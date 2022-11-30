@@ -1,6 +1,10 @@
-@jbx-protocol=node_modules/@jbx-protocol/
-@openzeppelin=node_modules/@openzeppelin/
-@paulrberg=node_modules/@paulrberg/
-prb-math=node_modules/prb-math/
-ds-test/=lib/forge-std/lib/ds-test/src/
+@jbx-protocol/=node_modules/@jbx-protocol/
+@juice-swap-allocator/=contracts/
+@openzeppelin/=node_modules/@openzeppelin/
+@paulrberg/=node_modules/@paulrberg/
+@uniswap/v3-core/=node_modules/@uniswap/v3-core/
+@uniswap/v3-periphery/=lib/v3-periphery/
+ds-test/=lib/ds-test/src/
 forge-std/=lib/forge-std/src/
+prb-math/=node_modules/prb-math/
+v3-periphery/=lib/v3-periphery/contracts/
