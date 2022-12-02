@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.16;
 
-
+import '@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController.sol';
 import '@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleDataSource.sol';
+import '@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleStore.sol';
 import '@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayDelegate.sol';
 import '@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayoutRedemptionPaymentTerminal.sol';
+import '@jbx-protocol/juice-contracts-v3/contracts/libraries/JBConstants.sol';
+import '@jbx-protocol/juice-contracts-v3/contracts/libraries/JBFundingCycleMetadataResolver.sol';
+import '@jbx-protocol/juice-contracts-v3/contracts/libraries/JBTokens.sol'; 
 import '@jbx-protocol/juice-contracts-v3/contracts/structs/JBDidPayData.sol';
 import '@jbx-protocol/juice-contracts-v3/contracts/structs/JBPayParamsData.sol';
 
@@ -26,10 +30,12 @@ import './interfaces/external/IWETH9.sol';
   quote for the user when contributing to a project.
 */
 
-contract DataSourceDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3SwapCallback {
+contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3SwapCallback {
+  using JBFundingCycleMetadataResolver for JBFundingCycle;
   //*********************************************************************//
   // --------------------------- custom errors ------------------------- //
   //*********************************************************************//
+  error JuiceBuyback_Unauthorized();
 
   //*********************************************************************//
   // --------------------------- unherited events----------------------- //
@@ -38,6 +44,18 @@ contract DataSourceDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
   //*********************************************************************//
   // --------------------- private constant properties ----------------- //
   //*********************************************************************//
+
+  /**
+    @notice
+    Address project token < address terminal token ?
+  */
+  bool private immutable _projectTokenIsZero;
+
+  /**
+    @notice
+    The unit of the max slippage (expressed in 1/10000th)
+  */
+  uint256 private constant SLIPPAGE_DENOMINATOR = 10000;
 
   //*********************************************************************//
   // --------------------- public constant properties ------------------ //
@@ -74,25 +92,12 @@ contract DataSourceDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
   // --------------------- private stored properties ------------------- //
   //*********************************************************************//
 
-  /**
-    @notice
-    A temporary storage of an eventual amount of token received if swapping is privilegied.
-    This storage slot is reset at the end of the transaction (ie 1-X-1 as this is the cheapest mutex)
-  */
-  uint256 private _swapTokenCount = 1;
-
-  /**
-    @notice
-    A temporary storage of an eventual amount of token received if minting is privilegied.
-    This storage slot is reset at the end of the transaction (ie 1-X-1)
-  */
-  uint256 private _issueTokenCount = 1;
-
   constructor(IERC20 _projectToken, IERC20 _terminalToken, IUniswapV3Pool _pool, IJBPayoutRedemptionPaymentTerminal _jbxTerminal) {
     projectToken = _projectToken;
     terminalToken = _terminalToken;
     pool = _pool;
     jbxTerminal = _jbxTerminal;
+    _projectTokenIsZero = address(_projectToken) < address(_terminalToken);
   }
     
   //*********************************************************************//
@@ -119,31 +124,90 @@ contract DataSourceDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
     )
     {
         // Find the total number of tokens to mint, as a fixed point number with as many decimals as `weight` has.
-        uint256 tokenCount = PRBMath.mulDiv(_data.amount.value, _data.weight, 10**_data.amount.decimals);
+        uint256 _tokenCount = PRBMath.mulDiv(_data.amount.value, _data.weight, 10**_data.amount.decimals);
 
-        // Get the net amount (without reserve rate), store in _mintTokenCount
+        // Unpack the quote from the pool
+        (uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (uint256, uint256));
 
-        // Compare with the quote from the pool, store in _swapTokenCount
+        // If the amount minted is bigger than the lowest received when swapping, do not use the delegate and use the fc weight
+        if (_tokenCount >= _quote * _slippage / SLIPPAGE_DENOMINATOR) {
+          return (_data.weight, _data.memo, new JBPayDelegateAllocation[](0));
+        }
+        else { // swapping gather more token, use the delegate and do not mint in the terminal
+          delegateAllocations = new JBPayDelegateAllocation[](1);
+          delegateAllocations[0] = JBPayDelegateAllocation({
+              delegate: IJBPayDelegate(this),
+              amount: _data.amount.value
+          });
 
-        // If _mintTokenCount > _swapTokenCount, return weight=_data.weight and no delegateAllocations
-
-        // If _mintTokenCount < _swapTokenCount, return weight=0 and delegateAllocations for the net amount
-        // in the swap path, mint for reserved rate too!
-
+          return (0, _data.memo, delegateAllocations);
+        }
     }
 
-    /**
-        @notice
-        Delegate to either swap or mint to the beneficiary (the mint to reserved being done by the delegate function, via
-        the weight).
-        @param _data the delegate data passed by the terminal
-    */
-    function didPay(JBDidPayData calldata _data) external payable override {
-        // Compare _swapTokenCount and _issueTokenCount
-        // If swap:
-        // try swap with the limit, success -> ok; catch -> mint instead (max slippage reached)
-        // Mint for the reserve? Or part of the swap?
-    }
+  /**
+      @notice
+      Delegate to either swap to the beneficiary (the mint to reserved being done by the delegate function, via
+      the weight) - this function is only called if swapping gather more token (delegate is bypassed if not)
+      @param _data the delegate data passed by the terminal
+  */
+  function didPay(JBDidPayData calldata _data) external payable override {
+
+      (uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (uint256, uint256));
+      bool __projectTokenIsZero = _projectTokenIsZero;
+
+      uint256 _amountReceived;
+
+      // Pull and approve token for swap
+      if(_data.amount.token != JBTokens.ETH)
+
+
+      // Try swapping, no price limit as slippage is tested on amount received
+      try pool.swap({
+        recipient: address(this),
+         zeroForOne: __projectTokenIsZero,
+         amountSpecified: int256(_data.amount.value),
+         sqrtPriceLimitX96: 0,
+         data: abi.encode(msg.sender, _quote * _slippage / SLIPPAGE_DENOMINATOR)
+      }) returns (int256 amount0, int256 amount1) {
+
+        _amountReceived = uint256(__projectTokenIsZero ? amount0 : amount1);
+
+      } catch {
+        // If swap is not successfull, mint the token to the beneficiary
+
+        // Get the current fc to retrieve the weight
+        IJBController controller = jbxTerminal.directory().controllerOf(_data.projectId);
+        IJBFundingCycleStore fundingCycleStore = jbxTerminal.store().fundingCycleStore();
+        JBFundingCycle memory _currentFundingCycle = fundingCycleStore.currentOf(_data.projectId);
+
+        uint256 _tokenCount = PRBMath.mulDiv(_data.amount.value, _currentFundingCycle.weight(), 10**_data.amount.decimals);
+
+        // Mint with the reserved rate (datasource has authorization via controller)
+        controller.mintTokensOf({
+          _projectId: _data.projectId,
+          _tokenCount: _tokenCount,
+          _beneficiary: _data.beneficiary,
+          _memo: _data.memo,
+          _preferClaimedTokens: _data._preferClaimedTokens,
+          _useReservedRate: true
+          });
+      }
+
+      IJBController controller = jbxTerminal.directory().controllerOf(_data.projectId);
+
+      // Get current weight
+      IJBFundingCycleStore fundingCycleStore = jbxTerminal.store().fundingCycleStore();
+      JBFundingCycle memory _currentFundingCycle = fundingCycleStore.currentOf(_data.projectId);
+
+      // Get the net amount (without reserve rate)
+      uint256 _nonReservedToken = PRBMath.mulDiv(
+        _amountReceived,
+        JBConstants.MAX_RESERVED_RATE - _currentFundingCycle.reservedRate(),
+        JBConstants.MAX_RESERVED_RATE);
+
+
+      // split and send/approve
+  }
 
     function redeemParams(JBRedeemParamsData calldata _data)
         external
@@ -164,6 +228,15 @@ contract DataSourceDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
     int256 amount1Delta,
     bytes calldata data
   ) external override {
+
+    // Check if this is really a callback
+    if(msg.sender != address(_pool)) revert JuiceBuyback_Unauthorized();
+
+    (address _recipient, uint256 _minimumAmountReceived) = abi.decode(data, (address, uint256));
+
+    // If _minimumAmountReceived > amount0 or 1, revert max slippage (this is handled by the try-catch)
+
+    // Pull fund from _recipient + eth case
   }
 
   //*********************************************************************//
