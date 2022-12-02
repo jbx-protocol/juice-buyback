@@ -153,33 +153,43 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
   function didPay(JBDidPayData calldata _data) external payable override {
 
       (uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (uint256, uint256));
-      bool __projectTokenIsZero = _projectTokenIsZero;
 
       uint256 _amountReceived;
 
       // Pull and approve token for swap
-      if(_data.amount.token != JBTokens.ETH)
+      if(_data.amount.token != JBTokens.ETH) {}
 
 
-      // Try swapping, no price limit as slippage is tested on amount received
+      // Get the current fc to retrieve the weight and reserved rate when/if needed
+      IJBController controller = jbxTerminal.directory().controllerOf(_data.projectId);
+      IJBFundingCycleStore fundingCycleStore = jbxTerminal.store().fundingCycleStore();
+      JBFundingCycle memory _currentFundingCycle = fundingCycleStore.currentOf(_data.projectId);
+
+
+      // Try swapping, no price limit as slippage is tested on amount received.
+      // Pass the terminal and min amount received as data
       try pool.swap({
         recipient: address(this),
-         zeroForOne: __projectTokenIsZero,
+         zeroForOne: _projectTokenIsZero,
          amountSpecified: int256(_data.amount.value),
          sqrtPriceLimitX96: 0,
          data: abi.encode(msg.sender, _quote * _slippage / SLIPPAGE_DENOMINATOR)
       }) returns (int256 amount0, int256 amount1) {
+        // Swap succeded, take note of the amount of projectToken received
+        _amountReceived = uint256(_projectTokenIsZero ? amount0 : amount1);
 
-        _amountReceived = uint256(__projectTokenIsZero ? amount0 : amount1);
+        // Get the net amount (without reserve rate)
+        uint256 _nonReservedToken = PRBMath.mulDiv(
+          _amountReceived,
+          JBConstants.MAX_RESERVED_RATE - _currentFundingCycle.reservedRate(),
+          JBConstants.MAX_RESERVED_RATE);
+        
+        // split and send/approve
 
       } catch {
         // If swap is not successfull, mint the token to the beneficiary
 
-        // Get the current fc to retrieve the weight
-        IJBController controller = jbxTerminal.directory().controllerOf(_data.projectId);
-        IJBFundingCycleStore fundingCycleStore = jbxTerminal.store().fundingCycleStore();
-        JBFundingCycle memory _currentFundingCycle = fundingCycleStore.currentOf(_data.projectId);
-
+        // What would be the total amount of token to mint
         uint256 _tokenCount = PRBMath.mulDiv(_data.amount.value, _currentFundingCycle.weight(), 10**_data.amount.decimals);
 
         // Mint with the reserved rate (datasource has authorization via controller)
@@ -191,22 +201,8 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
           _preferClaimedTokens: _data._preferClaimedTokens,
           _useReservedRate: true
           });
+
       }
-
-      IJBController controller = jbxTerminal.directory().controllerOf(_data.projectId);
-
-      // Get current weight
-      IJBFundingCycleStore fundingCycleStore = jbxTerminal.store().fundingCycleStore();
-      JBFundingCycle memory _currentFundingCycle = fundingCycleStore.currentOf(_data.projectId);
-
-      // Get the net amount (without reserve rate)
-      uint256 _nonReservedToken = PRBMath.mulDiv(
-        _amountReceived,
-        JBConstants.MAX_RESERVED_RATE - _currentFundingCycle.reservedRate(),
-        JBConstants.MAX_RESERVED_RATE);
-
-
-      // split and send/approve
   }
 
     function redeemParams(JBRedeemParamsData calldata _data)
@@ -230,13 +226,13 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
   ) external override {
 
     // Check if this is really a callback
-    if(msg.sender != address(_pool)) revert JuiceBuyback_Unauthorized();
+    if(msg.sender != address(pool)) revert JuiceBuyback_Unauthorized();
 
     (address _recipient, uint256 _minimumAmountReceived) = abi.decode(data, (address, uint256));
 
     // If _minimumAmountReceived > amount0 or 1, revert max slippage (this is handled by the try-catch)
 
-    // Pull fund from _recipient + eth case
+    // Pull fund from _recipient + treat eth case
   }
 
   //*********************************************************************//
