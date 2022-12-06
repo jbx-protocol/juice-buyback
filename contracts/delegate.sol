@@ -84,6 +84,12 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
   */
   IJBPayoutRedemptionPaymentTerminal public immutable jbxTerminal;
 
+  /**
+    @notice
+    The WETH contract
+  */
+  IWETH9 public immutable weth;
+
   //*********************************************************************//
   // --------------------- public stored properties -------------------- //
   //*********************************************************************//
@@ -92,12 +98,13 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
   // --------------------- private stored properties ------------------- //
   //*********************************************************************//
 
-  constructor(IERC20 _projectToken, IERC20 _terminalToken, IUniswapV3Pool _pool, IJBPayoutRedemptionPaymentTerminal _jbxTerminal) {
+  constructor(IERC20 _projectToken, IERC20 _terminalToken, IUniswapV3Pool _pool, IJBPayoutRedemptionPaymentTerminal _jbxTerminal, IWETH9 _weth) {
     projectToken = _projectToken;
     terminalToken = _terminalToken;
     pool = _pool;
     jbxTerminal = _jbxTerminal;
     _projectTokenIsZero = address(_projectToken) < address(_terminalToken);
+    weth = _weth;
   }
     
   //*********************************************************************//
@@ -157,26 +164,31 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
       uint256 _amountReceived;
 
       // Pull and approve token for swap
-      if(_data.amount.token != JBTokens.ETH) {}
-
+      if(_data.amount.token != JBTokens.ETH) {
+        IERC20(_data.amount.token).transferFrom(msg.sender, address(this), _data.amount.value);
+        IERC20(_data.amount.token).approve(address(pool), _data.amount.value);
+      } else {
+        // Wrap and approve balance
+        weth.deposit{value: _data.amount.value}();
+        weth.approve(address(pool), _data.amount.value);
+      }
 
       // Get the current fc to retrieve the weight and reserved rate when/if needed
-      IJBController controller = jbxTerminal.directory().controllerOf(_data.projectId);
+      IJBController controller = IJBController(jbxTerminal.directory().controllerOf(_data.projectId));
       IJBFundingCycleStore fundingCycleStore = jbxTerminal.store().fundingCycleStore();
       JBFundingCycle memory _currentFundingCycle = fundingCycleStore.currentOf(_data.projectId);
-
 
       // Try swapping, no price limit as slippage is tested on amount received.
       // Pass the terminal and min amount received as data
       try pool.swap({
         recipient: address(this),
-         zeroForOne: _projectTokenIsZero,
+         zeroForOne: !_projectTokenIsZero,
          amountSpecified: int256(_data.amount.value),
          sqrtPriceLimitX96: 0,
          data: abi.encode(msg.sender, _quote * _slippage / SLIPPAGE_DENOMINATOR)
       }) returns (int256 amount0, int256 amount1) {
         // Swap succeded, take note of the amount of projectToken received
-        _amountReceived = uint256(_projectTokenIsZero ? amount0 : amount1);
+        _amountReceived = uint256(!_projectTokenIsZero ? amount0 : amount1);
 
         // Get the net amount (without reserve rate)
         uint256 _nonReservedToken = PRBMath.mulDiv(
@@ -185,12 +197,16 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
           JBConstants.MAX_RESERVED_RATE);
         
         // split and send/approve
+        // -> allocate '_nonReservedToken' to the beneficiary, usedReservedRate = false
+        // -> allocate '_amountReceived - _nonReservedToken' to the reserve -> How?
+        //     -> either reservedRate = max, set a "local" reserve rate (but not part of the fc anymore), burn the amount and mint again...
+        //     -> ?
 
       } catch {
         // If swap is not successfull, mint the token to the beneficiary
 
         // What would be the total amount of token to mint
-        uint256 _tokenCount = PRBMath.mulDiv(_data.amount.value, _currentFundingCycle.weight(), 10**_data.amount.decimals);
+        uint256 _tokenCount = PRBMath.mulDiv(_data.amount.value, _currentFundingCycle.weight, 10**_data.amount.decimals);
 
         // Mint with the reserved rate (datasource has authorization via controller)
         controller.mintTokensOf({
@@ -198,7 +214,7 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
           _tokenCount: _tokenCount,
           _beneficiary: _data.beneficiary,
           _memo: _data.memo,
-          _preferClaimedTokens: _data._preferClaimedTokens,
+          _preferClaimedTokens: _data.preferClaimedTokens,
           _useReservedRate: true
           });
 
