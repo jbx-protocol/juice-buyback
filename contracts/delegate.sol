@@ -105,6 +105,15 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
   // --------------------- private stored properties ------------------- //
   //*********************************************************************//
 
+  /**
+    @notice
+    The amount of token created if minted is prefered
+    
+    @dev
+    This is a mutex 1-x-1
+  */
+  uint256 private _mintedAmount;
+
   constructor(IERC20 _projectToken, IERC20 _terminalToken, IUniswapV3Pool _pool, IJBPayoutRedemptionPaymentTerminal _jbxTerminal, IWETH9 _weth) {
     projectToken = _projectToken;
     terminalToken = _terminalToken;
@@ -142,24 +151,22 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
         return (_data.weight, _data.memo, new JBPayDelegateAllocation[](0));
       }
 
-      //Refactor: use the fc store in didPay anyway
+      // Find the total number of tokens to mint, as a fixed point number with as many decimals as `weight` has.
+      uint256 _tokenCount = PRBMath.mulDiv(_data.amount.value, _data.weight, 10**_data.amount.decimals);
 
-      // // Find the total number of tokens to mint, as a fixed point number with as many decimals as `weight` has.
-      // uint256 _tokenCount = PRBMath.mulDiv(_data.amount.value, _data.weight, 10**_data.amount.decimals);
+      // Unpack the quote from the pool
+      (uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (uint256, uint256));
 
-      // // Unpack the quote from the pool
-      // (uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (uint256, uint256));
+      // If the amount minted is bigger than the lowest received when swapping, use the mint pathway
+      if (_tokenCount >= _quote * _slippage / SLIPPAGE_DENOMINATOR) {
+        _mintedAmount = _tokenCount;
+      }
 
-      // // If the amount minted is bigger than the lowest received when swapping, use the mint pathway
-      // if (_tokenCount >= _quote * _slippage / SLIPPAGE_DENOMINATOR) {
-      //   _mintedAmount = _tokenCount;
-      // }
-
-      // delegateAllocations = new JBPayDelegateAllocation[](1);
-      // delegateAllocations[0] = JBPayDelegateAllocation({
-      //     delegate: IJBPayDelegate(this),
-      //     amount: _data.amount.value
-      // });
+      delegateAllocations = new JBPayDelegateAllocation[](1);
+      delegateAllocations[0] = JBPayDelegateAllocation({
+          delegate: IJBPayDelegate(this),
+          amount: _data.amount.value
+      });
 
       return (0, _data.memo, delegateAllocations);
     }
@@ -174,18 +181,12 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
 
     uint256 _amountReceived;
 
-    // Get the current fc to retrieve the weight and reserved rate
-    IJBController controller = IJBController(jbxTerminal.directory().controllerOf(_data.projectId));
-    IJBFundingCycleStore fundingCycleStore = jbxTerminal.store().fundingCycleStore();
-    JBFundingCycle memory _currentFundingCycle = fundingCycleStore.currentOf(_data.projectId);
-
-
     // The number of token created if minting
-    uint256 _tokenCount = PRBMath.mulDiv(_data.amount.value, _data.weight, 10**_data.amount.decimals);
+    uint256 _tokenCount = _mintedAmount;
+    delete _mintedAmount; // reset the mutex
 
     // The number of token received if swapping
     (uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (uint256, uint256));
-
 
 
     // Pull and approve token for swap
@@ -199,7 +200,7 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
     }
 
 
-
+// if quote > mint: swap; else: mint
 
   
   }
@@ -266,14 +267,14 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
     }
   }
 
-    function _mint() internal {
+    function _mint(JBDidPayData calldata _data, uint256 _amount) internal {
           // If swap is not successfull, mint the token to the beneficiary
-      // What would be the total amount of token to mint
-      _amountReceived = PRBMath.mulDiv(_data.amount.value, _currentFundingCycle.weight, 10**_data.amount.decimals);
+
+      IJBController controller = IJBController(jbxTerminal.directory().controllerOf(_data.projectId));
 
       // Get the net amount (without reserve rate), to send to beneficiary
       uint256 _nonReservedToken = PRBMath.mulDiv(
-        _amountReceived,
+        _amount,
         JBConstants.MAX_RESERVED_RATE - reservedRate,
         JBConstants.MAX_RESERVED_RATE);
 
@@ -290,7 +291,7 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
       // Mint the reserved token
       controller.mintTokensOf({
         _projectId: _data.projectId,
-        _tokenCount: _amountReceived - _nonReservedToken,
+        _tokenCount: _amount - _nonReservedToken,
         _beneficiary: _data.beneficiary,
         _memo: _data.memo,
         _preferClaimedTokens: _data.preferClaimedTokens,
