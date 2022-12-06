@@ -60,6 +60,7 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
   //*********************************************************************//
   // --------------------- public constant properties ------------------ //
   //*********************************************************************//
+
   /**
     @notice
     The other token paired with the project token in the Uniswap pool/the terminal currency.
@@ -93,6 +94,12 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
   //*********************************************************************//
   // --------------------- public stored properties -------------------- //
   //*********************************************************************//
+
+  /**
+    @notice
+    The actual reserved rate (the fc needs to have a max reserved rate for this delegate to run)
+  */
+  uint256 public reservedRate;
 
   //*********************************************************************//
   // --------------------- private stored properties ------------------- //
@@ -130,25 +137,31 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
       JBPayDelegateAllocation[] memory delegateAllocations
     )
     {
-        // Find the total number of tokens to mint, as a fixed point number with as many decimals as `weight` has.
-        uint256 _tokenCount = PRBMath.mulDiv(_data.amount.value, _data.weight, 10**_data.amount.decimals);
+      // If the funding cycle reserved rate is not the max, do not use the delegate
+      if (_data.reservedRate != JBConstants.MAX_RESERVED_RATE) {
+        return (_data.weight, _data.memo, new JBPayDelegateAllocation[](0));
+      }
 
-        // Unpack the quote from the pool
-        (uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (uint256, uint256));
+      //Refactor: use the fc store in didPay anyway
 
-        // If the amount minted is bigger than the lowest received when swapping, do not use the delegate and use the fc weight
-        if (_tokenCount >= _quote * _slippage / SLIPPAGE_DENOMINATOR) {
-          return (_data.weight, _data.memo, new JBPayDelegateAllocation[](0));
-        }
-        else { // swapping gather more token, use the delegate and do not mint in the terminal
-          delegateAllocations = new JBPayDelegateAllocation[](1);
-          delegateAllocations[0] = JBPayDelegateAllocation({
-              delegate: IJBPayDelegate(this),
-              amount: _data.amount.value
-          });
+      // // Find the total number of tokens to mint, as a fixed point number with as many decimals as `weight` has.
+      // uint256 _tokenCount = PRBMath.mulDiv(_data.amount.value, _data.weight, 10**_data.amount.decimals);
 
-          return (0, _data.memo, delegateAllocations);
-        }
+      // // Unpack the quote from the pool
+      // (uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (uint256, uint256));
+
+      // // If the amount minted is bigger than the lowest received when swapping, use the mint pathway
+      // if (_tokenCount >= _quote * _slippage / SLIPPAGE_DENOMINATOR) {
+      //   _mintedAmount = _tokenCount;
+      // }
+
+      // delegateAllocations = new JBPayDelegateAllocation[](1);
+      // delegateAllocations[0] = JBPayDelegateAllocation({
+      //     delegate: IJBPayDelegate(this),
+      //     amount: _data.amount.value
+      // });
+
+      return (0, _data.memo, delegateAllocations);
     }
 
   /**
@@ -159,76 +172,46 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
   */
   function didPay(JBDidPayData calldata _data) external payable override {
 
-      (uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (uint256, uint256));
+    uint256 _amountReceived;
 
-      uint256 _amountReceived;
+    // Get the current fc to retrieve the weight and reserved rate
+    IJBController controller = IJBController(jbxTerminal.directory().controllerOf(_data.projectId));
+    IJBFundingCycleStore fundingCycleStore = jbxTerminal.store().fundingCycleStore();
+    JBFundingCycle memory _currentFundingCycle = fundingCycleStore.currentOf(_data.projectId);
 
-      // Pull and approve token for swap
-      if(_data.amount.token != JBTokens.ETH) {
-        IERC20(_data.amount.token).transferFrom(msg.sender, address(this), _data.amount.value);
-        IERC20(_data.amount.token).approve(address(pool), _data.amount.value);
-      } else {
-        // Wrap and approve balance
-        weth.deposit{value: _data.amount.value}();
-        weth.approve(address(pool), _data.amount.value);
-      }
 
-      // Get the current fc to retrieve the weight and reserved rate when/if needed
-      IJBController controller = IJBController(jbxTerminal.directory().controllerOf(_data.projectId));
-      IJBFundingCycleStore fundingCycleStore = jbxTerminal.store().fundingCycleStore();
-      JBFundingCycle memory _currentFundingCycle = fundingCycleStore.currentOf(_data.projectId);
+    // The number of token created if minting
+    uint256 _tokenCount = PRBMath.mulDiv(_data.amount.value, _data.weight, 10**_data.amount.decimals);
 
-      // Try swapping, no price limit as slippage is tested on amount received.
-      // Pass the terminal and min amount received as data
-      try pool.swap({
-        recipient: address(this),
-         zeroForOne: !_projectTokenIsZero,
-         amountSpecified: int256(_data.amount.value),
-         sqrtPriceLimitX96: 0,
-         data: abi.encode(msg.sender, _quote * _slippage / SLIPPAGE_DENOMINATOR)
-      }) returns (int256 amount0, int256 amount1) {
-        // Swap succeded, take note of the amount of projectToken received
-        _amountReceived = uint256(!_projectTokenIsZero ? amount0 : amount1);
+    // The number of token received if swapping
+    (uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (uint256, uint256));
 
-        // Get the net amount (without reserve rate)
-        uint256 _nonReservedToken = PRBMath.mulDiv(
-          _amountReceived,
-          JBConstants.MAX_RESERVED_RATE - _currentFundingCycle.reservedRate(),
-          JBConstants.MAX_RESERVED_RATE);
-        
-        // split and send/approve
-        // -> allocate '_nonReservedToken' to the beneficiary, usedReservedRate = false
-        // -> allocate '_amountReceived - _nonReservedToken' to the reserve -> How?
-        //     -> either reservedRate = max, set a "local" reserve rate (but not part of the fc anymore), burn the amount and mint again...
-        //     -> ?
 
-      } catch {
-        // If swap is not successfull, mint the token to the beneficiary
 
-        // What would be the total amount of token to mint
-        uint256 _tokenCount = PRBMath.mulDiv(_data.amount.value, _currentFundingCycle.weight, 10**_data.amount.decimals);
+    // Pull and approve token for swap
+    if(_data.amount.token != JBTokens.ETH) {
+      IERC20(_data.amount.token).transferFrom(msg.sender, address(this), _data.amount.value);
+      IERC20(_data.amount.token).approve(address(pool), _data.amount.value);
+    } else {
+      // Wrap and approve weth balance
+      weth.deposit{value: _data.amount.value}();
+      weth.approve(address(pool), _data.amount.value);
+    }
 
-        // Mint with the reserved rate (datasource has authorization via controller)
-        controller.mintTokensOf({
-          _projectId: _data.projectId,
-          _tokenCount: _tokenCount,
-          _beneficiary: _data.beneficiary,
-          _memo: _data.memo,
-          _preferClaimedTokens: _data.preferClaimedTokens,
-          _useReservedRate: true
-          });
 
-      }
+
+
+  
   }
 
-    function redeemParams(JBRedeemParamsData calldata _data)
-        external
-        override
-    returns (
-            uint256 reclaimAmount,
-            string memory memo,
-            JBRedemptionDelegateAllocation[] memory delegateAllocations
-    ) {}
+  function redeemParams(JBRedeemParamsData calldata _data)
+      external
+      override
+  returns (
+          uint256 reclaimAmount,
+          string memory memo,
+          JBRedemptionDelegateAllocation[] memory delegateAllocations
+  ) {}
 
   /**
     @notice
@@ -266,6 +249,53 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
     @param _data the didPayData passed by the terminal
   */
   function _swap(JBDidPayData calldata _data) internal {
+        // Try swapping, no price limit as slippage is tested on amount received.
+    // Pass the terminal and min amount received as data
+    try pool.swap({
+      recipient: address(this),
+        zeroForOne: !_projectTokenIsZero,
+        amountSpecified: int256(_data.amount.value),
+        sqrtPriceLimitX96: 0,
+        data: abi.encode(msg.sender, _quote * _slippage / SLIPPAGE_DENOMINATOR)
+    }) returns (int256 amount0, int256 amount1) {
+      // Swap succeded, take note of the amount of projectToken received
+      _amountReceived = uint256(!_projectTokenIsZero ? amount0 : amount1);
+    
+    } catch {
+    
+    }
+  }
+
+    function _mint() internal {
+          // If swap is not successfull, mint the token to the beneficiary
+      // What would be the total amount of token to mint
+      _amountReceived = PRBMath.mulDiv(_data.amount.value, _currentFundingCycle.weight, 10**_data.amount.decimals);
+
+      // Get the net amount (without reserve rate), to send to beneficiary
+      uint256 _nonReservedToken = PRBMath.mulDiv(
+        _amountReceived,
+        JBConstants.MAX_RESERVED_RATE - reservedRate,
+        JBConstants.MAX_RESERVED_RATE);
+
+      // Mint to the beneficiary the non reserved token
+      controller.mintTokensOf({
+        _projectId: _data.projectId,
+        _tokenCount: _nonReservedToken,
+        _beneficiary: _data.beneficiary,
+        _memo: _data.memo,
+        _preferClaimedTokens: _data.preferClaimedTokens,
+        _useReservedRate: false
+        });
+
+      // Mint the reserved token
+      controller.mintTokensOf({
+        _projectId: _data.projectId,
+        _tokenCount: _amountReceived - _nonReservedToken,
+        _beneficiary: _data.beneficiary,
+        _memo: _data.memo,
+        _preferClaimedTokens: _data.preferClaimedTokens,
+        _useReservedRate: true
+        });
   }
 
   //*********************************************************************//
