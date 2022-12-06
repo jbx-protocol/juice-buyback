@@ -36,6 +36,7 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
   // --------------------------- custom errors ------------------------- //
   //*********************************************************************//
   error JuiceBuyback_Unauthorized();
+  error JuiceBuyback_MaximumSlippage();
 
   //*********************************************************************//
   // --------------------------- unherited events----------------------- //
@@ -178,31 +179,23 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
       @param _data the delegate data passed by the terminal
   */
   function didPay(JBDidPayData calldata _data) external payable override {
-
-    uint256 _amountReceived;
-
     // The number of token created if minting
     uint256 _tokenCount = _mintedAmount;
-    delete _mintedAmount; // reset the mutex
+    _mintedAmount = 1; // reset the mutex
 
     // The number of token received if swapping
     (uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (uint256, uint256));
+    uint256 _minimumReceivedFromSwap = _quote * _slippage / SLIPPAGE_DENOMINATOR;
 
+    // Pick the appropriate pathway (swap vs mint)
+    if (_minimumReceivedFromSwap > _tokenCount) {
+      // Try swapping
+      uint256 _amountReceived = _swap(_data, _minimumReceivedFromSwap);
 
-    // Pull and approve token for swap
-    if(_data.amount.token != JBTokens.ETH) {
-      IERC20(_data.amount.token).transferFrom(msg.sender, address(this), _data.amount.value);
-      IERC20(_data.amount.token).approve(address(pool), _data.amount.value);
-    } else {
-      // Wrap and approve weth balance
-      weth.deposit{value: _data.amount.value}();
-      weth.approve(address(pool), _data.amount.value);
-    }
+      // If swap failed, mint instead, with the original weight
+      if (_amountReceived == 0) _mint(_data, _tokenCount);
+    } else _mint(_data, _tokenCount);
 
-
-// if quote > mint: swap; else: mint
-
-  
   }
 
   function redeemParams(JBRedeemParamsData calldata _data)
@@ -224,15 +217,29 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
     int256 amount1Delta,
     bytes calldata data
   ) external override {
+// negative == sent by the pool, positive == must be received by the pool
 
     // Check if this is really a callback
     if(msg.sender != address(pool)) revert JuiceBuyback_Unauthorized();
 
-    (address _recipient, uint256 _minimumAmountReceived) = abi.decode(data, (address, uint256));
+    // Unpack the data
+    (address _terminal, address _token, uint256 _minimumAmountReceived) = abi.decode(data, (address, address, uint256));
 
-    // If _minimumAmountReceived > amount0 or 1, revert max slippage (this is handled by the try-catch)
+    // Assign 0 and 1 accordingly
+    uint256 _amountReceived = uint256(-(_projectTokenIsZero ? amount0Delta : amount1Delta));
+    uint256 _amountToSend = uint256(-(_projectTokenIsZero ? amount1Delta : amount0Delta));
 
-    // Pull fund from _recipient + treat eth case
+    // Revert if slippage is too high
+    if (_amountReceived < _minimumAmountReceived) revert JuiceBuyback_MaximumSlippage();
+
+    // Pull and transfer token to the pool
+    if(_token != JBTokens.ETH) {
+      IERC20(_token).transferFrom(_terminal, address(pool), _amountToSend);
+    } else {
+      // Wrap and transfer the weth to the pool
+      weth.deposit{value: _amountToSend}();
+      weth.transfer(address(pool), _amountToSend);
+    }
   }
 
   //*********************************************************************//
@@ -249,21 +256,20 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
     The reserved token are received in this contract, burned and then minted for the reserved token.
     @param _data the didPayData passed by the terminal
   */
-  function _swap(JBDidPayData calldata _data) internal {
-        // Try swapping, no price limit as slippage is tested on amount received.
-    // Pass the terminal and min amount received as data
+  function _swap(JBDidPayData calldata _data, uint256 _minimumReceivedFromSwap) internal returns(uint256 _amountReceived){
+
+    // Pass the terminal, token and min amount received as data
     try pool.swap({
       recipient: address(this),
         zeroForOne: !_projectTokenIsZero,
         amountSpecified: int256(_data.amount.value),
         sqrtPriceLimitX96: 0,
-        data: abi.encode(msg.sender, _quote * _slippage / SLIPPAGE_DENOMINATOR)
+        data: abi.encode(msg.sender, _data.amount.token, _minimumReceivedFromSwap)
     }) returns (int256 amount0, int256 amount1) {
-      // Swap succeded, take note of the amount of projectToken received
-      _amountReceived = uint256(!_projectTokenIsZero ? amount0 : amount1);
-    
+      // Swap succeded, take note of the amount of projectToken received (negative as exact input)
+      _amountReceived = uint256(-(_projectTokenIsZero ? amount0 : amount1));
     } catch {
-    
+      // _amountReceived = 0
     }
   }
 
