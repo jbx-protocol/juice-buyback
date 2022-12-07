@@ -5,6 +5,7 @@ import '@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController.sol'
 import '@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleDataSource.sol';
 import '@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayDelegate.sol';
 import '@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayoutRedemptionPaymentTerminal.sol';
+import '@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleBallot.sol';
 import '@jbx-protocol/juice-contracts-v3/contracts/libraries/JBConstants.sol';
 import '@jbx-protocol/juice-contracts-v3/contracts/libraries/JBFundingCycleMetadataResolver.sol';
 import '@jbx-protocol/juice-contracts-v3/contracts/libraries/JBTokens.sol'; 
@@ -44,6 +45,12 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
   //*********************************************************************//
   // -----------------------------  events ----------------------------- //
   //*********************************************************************//
+
+  struct ReservedRateConfiguration {
+    uint224 reconfigurationTime; // time at which the reserved rate was reconfigured
+    uint16 rateBefore; // reserved rate (expressed in 1/10000th) before reconfig
+    uint16 rateAfter; // reserved rate (expressed in 1/10000th) after reconfig
+  }
 
   //*********************************************************************//
   // --------------------- private constant properties ----------------- //
@@ -109,7 +116,13 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
     @notice
     The actual reserved rate (the fc needs to have a max reserved rate for this delegate to run)
   */
-  mapping(uint256=>uint256) public reservedRateOf;
+  mapping(uint256=>ReservedRateConfiguration) public reservedRateOf;
+
+  /**
+    @notice
+    The ballot used by a project
+  */
+  mapping(uint256=>IJBFundingCycleBallot) public ballotOf;
 
   //*********************************************************************//
   // --------------------- private stored properties ------------------- //
@@ -309,10 +322,12 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
 
     IJBController controller = IJBController(jbxTerminal.directory().controllerOf(_data.projectId));
 
+    uint256 _reservedRate = _getReservedRate(_data.projectId, controller);
+
     // Get the net amount (without reserve rate), to send to beneficiary
     uint256 _nonReservedToken = PRBMath.mulDiv(
       _amount,
-      JBConstants.MAX_RESERVED_RATE - reservedRateOf[_data.projectId],
+      JBConstants.MAX_RESERVED_RATE - _reservedRate,
       JBConstants.MAX_RESERVED_RATE);
 
     // Mint to the beneficiary the non reserved token
@@ -336,6 +351,31 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
       });
   }
 
+  function _getReservedRate(uint256 _projectId, IJBController _controller) internal view returns(uint256 _reservedRate) {
+    // Get the reserved rate configuration
+    ReservedRateConfiguration storage _reservedRateConfiguration = reservedRateOf[_projectId];
+
+
+    IJBFundingCycleBallot ballot = ballotOf[_projectId];
+
+    // No ballot to use
+    if(address(ballot) == address(0)) {
+      return _reservedRateConfiguration.rateAfter;
+    }
+
+    JBBallotState _currentState = ballot.stateOf({
+      _projectId: _projectId,
+      _configuration: _reservedRateConfiguration.reconfigurationTime,
+      _start: block.timestamp
+    });
+
+    if(_currentState == JBBallotState.Approved) {
+      _reservedRate = _reservedRateConfiguration.rateAfter;
+    } else {
+      _reservedRate = _reservedRateConfiguration.rateBefore;
+    }
+  }
+
   //*********************************************************************//
   // ---------------------- peripheral functions ----------------------- //
   //*********************************************************************//
@@ -357,9 +397,28 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
   TODO: add fc constraint / ballot
 
   */
-  function setReservedRateOf(uint256 _projectId, uint256 _reservedRate) external onlyOwner {
+  function setReservedRateOf(uint256 _projectId, uint16 _reservedRate) external onlyOwner {
     if(_reservedRate > JBConstants.MAX_RESERVED_RATE) revert JuiceBuyback_InvalidReservedRate();
 
-    reservedRateOf[_projectId] = _reservedRate;
+    IJBFundingCycleBallot ballot = ballotOf[_projectId];
+
+    // No ballot to use
+    if(address(ballot) == address(0)) {
+      reservedRateOf[_projectId].rateAfter = _reservedRate;
+    } else {
+      // Create a mem working copy
+      ReservedRateConfiguration memory _reservedRateStruct = reservedRateOf[_projectId];
+
+      _reservedRateStruct.rateBefore = _reservedRateStruct.rateAfter;
+      _reservedRateStruct.rateAfter = _reservedRate;
+      _reservedRateStruct.reconfigurationTime = uint224(block.timestamp);
+
+      reservedRateOf[_projectId] = _reservedRateStruct;
+    }
+
+  }
+
+  function addBallotTo(uint256 _projectId, IJBFundingCycleBallot _ballot) external onlyOwner {
+    ballotOf[_projectId] = _ballot;
   }
 }
