@@ -22,6 +22,8 @@ import '@uniswap/v3-core/contracts/interfaces/callback/IUniswapV3SwapCallback.so
 import './interfaces/external/IWETH9.sol';
 
 /**
+	@custom:benediction DEVS BENEDICAT ET PROTEGAT CONTRACTVS MEAM
+
   @title
   Delegate buyback
   
@@ -106,7 +108,7 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
     @notice
     The actual reserved rate (the fc needs to have a max reserved rate for this delegate to run)
   */
-  uint256 public reservedRate;
+  mapping(uint256=>uint256) public reservedRateOf;
 
   //*********************************************************************//
   // --------------------- private stored properties ------------------- //
@@ -309,7 +311,7 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
     // Get the net amount (without reserve rate), to send to beneficiary
     uint256 _nonReservedToken = PRBMath.mulDiv(
       _amount,
-      JBConstants.MAX_RESERVED_RATE - reservedRate,
+      JBConstants.MAX_RESERVED_RATE - reservedRateOf[_data.projectId],
       JBConstants.MAX_RESERVED_RATE);
 
     // Mint to the beneficiary the non reserved token
@@ -347,7 +349,14 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
   // ---------------------- setter functions --------------------------- //
   //*********************************************************************//
 
-  function setReservedRate(uint256 _reservedRate) external onlyOwner {
-    reservedRate = _reservedRate;
+  /**
+  @notice
+  Set the reserved rate used by this delegate
+
+  TODO: add fc constraint / ballot
+
+  */
+  function setReservedRateOf(uint256 _projectId, uint256 _reservedRate) external onlyOwner {
+    reservedRateOf[_projectId] = _reservedRate;
   }
 }
