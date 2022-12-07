@@ -37,6 +37,7 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
   //*********************************************************************//
   // --------------------------- custom errors ------------------------- //
   //*********************************************************************//
+  error JuiceBuyback_InvalidReservedRate();
   error JuiceBuyback_Unauthorized();
   error JuiceBuyback_MaximumSlippage();
 
@@ -357,6 +358,8 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
 
   */
   function setReservedRateOf(uint256 _projectId, uint256 _reservedRate) external onlyOwner {
+    if(_reservedRate > JBConstants.MAX_RESERVED_RATE) revert JuiceBuyback_InvalidReservedRate();
+
     reservedRateOf[_projectId] = _reservedRate;
   }
 }
