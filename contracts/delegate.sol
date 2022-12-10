@@ -261,9 +261,8 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
     if (_amountReceived < _minimumAmountReceived) revert JuiceBuyback_MaximumSlippage();
 
     // Pull and transfer token to the pool
-    if(_token != JBTokens.ETH) {
-      IERC20(_token).transferFrom(_terminal, address(pool), _amountToSend);
-    } else {
+    if(_token != JBTokens.ETH) IERC20(_token).transferFrom(_terminal, address(pool), _amountToSend);
+    else {
       // Wrap and transfer the weth to the pool
       weth.deposit{value: _amountToSend}();
       weth.transfer(address(pool), _amountToSend);
@@ -359,9 +358,7 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
     IJBFundingCycleBallot ballot = ballotOf[_projectId];
 
     // No ballot to use
-    if(address(ballot) == address(0)) {
-      return _reservedRateConfiguration.rateAfter;
-    }
+    if(address(ballot) == address(0)) return _reservedRateConfiguration.rateAfter;
 
     JBBallotState _currentState = ballot.stateOf({
       _projectId: _projectId,
@@ -369,11 +366,8 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
       _start: block.timestamp
     });
 
-    if(_currentState == JBBallotState.Approved) {
-      _reservedRate = _reservedRateConfiguration.rateAfter;
-    } else {
-      _reservedRate = _reservedRateConfiguration.rateBefore;
-    }
+    if(_currentState == JBBallotState.Approved) _reservedRate = _reservedRateConfiguration.rateAfter;
+    else  _reservedRate = _reservedRateConfiguration.rateBefore;
   }
 
   //*********************************************************************//
@@ -403,9 +397,8 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
     IJBFundingCycleBallot ballot = ballotOf[_projectId];
 
     // No ballot to use
-    if(address(ballot) == address(0)) {
-      reservedRateOf[_projectId].rateAfter = _reservedRate;
-    } else {
+    if(address(ballot) == address(0)) reservedRateOf[_projectId].rateAfter = _reservedRate;
+    else {
       // Create a mem working copy
       ReservedRateConfiguration memory _reservedRateStruct = reservedRateOf[_projectId];
 
