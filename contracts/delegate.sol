@@ -321,7 +321,7 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
 
     IJBController controller = IJBController(jbxTerminal.directory().controllerOf(_data.projectId));
 
-    uint256 _reservedRate = _getReservedRate(_data.projectId, controller);
+    uint256 _reservedRate = _getReservedRate(_data.projectId);
 
     // Get the net amount (without reserve rate), to send to beneficiary
     uint256 _nonReservedToken = PRBMath.mulDiv(
@@ -350,7 +350,7 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
       });
   }
 
-  function _getReservedRate(uint256 _projectId, IJBController _controller) internal view returns(uint256 _reservedRate) {
+  function _getReservedRate(uint256 _projectId) internal view returns(uint256 _reservedRate) {
     // Get the reserved rate configuration
     ReservedRateConfiguration storage _reservedRateConfiguration = reservedRateOf[_projectId];
 
