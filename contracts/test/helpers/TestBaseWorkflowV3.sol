@@ -40,7 +40,7 @@ import '@paulrberg/contracts/math/PRBMath.sol';
 // Base contract for Juicebox system tests.
 //
 // Provides common functionality, such as deploying contracts on test setup for v3.
-contract TestBaseWorkflowV2 is DSTest {
+contract TestBaseWorkflowV3 is DSTest {
   //*********************************************************************//
   // --------------------- private stored properties ------------------- //
   //*********************************************************************//
