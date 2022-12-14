@@ -33,7 +33,7 @@ import './interfaces/external/IWETH9.sol';
   quote for the user when contributing to a project.
 */
 
-contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3SwapCallback, Ownable {
+contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3SwapCallback, Ownable {
   using JBFundingCycleMetadataResolver for JBFundingCycle;
   //*********************************************************************//
   // --------------------------- custom errors ------------------------- //
