@@ -392,7 +392,7 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
 
   */
   function setReservedRateOf(uint256 _projectId, uint16 _reservedRate) external onlyOwner {
-    if(_reservedRate > JBConstants.MAX_RESERVED_RATE) revert JuiceBuyback_InvalidReservedRate();
+    if(_reservedRate >= JBConstants.MAX_RESERVED_RATE) revert JuiceBuyback_InvalidReservedRate();
 
     IJBFundingCycleBallot ballot = ballotOf[_projectId];
 
