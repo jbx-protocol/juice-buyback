@@ -90,7 +90,7 @@ contract TestUnitDatasourceDelegate is TestBaseWorkflowV3 {
       useTotalOverflowForRedemptions: false,
       useDataSourceForPay: true,
       useDataSourceForRedeem: false,
-      dataSource: address(0),
+      dataSource: address(_delegate),
       metadata: 0
     });
 
@@ -118,5 +118,68 @@ contract TestUnitDatasourceDelegate is TestBaseWorkflowV3 {
       _terminals,
       ''
     );
+  }
+
+  // If a reserved rate < JBConstants.MAX_RESERVED_RATE is used in the current funding cycle, do not use the data source/delegate logic
+  function testDatasourceDelegateNormalBehaviorWithNonMaxReservedRate() public {
+    uint256 payAmountInWei = 2 ether;
+
+    _metadata = JBFundingCycleMetadata({
+      global: JBGlobalFundingCycleMetadata({allowSetTerminals: false, allowSetController: false, pauseTransfers: false}),
+      reservedRate: reservedRate,
+      redemptionRate: 5000,
+      ballotRedemptionRate: 0,
+      pausePay: false,
+      pauseDistributions: false,
+      pauseRedeem: false,
+      pauseBurn: false,
+      allowMinting: true,
+      preferClaimedTokenOverride: false,
+      allowTerminalMigration: false,
+      allowControllerMigration: false,
+      holdFees: false,
+      useTotalOverflowForRedemptions: false,
+      useDataSourceForPay: true,
+      useDataSourceForRedeem: false,
+      dataSource: address(_delegate),
+      metadata: 0
+    });
+
+    _terminals = [jbETHPaymentTerminal()];
+
+    _projectId = controller.launchProjectFor(
+      multisig(),
+      _projectMetadata,
+      _data,
+      _metadata,
+      0, // Start asap
+      _groupedSplits,
+      _fundAccessConstraints,
+      _terminals,
+      ''
+    );
+    
+    jbETHPaymentTerminal().pay{value: payAmountInWei}(
+      _projectId,
+      payAmountInWei,
+      address(0),
+      beneficiary(),
+      /* _minReturnedTokens */
+      1,
+      /* _preferClaimedTokens */
+      false,
+      /* _memo */
+      'Take my money!',
+      /* _delegateMetadata */
+      new bytes(0)
+    );
+
+    uint256 totalMinted = PRBMath.mulDiv(payAmountInWei, weight, 10**18);
+    uint256 amountBeneficiary = (totalMinted * (JBConstants.MAX_RESERVED_RATE - reservedRate)) /
+      JBConstants.MAX_RESERVED_RATE;
+    uint256 amountReserved = totalMinted - amountBeneficiary;
+
+    assertEq(jbTokenStore().balanceOf(beneficiary(), _projectId), amountBeneficiary);
+    assertEq(controller.reservedTokenBalanceOf(_projectId, reservedRate), amountReserved);
   }
 }
