@@ -182,4 +182,46 @@ contract TestUnitDatasourceDelegate is TestBaseWorkflowV3 {
     assertEq(jbTokenStore().balanceOf(beneficiary(), _projectId), amountBeneficiary);
     assertEq(controller.reservedTokenBalanceOf(_projectId, reservedRate), amountReserved);
   }
+
+    // If minting gives a higher amount of project token, mint should be used with proper token distribution to beneficiary and reserved token
+  function testDatasourceDelegateMintIfQuoteIsHigher() public {
+    uint256 payAmountInWei = 10 ether;
+
+    bytes memory metadata = abi.encode(10, 10);
+
+    _delegate.setReservedRateOf(_projectId, 5000);
+
+    uint256 _nonReservedToken = PRBMath.mulDiv(
+      payAmountInWei,
+      JBConstants.MAX_RESERVED_RATE - 5000,
+      JBConstants.MAX_RESERVED_RATE);
+
+    jbETHPaymentTerminal().pay{value: payAmountInWei}(
+      _projectId,
+      payAmountInWei,
+      address(0),
+      beneficiary(),
+      /* _minReturnedTokens */
+      0, // Cannot be used in this setting
+      /* _preferClaimedTokens */
+      false,
+      /* _memo */
+      'Take my money!',
+      /* _delegateMetadata */
+      metadata
+    );
+
+
+    // Delegate is deployed using reservedRate
+    uint256 amountBeneficiary = PRBMath.mulDiv(_nonReservedToken, weight, 10**18);
+    uint256 amountReserved = ((amountBeneficiary * JBConstants.MAX_RESERVED_RATE) /
+      (JBConstants.MAX_RESERVED_RATE - 5000)) - amountBeneficiary;
+
+    assertEq(jbTokenStore().balanceOf(beneficiary(), _projectId), amountBeneficiary);
+
+    assertEq(
+      controller.reservedTokenBalanceOf(_projectId, JBConstants.MAX_RESERVED_RATE),
+      (amountReserved / 10) * 10 // Last wei rounding
+    );
+  }
 }
