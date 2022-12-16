@@ -417,39 +417,4 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
       _interfaceId == type(IJBFundingCycleDataSource).interfaceId ||
       _interfaceId == type(IJBPayDelegate).interfaceId;
   }
-
-  //*********************************************************************//
-  // ---------------------- setter functions --------------------------- //
-  //*********************************************************************//
-
-  /**
-  @notice
-  Set the reserved rate used by this delegate
-
-  TODO: add fc constraint / ballot
-
-  */
-  function setReservedRateOf(uint256 _projectId, uint16 _reservedRate) external onlyOwner {
-    if(_reservedRate > JBConstants.MAX_RESERVED_RATE) revert JuiceBuyback_InvalidReservedRate();
-
-    IJBFundingCycleBallot ballot = ballotOf[_projectId];
-
-    // No ballot to use
-    if(address(ballot) == address(0)) reservedRateOf[_projectId].rateAfter = _reservedRate;
-    else {
-      // Create a mem working copy
-      ReservedRateConfiguration memory _reservedRateStruct = reservedRateOf[_projectId];
-
-      _reservedRateStruct.rateBefore = _reservedRateStruct.rateAfter;
-      _reservedRateStruct.rateAfter = _reservedRate;
-      _reservedRateStruct.reconfigurationTime = uint224(block.timestamp);
-
-      reservedRateOf[_projectId] = _reservedRateStruct;
-    }
-
-  }
-
-  function addBallotTo(uint256 _projectId, IJBFundingCycleBallot _ballot) external onlyOwner {
-    ballotOf[_projectId] = _ballot;
-  }
 }
