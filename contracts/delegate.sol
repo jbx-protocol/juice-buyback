@@ -35,6 +35,7 @@ import './interfaces/external/IWETH9.sol';
 
 contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3SwapCallback, Ownable {
   using JBFundingCycleMetadataResolver for JBFundingCycle;
+
   //*********************************************************************//
   // --------------------------- custom errors ------------------------- //
   //*********************************************************************//
@@ -71,6 +72,12 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
   //*********************************************************************//
   // --------------------- public constant properties ------------------ //
   //*********************************************************************//
+
+  /**
+    @notice
+    The maximum reserved rate used by this delegate, passed as fc metadata (expressed in 1/200th)
+  */
+  uint256 public constant MAX_RESERVED_RATE = 200;
 
   /**
     @notice
@@ -209,7 +216,8 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
 
       @dev
       The reserved token are added by burning and minting them again, as this delegate is 
-      used only if the fc reserved rate is the maximum
+      used only if the fc reserved rate is the maximum. The actual reserved rate is in the
+      fundingcycle metadata.
 
       @param _data the delegate data passed by the terminal
   */
@@ -316,8 +324,8 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
 
     uint256 _nonReservedToken = PRBMath.mulDiv(
       _amountReceived,
-      JBConstants.MAX_RESERVED_RATE - _reservedRate,
-      JBConstants.MAX_RESERVED_RATE);
+      MAX_RESERVED_RATE - _reservedRate,
+      MAX_RESERVED_RATE);
 
     // Send the non reserved token to the beneficiary (if any / reserved rate is not max)
     if(_nonReservedToken != 0) projectToken.transfer(_data.beneficiary, _nonReservedToken);
@@ -363,8 +371,8 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
     // Get the net amount (without reserve rate), to send to beneficiary
     uint256 _nonReservedToken = PRBMath.mulDiv(
       _amount,
-      JBConstants.MAX_RESERVED_RATE - _reservedRate,
-      JBConstants.MAX_RESERVED_RATE);
+      MAX_RESERVED_RATE - _reservedRate,
+      MAX_RESERVED_RATE);
 
     // Mint to the beneficiary the non reserved token (if any)
     if(_nonReservedToken != 0)
@@ -390,23 +398,14 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
   }
 
   function _getReservedRate(uint256 _projectId) internal view returns(uint256 _reservedRate) {
-    // Get the reserved rate configuration
-    ReservedRateConfiguration storage _reservedRateConfiguration = reservedRateOf[_projectId];
+    // burn the reserved portion to mint it to the reserve (using the fc max reserved rate)
+    IJBController _controller = IJBController(jbxTerminal.directory().controllerOf(_projectId));
 
+    (, JBFundingCycleMetadata memory _metadata) = _controller.currentFundingCycleOf(_projectId);
 
-    IJBFundingCycleBallot ballot = ballotOf[_projectId];
+    _reservedRate = _metadata.metadata;
 
-    // No ballot to use
-    if(address(ballot) == address(0)) return _reservedRateConfiguration.rateAfter;
-
-    JBBallotState _currentState = ballot.stateOf({
-      _projectId: _projectId,
-      _configuration: _reservedRateConfiguration.reconfigurationTime,
-      _start: block.timestamp
-    });
-
-    if(_currentState == JBBallotState.Approved) _reservedRate = _reservedRateConfiguration.rateAfter;
-    else  _reservedRate = _reservedRateConfiguration.rateBefore;
+    if(_reservedRate > MAX_RESERVED_RATE) revert JuiceBuyback_InvalidReservedRate();
   }
 
   //*********************************************************************//
