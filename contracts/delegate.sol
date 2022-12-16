@@ -181,7 +181,7 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
       uint256 _tokenCount = PRBMath.mulDiv(_data.amount.value, _data.weight, 10**_data.amount.decimals);
 
       // Unpack the quote from the pool, given by the frontend
-      (uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (uint256, uint256));
+      (, , uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (bytes32, bytes32, uint256, uint256));
 
       delegateAllocations = new JBPayDelegateAllocation[](1);
 
@@ -219,7 +219,7 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
     _mintedAmount = 1;
 
     // The minimum amount of token received if swapping
-    (uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (uint256, uint256));
+    (, , uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (bytes32, bytes32, uint256, uint256));
     uint256 _minimumReceivedFromSwap = _quote * _slippage / SLIPPAGE_DENOMINATOR;
 
     // Pick the appropriate pathway (swap vs mint)
