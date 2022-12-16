@@ -319,29 +319,32 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
       JBConstants.MAX_RESERVED_RATE - _reservedRate,
       JBConstants.MAX_RESERVED_RATE);
 
-    // Send the non reserved token to the beneficiary
-    projectToken.transfer(_data.beneficiary, _nonReservedToken);
+    // Send the non reserved token to the beneficiary (if any / reserved rate is not max)
+    if(_nonReservedToken != 0) projectToken.transfer(_data.beneficiary, _nonReservedToken);
 
-    // burn the reserved portion to mint it to the reserve (using the fc max reserved rate)
-    IJBController controller = IJBController(jbxTerminal.directory().controllerOf(_data.projectId));
+    // If there are reserved token, burn and mint them to the reserve
+    if(_amountReceived - _nonReservedToken != 0) {
+      // burn the reserved portion to mint it to the reserve (using the fc max reserved rate)
+      IJBController controller = IJBController(jbxTerminal.directory().controllerOf(_data.projectId));
 
-    controller.burnTokensOf({
-      _holder: address(this),
-      _projectId: _data.projectId,
-      _tokenCount: _amountReceived - _nonReservedToken,
-      _memo: '',
-      _preferClaimedTokens: true
-    });
-
-    // Mint the reserved token straight to the reserve
-    controller.mintTokensOf({
-      _projectId: _data.projectId,
-      _tokenCount: _amountReceived - _nonReservedToken,
-      _beneficiary: _data.beneficiary,
-      _memo: _data.memo,
-      _preferClaimedTokens: _data.preferClaimedTokens,
-      _useReservedRate: true
+      controller.burnTokensOf({
+        _holder: address(this),
+        _projectId: _data.projectId,
+        _tokenCount: _amountReceived - _nonReservedToken,
+        _memo: '',
+        _preferClaimedTokens: true
       });
+
+      // Mint the reserved token straight to the reserve
+      controller.mintTokensOf({
+        _projectId: _data.projectId,
+        _tokenCount: _amountReceived - _nonReservedToken,
+        _beneficiary: _data.beneficiary,
+        _memo: _data.memo,
+        _preferClaimedTokens: _data.preferClaimedTokens,
+        _useReservedRate: true
+        });
+    }
   }
 
   /**
@@ -363,24 +366,26 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
       JBConstants.MAX_RESERVED_RATE - _reservedRate,
       JBConstants.MAX_RESERVED_RATE);
 
-    // Mint to the beneficiary the non reserved token
-    controller.mintTokensOf({
-      _projectId: _data.projectId,
-      _tokenCount: _nonReservedToken,
-      _beneficiary: _data.beneficiary,
-      _memo: _data.memo,
-      _preferClaimedTokens: _data.preferClaimedTokens,
-      _useReservedRate: false
+    // Mint to the beneficiary the non reserved token (if any)
+    if(_nonReservedToken != 0)
+      controller.mintTokensOf({
+        _projectId: _data.projectId,
+        _tokenCount: _nonReservedToken,
+        _beneficiary: _data.beneficiary,
+        _memo: _data.memo,
+        _preferClaimedTokens: _data.preferClaimedTokens,
+        _useReservedRate: false
       });
 
     // Mint the reserved token
-    controller.mintTokensOf({
-      _projectId: _data.projectId,
-      _tokenCount: _amount - _nonReservedToken,
-      _beneficiary: _data.beneficiary,
-      _memo: _data.memo,
-      _preferClaimedTokens: _data.preferClaimedTokens,
-      _useReservedRate: true
+    if(_amount - _nonReservedToken != 0)
+      controller.mintTokensOf({
+        _projectId: _data.projectId,
+        _tokenCount: _amount - _nonReservedToken,
+        _beneficiary: _data.beneficiary,
+        _memo: _data.memo,
+        _preferClaimedTokens: _data.preferClaimedTokens,
+        _useReservedRate: true
       });
   }
 
