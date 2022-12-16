@@ -405,7 +405,8 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
 
     _reservedRate = _metadata.metadata;
 
-    if(_reservedRate > MAX_RESERVED_RATE) revert JuiceBuyback_InvalidReservedRate();
+    // If invalid reserved rate, use no reserve
+    if(_reservedRate > MAX_RESERVED_RATE) _reservedRate = 0;
   }
 
   //*********************************************************************//
