@@ -35,6 +35,7 @@ import './interfaces/external/IWETH9.sol';
 
 contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3SwapCallback, Ownable {
   using JBFundingCycleMetadataResolver for JBFundingCycle;
+
   //*********************************************************************//
   // --------------------------- custom errors ------------------------- //
   //*********************************************************************//
@@ -71,6 +72,12 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
   //*********************************************************************//
   // --------------------- public constant properties ------------------ //
   //*********************************************************************//
+
+  /**
+    @notice
+    The maximum reserved rate used by this delegate, passed as fc metadata (expressed in 1/200th)
+  */
+  uint256 public constant MAX_RESERVED_RATE = 200;
 
   /**
     @notice
@@ -181,7 +188,7 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
       uint256 _tokenCount = PRBMath.mulDiv(_data.amount.value, _data.weight, 10**_data.amount.decimals);
 
       // Unpack the quote from the pool, given by the frontend
-      (uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (uint256, uint256));
+      (, , uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (bytes32, bytes32, uint256, uint256));
 
       delegateAllocations = new JBPayDelegateAllocation[](1);
 
@@ -209,7 +216,8 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
 
       @dev
       The reserved token are added by burning and minting them again, as this delegate is 
-      used only if the fc reserved rate is the maximum
+      used only if the fc reserved rate is the maximum. The actual reserved rate is in the
+      fundingcycle metadata.
 
       @param _data the delegate data passed by the terminal
   */
@@ -219,7 +227,7 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
     _mintedAmount = 1;
 
     // The minimum amount of token received if swapping
-    (uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (uint256, uint256));
+    (, , uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (bytes32, bytes32, uint256, uint256));
     uint256 _minimumReceivedFromSwap = _quote * _slippage / SLIPPAGE_DENOMINATOR;
 
     // Pick the appropriate pathway (swap vs mint)
@@ -245,8 +253,6 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
     int256 amount1Delta,
     bytes calldata data
   ) external override {
-// negative == sent by the pool, positive == must be received by the pool
-
     // Check if this is really a callback
     if(msg.sender != address(pool)) revert JuiceBuyback_Unauthorized();
 
@@ -303,10 +309,49 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
       // Swap succeded, take note of the amount of projectToken received (negative as it is an exact input)
       _amountReceived = uint256(-(_projectTokenIsZero ? amount0 : amount1));
     } catch {
-      // _amountReceived = 0 -> will later mint
+      // implies _amountReceived = 0 -> will later mint when back in didPay
 
-      // Return the tokenIn to the terminal
-      IJBPaymentTerminal(msg.sender).addToBalanceOf(_data.projectId, _data.amount.value, _data.amount.token, "", new bytes(0));
+      // Send the tokenIn back to the terminal balance
+      IJBPaymentTerminal(msg.sender).addToBalanceOf
+        {value: address(terminalToken) == JBTokens.ETH ? _data.amount.value : 0}
+        (_data.projectId, _data.amount.value, _data.amount.token, "", new bytes(0));
+
+      return _amountReceived;
+    }
+
+    // Get the net amount (without reserve), to send to beneficiary
+    uint256 _reservedRate = _getReservedRate(_data.projectId);
+
+    uint256 _nonReservedToken = PRBMath.mulDiv(
+      _amountReceived,
+      MAX_RESERVED_RATE - _reservedRate,
+      MAX_RESERVED_RATE);
+
+    // Send the non reserved token to the beneficiary (if any / reserved rate is not max)
+    if(_nonReservedToken != 0) projectToken.transfer(_data.beneficiary, _nonReservedToken);
+
+    // If there are reserved token, burn and mint them to the reserve
+    if(_amountReceived - _nonReservedToken != 0) {
+      // burn the reserved portion to mint it to the reserve (using the fc max reserved rate)
+      IJBController controller = IJBController(jbxTerminal.directory().controllerOf(_data.projectId));
+
+      controller.burnTokensOf({
+        _holder: address(this),
+        _projectId: _data.projectId,
+        _tokenCount: _amountReceived - _nonReservedToken,
+        _memo: '',
+        _preferClaimedTokens: true
+      });
+
+      // Mint the reserved token straight to the reserve
+      controller.mintTokensOf({
+        _projectId: _data.projectId,
+        _tokenCount: _amountReceived - _nonReservedToken,
+        _beneficiary: _data.beneficiary,
+        _memo: _data.memo,
+        _preferClaimedTokens: _data.preferClaimedTokens,
+        _useReservedRate: true
+        });
     }
   }
 
@@ -326,48 +371,41 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
     // Get the net amount (without reserve rate), to send to beneficiary
     uint256 _nonReservedToken = PRBMath.mulDiv(
       _amount,
-      JBConstants.MAX_RESERVED_RATE - _reservedRate,
-      JBConstants.MAX_RESERVED_RATE);
+      MAX_RESERVED_RATE - _reservedRate,
+      MAX_RESERVED_RATE);
 
-    // Mint to the beneficiary the non reserved token
-    controller.mintTokensOf({
-      _projectId: _data.projectId,
-      _tokenCount: _nonReservedToken,
-      _beneficiary: _data.beneficiary,
-      _memo: _data.memo,
-      _preferClaimedTokens: _data.preferClaimedTokens,
-      _useReservedRate: false
+    // Mint to the beneficiary the non reserved token (if any)
+    if(_nonReservedToken != 0)
+      controller.mintTokensOf({
+        _projectId: _data.projectId,
+        _tokenCount: _nonReservedToken,
+        _beneficiary: _data.beneficiary,
+        _memo: _data.memo,
+        _preferClaimedTokens: _data.preferClaimedTokens,
+        _useReservedRate: false
       });
 
     // Mint the reserved token
-    controller.mintTokensOf({
-      _projectId: _data.projectId,
-      _tokenCount: _amount - _nonReservedToken,
-      _beneficiary: _data.beneficiary,
-      _memo: _data.memo,
-      _preferClaimedTokens: _data.preferClaimedTokens,
-      _useReservedRate: true
+    if(_amount - _nonReservedToken != 0)
+      controller.mintTokensOf({
+        _projectId: _data.projectId,
+        _tokenCount: _amount - _nonReservedToken,
+        _beneficiary: _data.beneficiary,
+        _memo: _data.memo,
+        _preferClaimedTokens: _data.preferClaimedTokens,
+        _useReservedRate: true
       });
   }
 
   function _getReservedRate(uint256 _projectId) internal view returns(uint256 _reservedRate) {
-    // Get the reserved rate configuration
-    ReservedRateConfiguration storage _reservedRateConfiguration = reservedRateOf[_projectId];
+    // burn the reserved portion to mint it to the reserve (using the fc max reserved rate)
+    IJBController _controller = IJBController(jbxTerminal.directory().controllerOf(_projectId));
 
+    (, JBFundingCycleMetadata memory _metadata) = _controller.currentFundingCycleOf(_projectId);
 
-    IJBFundingCycleBallot ballot = ballotOf[_projectId];
+    _reservedRate = _metadata.metadata;
 
-    // No ballot to use
-    if(address(ballot) == address(0)) return _reservedRateConfiguration.rateAfter;
-
-    JBBallotState _currentState = ballot.stateOf({
-      _projectId: _projectId,
-      _configuration: _reservedRateConfiguration.reconfigurationTime,
-      _start: block.timestamp
-    });
-
-    if(_currentState == JBBallotState.Approved) _reservedRate = _reservedRateConfiguration.rateAfter;
-    else  _reservedRate = _reservedRateConfiguration.rateBefore;
+    if(_reservedRate > MAX_RESERVED_RATE) revert JuiceBuyback_InvalidReservedRate();
   }
 
   //*********************************************************************//
