@@ -301,10 +301,12 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
       // Swap succeded, take note of the amount of projectToken received (negative as it is an exact input)
       _amountReceived = uint256(-(_projectTokenIsZero ? amount0 : amount1));
     } catch {
-      // _amountReceived = 0 -> will later mint
+      // implies _amountReceived = 0 -> will later mint when back in didPay
 
-      // Return the tokenIn to the terminal
-      IJBPaymentTerminal(msg.sender).addToBalanceOf(_data.projectId, _data.amount.value, _data.amount.token, "", new bytes(0));
+      // Send the tokenIn back to the terminal balance
+      IJBPaymentTerminal(msg.sender).addToBalanceOf
+        {value: address(terminalToken) == JBTokens.ETH ? _data.amount.value : 0}
+        (_data.projectId, _data.amount.value, _data.amount.token, "", new bytes(0));
 
       return _amountReceived;
     }
