@@ -245,8 +245,6 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
     int256 amount1Delta,
     bytes calldata data
   ) external override {
-// negative == sent by the pool, positive == must be received by the pool
-
     // Check if this is really a callback
     if(msg.sender != address(pool)) revert JuiceBuyback_Unauthorized();
 
@@ -307,7 +305,41 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
 
       // Return the tokenIn to the terminal
       IJBPaymentTerminal(msg.sender).addToBalanceOf(_data.projectId, _data.amount.value, _data.amount.token, "", new bytes(0));
+
+      return _amountReceived;
     }
+
+    // Get the net amount (without reserve), to send to beneficiary
+    uint256 _reservedRate = _getReservedRate(_data.projectId);
+
+    uint256 _nonReservedToken = PRBMath.mulDiv(
+      _amountReceived,
+      JBConstants.MAX_RESERVED_RATE - _reservedRate,
+      JBConstants.MAX_RESERVED_RATE);
+
+    // Send the non reserved token to the beneficiary
+    projectToken.transfer(_data.beneficiary, _nonReservedToken);
+
+    // burn the reserved portion to mint it to the reserve (using the fc max reserved rate)
+    IJBController controller = IJBController(jbxTerminal.directory().controllerOf(_data.projectId));
+
+    controller.burnTokensOf({
+      _holder: address(this),
+      _projectId: _data.projectId,
+      _tokenCount: _amountReceived - _nonReservedToken,
+      _memo: '',
+      _preferClaimedTokens: true
+    });
+
+    // Mint the reserved token straight to the reserve
+    controller.mintTokensOf({
+      _projectId: _data.projectId,
+      _tokenCount: _amountReceived - _nonReservedToken,
+      _beneficiary: _data.beneficiary,
+      _memo: _data.memo,
+      _preferClaimedTokens: _data.preferClaimedTokens,
+      _useReservedRate: true
+      });
   }
 
   /**
