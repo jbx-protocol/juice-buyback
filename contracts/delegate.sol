@@ -230,15 +230,14 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
     (, , uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (bytes32, bytes32, uint256, uint256));
     uint256 _minimumReceivedFromSwap = _quote * _slippage / SLIPPAGE_DENOMINATOR;
 
-    // Pick the appropriate pathway (swap vs mint)
-    if (_minimumReceivedFromSwap > _tokenCount) {
+    // Pick the appropriate pathway (swap vs mint), use mint if non-claimed prefered
+    if (_minimumReceivedFromSwap > _tokenCount || !_data.preferClaimedTokens) {
       // Try swapping
       uint256 _amountReceived = _swap(_data, _minimumReceivedFromSwap);
 
       // If swap failed, mint instead, with the original weight + add to balance the token in
       if (_amountReceived == 0) _mint(_data, _tokenCount);
     } else _mint(_data, _tokenCount);
-
   }
 
   /**
