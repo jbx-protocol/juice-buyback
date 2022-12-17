@@ -179,11 +179,6 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
       string memory memo,
       JBPayDelegateAllocation[] memory delegateAllocations
     )
-    {
-      // If the funding cycle reserved rate is not the max, do not use the delegate (pass through)
-      if (_data.reservedRate != JBConstants.MAX_RESERVED_RATE)
-        return (_data.weight, _data.memo, new JBPayDelegateAllocation[](0));
-
       // Find the total number of tokens to mint, as a fixed point number with as many decimals as `weight` has.
       uint256 _tokenCount = PRBMath.mulDiv(_data.amount.value, _data.weight, 10**_data.amount.decimals);
 
@@ -200,14 +195,11 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
           delegate: IJBPayDelegate(this),
           amount: 0 // Leave the terminal token in the terminal
         });
-      } else {
-        delegateAllocations[0] = JBPayDelegateAllocation({
-          delegate: IJBPayDelegate(this),
-          amount: _data.amount.value // Take the terminal token for swapping it
-        });
+
+        return (0, _data.memo, delegateAllocations);
       }
 
-      return (0, _data.memo, delegateAllocations);
+      return (_tokenCount, _data.memo, JBPayDelegateAllocation({delegate: IJBPayDelegate(address(0)), amount: 0}));
     }
 
   /**
