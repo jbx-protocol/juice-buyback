@@ -94,7 +94,7 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
 
   /**
     @notice
-    The projectId terminal using this extension
+    The project terminal using this extension
   */
   IJBPayoutRedemptionPaymentTerminal public immutable jbxTerminal;
 
@@ -215,8 +215,8 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
       uint256 _amountReceived = _swap(_data, _minimumReceivedFromSwap, _reservedRate);
 
       // If swap failed, mint instead, with the original weight + add to balance the token in
-      if (_amountReceived == 0) _mint(_data, _tokenCount, _reservedRate);
-    } else _mint(_data, _tokenCount, _reservedRate);
+      if (_amountReceived == 0) _mint(_data, _tokenCount);
+    } else _mint(_data, _tokenCount);
   }
 
   /**
@@ -288,42 +288,44 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
       _amountReceived = uint256(-(_projectTokenIsZero ? amount0 : amount1));
     } catch {
       // implies _amountReceived = 0 -> will later mint when back in didPay
-
-      // Send the tokenIn back to the terminal balance
-      IJBPaymentTerminal(msg.sender).addToBalanceOf
-        {value: address(terminalToken) == JBTokens.ETH ? _data.amount.value : 0}
-        (_data.projectId, _data.amount.value, _data.amount.token, "", new bytes(0));
-
       return _amountReceived;
     }
 
+    // The amount to send to the beneficiary
     uint256 _nonReservedToken = PRBMath.mulDiv(
       _amountReceived,
       JBConstants.MAX_RESERVED_RATE - _reservedRate,
       JBConstants.MAX_RESERVED_RATE);
 
+    uint256 _reservedToken = _amountReceived - _nonReservedToken;
+
     // Send the non reserved token to the beneficiary (if any / reserved rate is not max)
     if(_nonReservedToken != 0) projectToken.transfer(_data.beneficiary, _nonReservedToken);
 
     // If there are reserved token, burn and mint them to the reserve
-    if(_amountReceived - _nonReservedToken != 0) {
+    if(_reservedToken != 0) {
       // burn the reserved portion to mint it to the reserve (using the fc max reserved rate)
       IJBController controller = IJBController(jbxTerminal.directory().controllerOf(_data.projectId));
+
+      // The amount to mint to have _reservedToken in the reserve, given the reserved rate
+      uint256 _totalToMint = PRBMath.mulDiv(
+        _amountReceived,
+        JBConstants.MAX_RESERVED_RATE,
+        _reservedRate);
 
       // Burn all the reserved token, which are in this address
       controller.burnTokensOf({
         _holder: address(this),
         _projectId: _data.projectId,
-        _tokenCount: _amountReceived - _nonReservedToken,
+        _tokenCount: _reservedToken,
         _memo: '',
         _preferClaimedTokens: true
       });
 
-// TODO: FIX THIS -> we should mint amountReceived-nonReserve TO THE RESERVE, not as a whole token count!
       // Mint the reserved token with this address as beneficiary
       controller.mintTokensOf({
         _projectId: _data.projectId,
-        _tokenCount: _amountReceived - _nonReservedToken,
+        _tokenCount: _totalToMint,
         _beneficiary: address(this),
         _memo: _data.memo,
         _preferClaimedTokens: false,
@@ -331,8 +333,7 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
         });
 
       // Burn the non-reserve token which are in this address
-      // TOD0: use arithmetic magic instead of balanceOf
-      uint256 _nonReservedTokenInContract = projectToken.balanceOf(address(this));
+      uint256 _nonReservedTokenInContract = _totalToMint - _reservedToken;
 
       if(_nonReservedTokenInContract != 0)
         controller.burnTokensOf({
@@ -347,42 +348,28 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
 
   /**
     @notice
-    Mint the token out, leaving token in in the terminal
+    Mint the token out, sending back the token in in the terminal
 
     @param _data the didPayData passed by the terminal
     @param _amount the amount of token out to mint
   */
-  function _mint(JBDidPayData calldata _data, uint256 _amount, uint256 _reservedRate) internal {
-
+  function _mint(JBDidPayData calldata _data, uint256 _amount ) internal {
     IJBController controller = IJBController(jbxTerminal.directory().controllerOf(_data.projectId));
 
-    // Get the net amount (without reserved token), to send to beneficiary
-    uint256 _nonReservedToken = PRBMath.mulDiv(
-      _amount,
-      JBConstants.MAX_RESERVED_RATE - _reservedRate,
-      JBConstants.MAX_RESERVED_RATE);
+    // Mint to the beneficiary with the fc reserve rate
+    controller.mintTokensOf({
+      _projectId: _data.projectId,
+      _tokenCount: _amount,
+      _beneficiary: _data.beneficiary,
+      _memo: _data.memo,
+      _preferClaimedTokens: _data.preferClaimedTokens,
+      _useReservedRate: true
+    });
 
-    // Mint to the beneficiary the non reserved token (if any)
-    if(_nonReservedToken != 0)
-      controller.mintTokensOf({
-        _projectId: _data.projectId,
-        _tokenCount: _nonReservedToken,
-        _beneficiary: _data.beneficiary,
-        _memo: _data.memo,
-        _preferClaimedTokens: _data.preferClaimedTokens,
-        _useReservedRate: false
-      });
-
-    // Mint the reserved token
-    if(_amount - _nonReservedToken != 0)
-      controller.mintTokensOf({
-        _projectId: _data.projectId,
-        _tokenCount: _amount - _nonReservedToken,
-        _beneficiary: _data.beneficiary,
-        _memo: _data.memo,
-        _preferClaimedTokens: _data.preferClaimedTokens,
-        _useReservedRate: true
-      });
+    // Send the tokenIn back to the terminal balance
+    jbxTerminal.addToBalanceOf
+      {value: address(terminalToken) == JBTokens.ETH ? _data.amount.value : 0}
+      (_data.projectId, _data.amount.value, _data.amount.token, "", new bytes(0));
   }
 
   //*********************************************************************//
