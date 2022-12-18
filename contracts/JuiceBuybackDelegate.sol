@@ -319,11 +319,12 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
         _preferClaimedTokens: true
       });
 
+// TODO: FIX THIS -> we should mint amountReceived-nonReserve TO THE RESERVE, not as a whole token count!
       // Mint the reserved token with this address as beneficiary
       controller.mintTokensOf({
         _projectId: _data.projectId,
         _tokenCount: _amountReceived - _nonReservedToken,
-        _beneficiary: _data.beneficiary,
+        _beneficiary: address(this),
         _memo: _data.memo,
         _preferClaimedTokens: false,
         _useReservedRate: true
