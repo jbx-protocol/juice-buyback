@@ -33,7 +33,7 @@ import './interfaces/external/IWETH9.sol';
   quote for the user when contributing to a project.
 */
 
-contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3SwapCallback, Ownable {
+contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3SwapCallback, Ownable {
   using JBFundingCycleMetadataResolver for JBFundingCycle;
 
   //*********************************************************************//
@@ -178,7 +178,7 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
       uint256 weight,
       string memory memo,
       JBPayDelegateAllocation[] memory delegateAllocations
-    )
+    ) {
       // Find the total number of tokens to mint, as a fixed point number with as many decimals as `weight` has.
       uint256 _tokenCount = PRBMath.mulDiv(_data.amount.value, _data.weight, 10**_data.amount.decimals);
 
@@ -199,7 +199,12 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
         return (0, _data.memo, delegateAllocations);
       }
 
-      return (_tokenCount, _data.memo, JBPayDelegateAllocation({delegate: IJBPayDelegate(address(0)), amount: 0}));
+      delegateAllocations[0] = JBPayDelegateAllocation({
+        delegate: IJBPayDelegate(address(0)),
+        amount: 0
+      });
+
+      return (_tokenCount, _data.memo, delegateAllocations);
     }
 
   /**
@@ -223,7 +228,7 @@ contract JuiceBuyback is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3Sw
     uint256 _minimumReceivedFromSwap = _quote * _slippage / SLIPPAGE_DENOMINATOR;
 
     // Pick the appropriate pathway (swap vs mint), use mint if non-claimed prefered
-    if (_minimumReceivedFromSwap > _tokenCount || !_data.preferClaimedTokens) {
+    if (_minimumReceivedFromSwap > _tokenCount && _data.preferClaimedTokens) {
       // Try swapping
       uint256 _amountReceived = _swap(_data, _minimumReceivedFromSwap);
 
