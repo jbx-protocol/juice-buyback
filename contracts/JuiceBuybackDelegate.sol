@@ -179,11 +179,6 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
       string memory memo,
       JBPayDelegateAllocation[] memory delegateAllocations
     )
-    {
-      // If the funding cycle reserved rate is not the max, do not use the delegate (pass through)
-      if (_data.reservedRate != JBConstants.MAX_RESERVED_RATE)
-        return (_data.weight, _data.memo, new JBPayDelegateAllocation[](0));
-
       // Find the total number of tokens to mint, as a fixed point number with as many decimals as `weight` has.
       uint256 _tokenCount = PRBMath.mulDiv(_data.amount.value, _data.weight, 10**_data.amount.decimals);
 
@@ -200,14 +195,11 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
           delegate: IJBPayDelegate(this),
           amount: 0 // Leave the terminal token in the terminal
         });
-      } else {
-        delegateAllocations[0] = JBPayDelegateAllocation({
-          delegate: IJBPayDelegate(this),
-          amount: _data.amount.value // Take the terminal token for swapping it
-        });
+
+        return (0, _data.memo, delegateAllocations);
       }
 
-      return (0, _data.memo, delegateAllocations);
+      return (_tokenCount, _data.memo, JBPayDelegateAllocation({delegate: IJBPayDelegate(address(0)), amount: 0}));
     }
 
   /**
@@ -230,15 +222,14 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
     (, , uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (bytes32, bytes32, uint256, uint256));
     uint256 _minimumReceivedFromSwap = _quote * _slippage / SLIPPAGE_DENOMINATOR;
 
-    // Pick the appropriate pathway (swap vs mint)
-    if (_minimumReceivedFromSwap > _tokenCount) {
+    // Pick the appropriate pathway (swap vs mint), use mint if non-claimed prefered
+    if (_minimumReceivedFromSwap > _tokenCount || !_data.preferClaimedTokens) {
       // Try swapping
       uint256 _amountReceived = _swap(_data, _minimumReceivedFromSwap);
 
       // If swap failed, mint instead, with the original weight + add to balance the token in
       if (_amountReceived == 0) _mint(_data, _tokenCount);
     } else _mint(_data, _tokenCount);
-
   }
 
   /**
@@ -405,7 +396,8 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
 
     _reservedRate = _metadata.metadata;
 
-    if(_reservedRate > MAX_RESERVED_RATE) revert JuiceBuyback_InvalidReservedRate();
+    // If invalid reserved rate, use no reserve
+    if(_reservedRate > MAX_RESERVED_RATE) _reservedRate = 0;
   }
 
   //*********************************************************************//
