@@ -167,13 +167,14 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
       // Unpack the quote from the pool, given by the frontend
       (, , uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (bytes32, bytes32, uint256, uint256));
 
-      delegateAllocations = new JBPayDelegateAllocation[](1);
-
-      // If the amount minted is bigger than the lowest received when swapping, use the mint pathway
+      // If the amount swapped is bigger than the lowest received when minting, use the swap pathway
       if (_tokenCount >= _quote * _slippage / SLIPPAGE_DENOMINATOR) {
+        // Pass the quote and reserve rate via a mutex
         mintedAmount = _tokenCount;
         reservedRate = _data.reservedRate;
 
+        // Return this delegate as the one to use, and do not mint from the terminal
+        delegateAllocations = new JBPayDelegateAllocation[](1);
         delegateAllocations[0] = JBPayDelegateAllocation({
           delegate: IJBPayDelegate(this),
           amount: _data.amount.value
@@ -191,17 +192,16 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
       Delegate to either swap to the beneficiary or mint to the beneficiary
 
       @dev
-      The reserved token are added by burning and minting them again, as this delegate is 
-      used only if the fc reserved rate is the maximum. The actual reserved rate is in the
-      fundingcycle metadata.
+      
 
       @param _data the delegate data passed by the terminal
   */
   function didPay(JBDidPayData calldata _data) external payable override {
-    // Retrieve the number of token created if minting and reset the mutexes
+    // Retrieve the number of token created if minting and reset the mutex
     uint256 _tokenCount = mintedAmount;
     mintedAmount = 1;
 
+    // Retrieve the fc reserved rate and reset the mutex
     uint256 _reservedRate = reservedRate;
     reservedRate = 1;
 
@@ -296,24 +296,24 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
       _amountReceived,
       JBConstants.MAX_RESERVED_RATE - _reservedRate,
       JBConstants.MAX_RESERVED_RATE);
-
+    
+    // The amount to add to the reserved token
     uint256 _reservedToken = _amountReceived - _nonReservedToken;
 
-    // Send the non reserved token to the beneficiary (if any / reserved rate is not max)
+    // Send the non-reserved token to the beneficiary (if any / reserved rate is not max)
     if(_nonReservedToken != 0) projectToken.transfer(_data.beneficiary, _nonReservedToken);
 
-    // If there are reserved token, burn and mint them to the reserve
+    // If there are reserved token, add them to the reserve
     if(_reservedToken != 0) {
-      // burn the reserved portion to mint it to the reserve (using the fc max reserved rate)
       IJBController controller = IJBController(jbxTerminal.directory().controllerOf(_data.projectId));
 
-      // The amount to mint to have _reservedToken in the reserve, given the reserved rate
+      // The amount to mint to have _reservedToken in the reserve, given the current fc reserved rate
       uint256 _totalToMint = PRBMath.mulDiv(
         _amountReceived,
         JBConstants.MAX_RESERVED_RATE,
         _reservedRate);
 
-      // Burn all the reserved token, which are in this address
+      // 1) Burn all the reserved token, which are in this address -> 0 here, 0 in reserve
       controller.burnTokensOf({
         _holder: address(this),
         _projectId: _data.projectId,
@@ -322,7 +322,7 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
         _preferClaimedTokens: true
       });
 
-      // Mint the reserved token with this address as beneficiary
+      // 2) Mint the reserved token with this address as beneficiary -> totalToMint here, reservedToken in reserve
       controller.mintTokensOf({
         _projectId: _data.projectId,
         _tokenCount: _totalToMint,
@@ -332,7 +332,7 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
         _useReservedRate: true
         });
 
-      // Burn the non-reserve token which are in this address
+      // 3) Burn the non-reserve token which are now left in this address (can be 0) -> 0 here, reservedToken in reserve
       uint256 _nonReservedTokenInContract = _totalToMint - _reservedToken;
 
       if(_nonReservedTokenInContract != 0)
