@@ -310,6 +310,7 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
       // burn the reserved portion to mint it to the reserve (using the fc max reserved rate)
       IJBController controller = IJBController(jbxTerminal.directory().controllerOf(_data.projectId));
 
+      // Burn all the reserved token, which are in this address
       controller.burnTokensOf({
         _holder: address(this),
         _projectId: _data.projectId,
@@ -318,14 +319,27 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
         _preferClaimedTokens: true
       });
 
-      // Mint the reserved token straight to the reserve
+      // Mint the reserved token with this address as beneficiary
       controller.mintTokensOf({
         _projectId: _data.projectId,
         _tokenCount: _amountReceived - _nonReservedToken,
         _beneficiary: _data.beneficiary,
         _memo: _data.memo,
-        _preferClaimedTokens: _data.preferClaimedTokens,
+        _preferClaimedTokens: false,
         _useReservedRate: true
+        });
+
+      // Burn the non-reserve token which are in this address
+      // TOD0: use arithmetic magic instead of balanceOf
+      uint256 _nonReservedTokenInContract = projectToken.balanceOf(address(this));
+
+      if(_nonReservedTokenInContract != 0)
+        controller.burnTokensOf({
+          _holder: address(this),
+          _projectId: _data.projectId,
+          _tokenCount: _nonReservedTokenInContract,
+          _memo: '',
+          _preferClaimedTokens: false
         });
     }
   }
@@ -341,7 +355,7 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
 
     IJBController controller = IJBController(jbxTerminal.directory().controllerOf(_data.projectId));
 
-    // Get the net amount (without reserve rate), to send to beneficiary
+    // Get the net amount (without reserved token), to send to beneficiary
     uint256 _nonReservedToken = PRBMath.mulDiv(
       _amount,
       JBConstants.MAX_RESERVED_RATE - _reservedRate,
