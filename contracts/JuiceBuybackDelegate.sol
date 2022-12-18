@@ -39,7 +39,6 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
   //*********************************************************************//
   // --------------------------- custom errors ------------------------- //
   //*********************************************************************//
-  error JuiceBuyback_InvalidReservedRate();
   error JuiceBuyback_Unauthorized();
   error JuiceBuyback_MaximumSlippage();
 
@@ -47,11 +46,7 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
   // -----------------------------  events ----------------------------- //
   //*********************************************************************//
 
-  struct ReservedRateConfiguration {
-    uint224 reconfigurationTime; // time at which the reserved rate was reconfigured
-    uint16 rateBefore; // reserved rate (expressed in 1/10000th) before reconfig
-    uint16 rateAfter; // reserved rate (expressed in 1/10000th) after reconfig
-  }
+
 
   //*********************************************************************//
   // --------------------- private constant properties ----------------- //
@@ -72,12 +67,6 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
   //*********************************************************************//
   // --------------------- public constant properties ------------------ //
   //*********************************************************************//
-
-  /**
-    @notice
-    The maximum reserved rate used by this delegate, passed as fc metadata (expressed in 1/200th)
-  */
-  uint256 public constant MAX_RESERVED_RATE = 200;
 
   /**
     @notice
@@ -116,22 +105,6 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
   IWETH9 public immutable weth;
 
   //*********************************************************************//
-  // --------------------- public stored properties -------------------- //
-  //*********************************************************************//
-
-  /**
-    @notice
-    The actual reserved rate (the fc needs to have a max reserved rate for this delegate to run)
-  */
-  mapping(uint256=>ReservedRateConfiguration) public reservedRateOf;
-
-  /**
-    @notice
-    The ballot used by a project
-  */
-  mapping(uint256=>IJBFundingCycleBallot) public ballotOf;
-
-  //*********************************************************************//
   // --------------------- private stored properties ------------------- //
   //*********************************************************************//
 
@@ -142,7 +115,16 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
     @dev
     This is a mutex 1-x-1
   */
-  uint256 private _mintedAmount;
+  uint256 private mintedAmount = 1;
+
+  /**
+    @notice
+    The current reserved rate
+
+    @dev
+    This is a mutex 1-x-1
+  */
+  uint256 private reservedRate = 1;
 
   /**
     @dev
@@ -189,22 +171,19 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
 
       // If the amount minted is bigger than the lowest received when swapping, use the mint pathway
       if (_tokenCount >= _quote * _slippage / SLIPPAGE_DENOMINATOR) {
-        _mintedAmount = _tokenCount;
+        mintedAmount = _tokenCount;
+        reservedRate = _data.reservedRate;
 
         delegateAllocations[0] = JBPayDelegateAllocation({
           delegate: IJBPayDelegate(this),
-          amount: 0 // Leave the terminal token in the terminal
+          amount: _data.amount.value
         });
 
         return (0, _data.memo, delegateAllocations);
       }
 
-      delegateAllocations[0] = JBPayDelegateAllocation({
-        delegate: IJBPayDelegate(address(0)),
-        amount: 0
-      });
-
-      return (_tokenCount, _data.memo, delegateAllocations);
+      // If minting, do not use this as delegate
+      return (_data.weight, _data.memo, new JBPayDelegateAllocation[](0));
     }
 
   /**
@@ -219,22 +198,25 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
       @param _data the delegate data passed by the terminal
   */
   function didPay(JBDidPayData calldata _data) external payable override {
-    // Retrieve the number of token created if minting and reset the mutex
-    uint256 _tokenCount = _mintedAmount;
-    _mintedAmount = 1;
+    // Retrieve the number of token created if minting and reset the mutexes
+    uint256 _tokenCount = mintedAmount;
+    mintedAmount = 1;
+
+    uint256 _reservedRate = reservedRate;
+    reservedRate = 1;
 
     // The minimum amount of token received if swapping
     (, , uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (bytes32, bytes32, uint256, uint256));
     uint256 _minimumReceivedFromSwap = _quote * _slippage / SLIPPAGE_DENOMINATOR;
 
     // Pick the appropriate pathway (swap vs mint), use mint if non-claimed prefered
-    if (_minimumReceivedFromSwap > _tokenCount && _data.preferClaimedTokens) {
+    if (_data.preferClaimedTokens) {
       // Try swapping
-      uint256 _amountReceived = _swap(_data, _minimumReceivedFromSwap);
+      uint256 _amountReceived = _swap(_data, _minimumReceivedFromSwap, _reservedRate);
 
       // If swap failed, mint instead, with the original weight + add to balance the token in
-      if (_amountReceived == 0) _mint(_data, _tokenCount);
-    } else _mint(_data, _tokenCount);
+      if (_amountReceived == 0) _mint(_data, _tokenCount, _reservedRate);
+    } else _mint(_data, _tokenCount, _reservedRate);
   }
 
   /**
@@ -292,7 +274,7 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
     @param _data the didPayData passed by the terminal
     @param _minimumReceivedFromSwap the minimum amount received, to prevent slippage
   */
-  function _swap(JBDidPayData calldata _data, uint256 _minimumReceivedFromSwap) internal returns(uint256 _amountReceived){
+  function _swap(JBDidPayData calldata _data, uint256 _minimumReceivedFromSwap, uint256 _reservedRate) internal returns(uint256 _amountReceived){
 
     // Pass the terminal, token and min amount to receive as extra data
     try pool.swap({
@@ -315,13 +297,10 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
       return _amountReceived;
     }
 
-    // Get the net amount (without reserve), to send to beneficiary
-    uint256 _reservedRate = _getReservedRate(_data.projectId);
-
     uint256 _nonReservedToken = PRBMath.mulDiv(
       _amountReceived,
-      MAX_RESERVED_RATE - _reservedRate,
-      MAX_RESERVED_RATE);
+      JBConstants.MAX_RESERVED_RATE - _reservedRate,
+      JBConstants.MAX_RESERVED_RATE);
 
     // Send the non reserved token to the beneficiary (if any / reserved rate is not max)
     if(_nonReservedToken != 0) projectToken.transfer(_data.beneficiary, _nonReservedToken);
@@ -358,17 +337,15 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
     @param _data the didPayData passed by the terminal
     @param _amount the amount of token out to mint
   */
-  function _mint(JBDidPayData calldata _data, uint256 _amount) internal {
+  function _mint(JBDidPayData calldata _data, uint256 _amount, uint256 _reservedRate) internal {
 
     IJBController controller = IJBController(jbxTerminal.directory().controllerOf(_data.projectId));
-
-    uint256 _reservedRate = _getReservedRate(_data.projectId);
 
     // Get the net amount (without reserve rate), to send to beneficiary
     uint256 _nonReservedToken = PRBMath.mulDiv(
       _amount,
-      MAX_RESERVED_RATE - _reservedRate,
-      MAX_RESERVED_RATE);
+      JBConstants.MAX_RESERVED_RATE - _reservedRate,
+      JBConstants.MAX_RESERVED_RATE);
 
     // Mint to the beneficiary the non reserved token (if any)
     if(_nonReservedToken != 0)
@@ -391,18 +368,6 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
         _preferClaimedTokens: _data.preferClaimedTokens,
         _useReservedRate: true
       });
-  }
-
-  function _getReservedRate(uint256 _projectId) internal view returns(uint256 _reservedRate) {
-    // burn the reserved portion to mint it to the reserve (using the fc max reserved rate)
-    IJBController _controller = IJBController(jbxTerminal.directory().controllerOf(_projectId));
-
-    (, JBFundingCycleMetadata memory _metadata) = _controller.currentFundingCycleOf(_projectId);
-
-    _reservedRate = _metadata.metadata;
-
-    // If invalid reserved rate, use no reserve
-    if(_reservedRate > MAX_RESERVED_RATE) _reservedRate = 0;
   }
 
   //*********************************************************************//
