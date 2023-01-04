@@ -62,7 +62,7 @@ contract TestUnitJuiceBuybackDelegate is TestBaseWorkflowV3 {
 
     controller = jbController();
 
-    _delegate = new JuiceBuybackDelegate(IERC20(address(jbx)), weth, pool, jbETHPaymentTerminal(), weth);
+    _delegate = new JuiceBuybackDelegate(IERC20(address(jbx)), IERC20(JBTokens.ETH), pool, jbETHPaymentTerminal(), weth);
 
     _projectMetadata = JBProjectMetadata({content: 'myIPFSHash', domain: 1});
 
@@ -75,7 +75,7 @@ contract TestUnitJuiceBuybackDelegate is TestBaseWorkflowV3 {
 
     _metadata = JBFundingCycleMetadata({
       global: JBGlobalFundingCycleMetadata({allowSetTerminals: false, allowSetController: false, pauseTransfers: false}),
-      reservedRate: 10000,
+      reservedRate: reservedRate,
       redemptionRate: 5000,
       ballotRedemptionRate: 0,
       pausePay: false,
@@ -120,7 +120,7 @@ contract TestUnitJuiceBuybackDelegate is TestBaseWorkflowV3 {
     );
   }
 
-  // If the quote amount is higher than the token that would be recevied after minting or a swap the buy back delegate isn't used
+  // // If the quote amount is higher than the token that would be recevied after minting or a swap the buy back delegate isn't used
   function testDatasourceDelegateWhenQuoteIsHigherThanTokenCount() public {
     uint256 payAmountInWei = 2 ether;
 
@@ -186,18 +186,12 @@ contract TestUnitJuiceBuybackDelegate is TestBaseWorkflowV3 {
     assertEq(controller.reservedTokenBalanceOf(_projectId, reservedRate), amountReserved);
   }
 
-  // If minting gives a higher amount of project token, mint should be used with proper token distribution to beneficiary and reserved token
-  function testDatasourceDelegateMintIfQuoteIsHigher() public {
+  // If claimed token flag is not true then make sure the delegate mints the tokens & the balance distribution is correct
+  function testDatasourceDelegateMintIfPreferenceIsNotToClaimTokens() public {
     uint256 payAmountInWei = 10 ether;
 
-    bytes memory metadata = abi.encode(10, 10);
-
-    _delegate.setReservedRateOf(_projectId, 5000);
-
-    uint256 _nonReservedToken = PRBMath.mulDiv(
-      payAmountInWei,
-      JBConstants.MAX_RESERVED_RATE - 5000,
-      JBConstants.MAX_RESERVED_RATE);
+    // setting the quote in metadata
+    bytes memory metadata = abi.encode(new bytes(0), new bytes(0), 1 ether, 10000);
 
     jbETHPaymentTerminal().pay{value: payAmountInWei}(
       _projectId,
@@ -214,17 +208,17 @@ contract TestUnitJuiceBuybackDelegate is TestBaseWorkflowV3 {
       metadata
     );
 
+    uint256 totalMinted = PRBMath.mulDiv(payAmountInWei, weight, 10**18);
+    uint256 amountBeneficiary = PRBMath.mulDiv(
+        totalMinted,
+        JBConstants.MAX_RESERVED_RATE - reservedRate,
+        JBConstants.MAX_RESERVED_RATE
+      );
 
-    // Delegate is deployed using reservedRate
-    uint256 amountBeneficiary = PRBMath.mulDiv(_nonReservedToken, weight, 10**18);
-    uint256 amountReserved = ((amountBeneficiary * JBConstants.MAX_RESERVED_RATE) /
-      (JBConstants.MAX_RESERVED_RATE - 5000)) - amountBeneficiary;
+    uint256 amountReserved = totalMinted - amountBeneficiary;
 
     assertEq(jbTokenStore().balanceOf(beneficiary(), _projectId), amountBeneficiary);
-
-    assertEq(
-      controller.reservedTokenBalanceOf(_projectId, JBConstants.MAX_RESERVED_RATE),
-      (amountReserved / 10) * 10 // Last wei rounding
-    );
+    assertEq(controller.reservedTokenBalanceOf(_projectId, reservedRate), amountReserved);
+    assertEq(jbPaymentTerminalStore().balanceOf(jbETHPaymentTerminal(), _projectId), payAmountInWei);
   }
 }
