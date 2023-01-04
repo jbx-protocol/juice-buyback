@@ -289,4 +289,13 @@ contract TestUnitJuiceBuybackDelegate is TestBaseWorkflowV3 {
       reservedAmount // Last wei rounding
     );
   }
+
+  function testRevertIfSlippageIsTooMuchWhenSwapping() public {
+    // construct metadata
+    bytes memory metadata = abi.encode(JBTokens.ETH, 100 ether);
+
+    evm.prank(address(pool));
+    evm.expectRevert();
+    _delegate.uniswapV3SwapCallback(1 ether, 1 ether, metadata);
+  }
 }
