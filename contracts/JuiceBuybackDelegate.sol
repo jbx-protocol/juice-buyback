@@ -259,7 +259,7 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
     if (_amountReceived < _minimumAmountReceived) revert JuiceBuyback_MaximumSlippage();
 
     // Pull and transfer token to the pool
-    if(_token != JBTokens.ETH) IERC20(_token).transferFrom(jbxTerminal, address(pool), _amountToSend);
+    if(_token != JBTokens.ETH) IERC20(_token).transferFrom(address(jbxTerminal), address(pool), _amountToSend);
     else {
       // Wrap and transfer the weth to the pool
       weth.deposit{value: _amountToSend}();

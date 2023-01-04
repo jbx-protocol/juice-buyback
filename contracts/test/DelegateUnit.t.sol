@@ -27,7 +27,7 @@ import '@uniswap/v3-core/contracts/interfaces/callback/IUniswapV3SwapCallback.so
 
 import '../JuiceBuybackDelegate.sol';
 
-contract TestUnitDatasourceDelegate is TestBaseWorkflowV3 {
+contract TestUnitJuiceBuybackDelegate is TestBaseWorkflowV3 {
   using JBFundingCycleMetadataResolver for JBFundingCycle;
   JBController controller;
   JBProjectMetadata _projectMetadata;
@@ -41,7 +41,7 @@ contract TestUnitDatasourceDelegate is TestBaseWorkflowV3 {
   uint256 _projectId;
 
   uint256 reservedRate = 4500;
-  uint256 weight = 10000 * 10**18;
+  uint256 weight = 10**18;
   JuiceBuybackDelegate _delegate;
 
   IWETH9 private constant weth = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
@@ -120,8 +120,8 @@ contract TestUnitDatasourceDelegate is TestBaseWorkflowV3 {
     );
   }
 
-  // If a reserved rate < JBConstants.MAX_RESERVED_RATE is used in the current funding cycle, do not use the data source/delegate logic
-  function testDatasourceDelegateNormalBehaviorWithNonMaxReservedRate() public {
+  // If the quote amount is higher than the token that would be recevied after minting or a swap the buy back delegate isn't used
+  function testDatasourceDelegateWhenQuoteIsHigherThanTokenCount() public {
     uint256 payAmountInWei = 2 ether;
 
     _metadata = JBFundingCycleMetadata({
@@ -159,6 +159,9 @@ contract TestUnitDatasourceDelegate is TestBaseWorkflowV3 {
       ''
     );
     
+    // setting the quote in metadata
+    bytes memory metadata = abi.encode(new bytes(0), new bytes(0), 3 ether, 10000);
+    
     jbETHPaymentTerminal().pay{value: payAmountInWei}(
       _projectId,
       payAmountInWei,
@@ -171,7 +174,7 @@ contract TestUnitDatasourceDelegate is TestBaseWorkflowV3 {
       /* _memo */
       'Take my money!',
       /* _delegateMetadata */
-      new bytes(0)
+      metadata
     );
 
     uint256 totalMinted = PRBMath.mulDiv(payAmountInWei, weight, 10**18);
@@ -183,7 +186,7 @@ contract TestUnitDatasourceDelegate is TestBaseWorkflowV3 {
     assertEq(controller.reservedTokenBalanceOf(_projectId, reservedRate), amountReserved);
   }
 
-    // If minting gives a higher amount of project token, mint should be used with proper token distribution to beneficiary and reserved token
+  // If minting gives a higher amount of project token, mint should be used with proper token distribution to beneficiary and reserved token
   function testDatasourceDelegateMintIfQuoteIsHigher() public {
     uint256 payAmountInWei = 10 ether;
 
