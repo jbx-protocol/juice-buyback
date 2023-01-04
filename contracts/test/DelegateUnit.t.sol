@@ -120,7 +120,7 @@ contract TestUnitJuiceBuybackDelegate is TestBaseWorkflowV3 {
     );
   }
 
-  // // If the quote amount is higher than the token that would be recevied after minting or a swap the buy back delegate isn't used
+  // If the quote amount is higher than the token that would be recevied after minting or a swap the buy back delegate isn't used
   function testDatasourceDelegateWhenQuoteIsHigherThanTokenCount() public {
     uint256 payAmountInWei = 2 ether;
 
@@ -220,5 +220,73 @@ contract TestUnitJuiceBuybackDelegate is TestBaseWorkflowV3 {
     assertEq(jbTokenStore().balanceOf(beneficiary(), _projectId), amountBeneficiary);
     assertEq(controller.reservedTokenBalanceOf(_projectId, reservedRate), amountReserved);
     assertEq(jbPaymentTerminalStore().balanceOf(jbETHPaymentTerminal(), _projectId), payAmountInWei);
+  }
+
+  // if claimed token flag is true then we go for the swap route
+  function testDatasourceDelegateSwaoIfPreferenceIsToClaimTokens() public {
+    uint256 payAmountInWei = 10 ether;
+    uint256 quoteOnUniswap = 1 ether;
+
+    // Mock the swap returned value, which is the amount of token transfered (negative = exact amount)
+    evm.mockCall(
+      address(pool),
+      abi.encodeWithSelector(IUniswapV3PoolActions.swap.selector),
+      abi.encode(0, -int256(quoteOnUniswap))
+    );
+
+    jbETHPaymentTerminal().addToBalanceOf{value: payAmountInWei}(
+      _projectId,
+      payAmountInWei,
+      jbLibraries().ETHToken(),
+      '',
+      bytes('')
+    );
+
+    // Trick the balance post-swap
+    evm.prank(multisig());
+
+    jbController().mintTokensOf(_projectId, quoteOnUniswap, address(_delegate), '', false, false);
+
+    // setting the quote in metadata
+    bytes memory metadata = abi.encode(new bytes(0), new bytes(0), quoteOnUniswap, 10000);
+
+    // Mock the jbx transfer to the beneficiary - same logic as in delegate to avoid rounding errors
+    uint256 reservedAmount = PRBMath.mulDiv(
+      quoteOnUniswap,
+      reservedRate,
+      JBConstants.MAX_RESERVED_RATE
+    );
+
+    uint256 nonReservedAmount = quoteOnUniswap - reservedAmount;
+
+    evm.mockCall(
+      address(jbx),
+      abi.encodeWithSelector(
+        IJBToken.transfer.selector,
+        beneficiary(),
+        nonReservedAmount
+      ),
+      abi.encode(true)
+    );
+
+    jbETHPaymentTerminal().pay{value: payAmountInWei}(
+      _projectId,
+      payAmountInWei,
+      address(0),
+      beneficiary(),
+      /* _minReturnedTokens */
+      0, // Cannot be used in this setting
+      /* _preferClaimedTokens */
+      true,
+      /* _memo */
+      'Take my money!',
+      /* _delegateMetadata */
+      metadata
+    );
+
+    assertEq(
+      controller.reservedTokenBalanceOf(_projectId, reservedRate),
+      reservedAmount // Last wei rounding
+    );
   }
 }
