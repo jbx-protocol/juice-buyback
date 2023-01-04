@@ -262,7 +262,7 @@ contract TestUnitJuiceBuybackDelegate is TestBaseWorkflowV3 {
     evm.mockCall(
       address(jbx),
       abi.encodeWithSelector(
-        IJBToken.transfer.selector,
+        IERC20.transfer.selector,
         beneficiary(),
         nonReservedAmount
       ),
