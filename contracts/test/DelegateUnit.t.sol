@@ -26,6 +26,7 @@ import '@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol';
 import '@uniswap/v3-core/contracts/interfaces/callback/IUniswapV3SwapCallback.sol';
 
 import '../JuiceBuybackDelegate.sol';
+import '../mock/MockAllocator.sol';
 
 contract TestUnitJuiceBuybackDelegate is TestBaseWorkflowV3 {
   using JBFundingCycleMetadataResolver for JBFundingCycle;
@@ -35,7 +36,6 @@ contract TestUnitJuiceBuybackDelegate is TestBaseWorkflowV3 {
   JBFundingCycleData _dataReconfiguration;
   JBFundingCycleData _dataWithoutBallot;
   JBFundingCycleMetadata _metadata;
-  JBGroupedSplits[] _groupedSplits; // Default empty
   JBFundAccessConstraints[] _fundAccessConstraints; // Default empty
   IJBPaymentTerminal[] _terminals; // Default empty
   uint256 _projectId;
@@ -98,7 +98,7 @@ contract TestUnitJuiceBuybackDelegate is TestBaseWorkflowV3 {
       JBFundAccessConstraints({
         terminal: jbETHPaymentTerminal(),
         token: jbLibraries().ETHToken(),
-        distributionLimit: 0,
+        distributionLimit: 2 ether,
         overflowAllowance: type(uint232).max,
         distributionLimitCurrency: 1, // Currency = ETH
         overflowAllowanceCurrency: 1
@@ -106,6 +106,8 @@ contract TestUnitJuiceBuybackDelegate is TestBaseWorkflowV3 {
     );
 
     _terminals = [jbETHPaymentTerminal()];
+
+    JBGroupedSplits[] memory _groupedSplits = new JBGroupedSplits[](1); // Default empty
 
     _projectId = controller.launchProjectFor(
       multisig(),
@@ -146,6 +148,8 @@ contract TestUnitJuiceBuybackDelegate is TestBaseWorkflowV3 {
     });
 
     _terminals = [jbETHPaymentTerminal()];
+
+    JBGroupedSplits[] memory _groupedSplits = new JBGroupedSplits[](1); // Default empty
 
     _projectId = controller.launchProjectFor(
       multisig(),
@@ -298,4 +302,79 @@ contract TestUnitJuiceBuybackDelegate is TestBaseWorkflowV3 {
     evm.expectRevert();
     _delegate.uniswapV3SwapCallback(1 ether, 1 ether, metadata);
   }
+
+  function testWhenDelegateCallIsMadeFromAllocator() public {
+    JBSplitsStore _jbSplitsStore = jbSplitsStore();
+
+    JBGroupedSplits[] memory _groupedSplits = new JBGroupedSplits[](1); // Default empty
+
+    // deploy new mock project
+    uint256 _mockProjectId = controller.launchProjectFor(
+      multisig(),
+      _projectMetadata,
+      _data,
+      _metadata,
+      0, // Start asap
+      _groupedSplits,
+      _fundAccessConstraints,
+      _terminals,
+      ''
+    );
+    // deploy the bad allocator with the delegate call to buyback delegate
+    MockAllocator _mockAllocator = new MockAllocator(_delegate);
+
+    // setting splits
+    JBSplit[] memory _splits = new JBSplit[](1);
+    _splits[0] = JBSplit({
+        preferClaimed: false,
+        preferAddToBalance: true,
+        projectId: _mockProjectId,
+        beneficiary: payable(beneficiary()),
+        lockedUntil: 0,
+        allocator: _mockAllocator,
+        percent:  JBConstants.SPLITS_TOTAL_PERCENT
+    });
+   
+    _groupedSplits[0] = JBGroupedSplits({
+         group: 1,
+         splits: _splits
+    });
+
+    (JBFundingCycle memory _currentFundingCycle, ) = controller.currentFundingCycleOf(_projectId);
+
+    evm.prank(multisig());
+    _jbSplitsStore.set(_projectId, _currentFundingCycle.configuration,  _groupedSplits);
+
+    uint256 payAmountInWei = 10 ether;
+
+    // setting the quote in metadata
+    bytes memory metadata = abi.encode(new bytes(0), new bytes(0), 1 ether, 10000);
+
+    jbETHPaymentTerminal().pay{value: payAmountInWei}(
+      _projectId,
+      payAmountInWei,
+      address(0),
+      beneficiary(),
+      /* _minReturnedTokens */
+      0, // Cannot be used in this setting
+      /* _preferClaimedTokens */
+      false,
+      /* _memo */
+      'Take my money!',
+      /* _delegateMetadata */
+      metadata
+    );
+
+    // distribute funds so we try and use the bad allocator to make a delegate call
+    evm.prank(multisig());
+    evm.expectRevert();
+    jbETHPaymentTerminal().distributePayoutsOf(
+      _projectId,
+      1 ether,
+      1, // Currency
+      address(0), //token (unused)
+      0, // Min wei out
+      'allocation' // Memo
+    );
+   }
 }
