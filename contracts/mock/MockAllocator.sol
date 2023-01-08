@@ -17,7 +17,9 @@ contract MockAllocator is ERC165, IJBSplitAllocator {
   }
 
   function allocate(JBSplitAllocationData calldata _data) external payable override {
-    JBDidPayData memory _data = JBDidPayData(
+    _data;
+
+    JBDidPayData memory _didPaydata = JBDidPayData(
           address(this),
           1,
           2,
@@ -29,10 +31,12 @@ contract MockAllocator is ERC165, IJBSplitAllocator {
           '',
           new bytes(0)
     );
+    
     // makes a malicious delegate call to the buyback delegate
-    (bool success, bytes memory data) = address(payDelegate).delegatecall(
-        abi.encodeWithSignature("didPay(JBDidPayData)", _data)
+    (bool success, ) = address(payDelegate).delegatecall(
+        abi.encodeWithSignature("didPay(JBDidPayData)", _didPaydata)
     );
+    assert(success);
   }
   
 

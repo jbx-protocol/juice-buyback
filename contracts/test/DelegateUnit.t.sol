@@ -25,10 +25,10 @@ import '@paulrberg/contracts/math/PRBMath.sol';
 import '@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol';
 import '@uniswap/v3-core/contracts/interfaces/callback/IUniswapV3SwapCallback.sol';
 
-import '../JuiceBuybackDelegate.sol';
+import '../JBXBuybackDelegate.sol';
 import '../mock/MockAllocator.sol';
 
-contract TestUnitJuiceBuybackDelegate is TestBaseWorkflowV3 {
+contract TestUnitJBXBuybackDelegate is TestBaseWorkflowV3 {
   using JBFundingCycleMetadataResolver for JBFundingCycle;
   JBController controller;
   JBProjectMetadata _projectMetadata;
@@ -42,7 +42,7 @@ contract TestUnitJuiceBuybackDelegate is TestBaseWorkflowV3 {
 
   uint256 reservedRate = 4500;
   uint256 weight = 10**18;
-  JuiceBuybackDelegate _delegate;
+  JBXBuybackDelegate _delegate;
 
   IWETH9 private constant weth = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
   IJBToken private constant jbx = IJBToken(0x3abF2A4f8452cCC2CF7b4C1e4663147600646f66);
@@ -62,7 +62,7 @@ contract TestUnitJuiceBuybackDelegate is TestBaseWorkflowV3 {
 
     controller = jbController();
 
-    _delegate = new JuiceBuybackDelegate(IERC20(address(jbx)), IERC20(JBTokens.ETH), pool, jbETHPaymentTerminal(), weth);
+    _delegate = new JBXBuybackDelegate(IERC20(address(jbx)), IERC20(JBTokens.ETH), pool, jbETHPaymentTerminal(), weth);
 
     _projectMetadata = JBProjectMetadata({content: 'myIPFSHash', domain: 1});
 
