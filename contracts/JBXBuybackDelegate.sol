@@ -33,7 +33,7 @@ import './interfaces/external/IWETH9.sol';
   quote for the user when contributing to a project.
 */
 
-contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3SwapCallback, Ownable {
+contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3SwapCallback, Ownable {
   using JBFundingCycleMetadataResolver for JBFundingCycle;
 
   //*********************************************************************//
@@ -46,7 +46,8 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
   // -----------------------------  events ----------------------------- //
   //*********************************************************************//
 
-// TODO: this is so empty
+  event JBXBuybackDelegate_Swap(uint256 projectId, uint256 amountEth, uint256 amountOut);
+  event JBXBuybackDelegate_Mint(uint256 projectId);
 
   //*********************************************************************//
   // --------------------- private constant properties ----------------- //
@@ -89,6 +90,7 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
   /**
     @notice
     The uniswap pool corresponding to the project token-other token market
+    (this should be carefully chose liquidity wise)
   */
   IUniswapV3Pool public immutable pool;
 
@@ -130,7 +132,7 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
     @notice
     The address of the original contract, to prevent delegatecalling
   */
-  address private originalAddress;
+  address private immutable originalAddress;
 
   /**
     @dev
@@ -168,8 +170,8 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
       string memory memo,
       JBPayDelegateAllocation[] memory delegateAllocations
     ) {
-      // Find the total number of tokens to mint, as a fixed point number with as many decimals as `weight` has.
-      uint256 _tokenCount = PRBMath.mulDiv(_data.amount.value, _data.weight, 10**_data.amount.decimals);
+      // Find the total number of tokens to mint, as a fixed point number with 18 decimals
+      uint256 _tokenCount = PRBMath.mulDiv(_data.amount.value, _data.weight, 10**18);
 
       // Unpack the quote from the pool, given by the frontend
       (, , uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (bytes32, bytes32, uint256, uint256));
@@ -208,10 +210,10 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
       @param _data the delegate data passed by the terminal
   */
   function didPay(JBDidPayData calldata _data) external payable override {
-    // Access control as minting is authorized to this delegate
+    // Access control as minting is authorized to this delegate (+no delegate call)
     if(msg.sender != address(jbxTerminal) || address(this) != originalAddress) revert JuiceBuyback_Unauthorized();
 
-    // Retrieve the number of token created if minting and reset the mutex
+    // Retrieve the number of token created if minting and reset the mutex (not exposed in JBDidPayData)
     uint256 _tokenCount = mintedAmount;
     mintedAmount = 1;
 
@@ -249,7 +251,7 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
     if(msg.sender != address(pool)) revert JuiceBuyback_Unauthorized();
 
     // Unpack the data
-    (address _token, uint256 _minimumAmountReceived) = abi.decode(data, (address, uint256));
+    (uint256 _minimumAmountReceived) = abi.decode(data, (uint256));
 
     // Assign 0 and 1 accordingly
     uint256 _amountReceived = uint256(-(_projectTokenIsZero ? amount0Delta : amount1Delta));
@@ -258,13 +260,9 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
     // Revert if slippage is too high
     if (_amountReceived < _minimumAmountReceived) revert JuiceBuyback_MaximumSlippage();
 
-    // Pull and transfer token to the pool
-    if(_token != JBTokens.ETH) IERC20(_token).transferFrom(address(jbxTerminal), address(pool), _amountToSend);
-    else {
-      // Wrap and transfer the weth to the pool
-      weth.deposit{value: _amountToSend}();
-      weth.transfer(address(pool), _amountToSend);
-    }
+    // Wrap and transfer the weth to the pool
+    weth.deposit{value: _amountToSend}();
+    weth.transfer(address(pool), _amountToSend);
   }
 
   function redeemParams(JBRedeemParamsData calldata _data)
@@ -302,7 +300,7 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
         zeroForOne: !_projectTokenIsZero,
         amountSpecified: int256(_data.amount.value),
         sqrtPriceLimitX96: 0,
-        data: abi.encode(_data.amount.token, _minimumReceivedFromSwap)
+        data: abi.encode(_minimumReceivedFromSwap)
     }) returns (int256 amount0, int256 amount1) {
       // Swap succeded, take note of the amount of projectToken received (negative as it is an exact input)
       _amountReceived = uint256(-(_projectTokenIsZero ? amount0 : amount1));
@@ -358,6 +356,8 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
           _preferClaimedTokens: false
         });
     }
+
+    emit JBXBuybackDelegate_Swap(_data.projectId, _data.amount.value, _amountReceived);
   }
 
   /**
@@ -380,16 +380,12 @@ contract JuiceBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUni
       _useReservedRate: true
     });
 
-    // Pull erc20 to then send it back again, to keep the correct balance in the terminal store
-    if(address(terminalToken) != JBTokens.ETH) {
-      IERC20(terminalToken).transferFrom(address(jbxTerminal), address(this), _data.amount.value);
-      IERC20(terminalToken).approve(address(jbxTerminal), _data.amount.value);
-    }
-
-    // Send the tokenIn back to the terminal balance
+    // Send the eth back to the terminal balance
     jbxTerminal.addToBalanceOf
-      {value: address(terminalToken) == JBTokens.ETH ? _data.amount.value : 0}
+      {value: _data.amount.value}
       (_data.projectId, _data.amount.value, address(terminalToken), "", new bytes(0));
+
+    emit JBXBuybackDelegate_Mint(_data.projectId);
   }
 
   //*********************************************************************//
