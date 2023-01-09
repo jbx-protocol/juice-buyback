@@ -62,7 +62,7 @@ contract TestUnitJBXBuybackDelegate is TestBaseWorkflowV3 {
 
     controller = jbController();
 
-    _delegate = new JBXBuybackDelegate(IERC20(address(jbx)), IERC20(JBTokens.ETH), pool, jbETHPaymentTerminal(), weth);
+    _delegate = new JBXBuybackDelegate(IERC20(address(jbx)), IERC20(address(weth)), pool, jbETHPaymentTerminal(), weth);
 
     _projectMetadata = JBProjectMetadata({content: 'myIPFSHash', domain: 1});
 
@@ -227,7 +227,7 @@ contract TestUnitJBXBuybackDelegate is TestBaseWorkflowV3 {
   }
 
   // if claimed token flag is true then we go for the swap route
-  function testDatasourceDelegateSwaoIfPreferenceIsToClaimTokens() public {
+  function testDatasourceDelegateSwapIfPreferenceIsToClaimTokens() public {
     uint256 payAmountInWei = 10 ether;
     uint256 quoteOnUniswap = 1 ether;
 
@@ -235,7 +235,7 @@ contract TestUnitJBXBuybackDelegate is TestBaseWorkflowV3 {
     evm.mockCall(
       address(pool),
       abi.encodeWithSelector(IUniswapV3PoolActions.swap.selector),
-      abi.encode(0, -int256(quoteOnUniswap))
+      abi.encode(-int256(quoteOnUniswap), 0)
     );
 
     jbETHPaymentTerminal().addToBalanceOf{value: payAmountInWei}(
