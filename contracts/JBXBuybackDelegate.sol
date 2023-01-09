@@ -383,7 +383,7 @@ contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
     // Send the eth back to the terminal balance
     jbxTerminal.addToBalanceOf
       {value: _data.amount.value}
-      (_data.projectId, _data.amount.value, address(terminalToken), "", new bytes(0));
+      (_data.projectId, _data.amount.value, JBTokens.ETH, "", new bytes(0));
 
     emit JBXBuybackDelegate_Mint(_data.projectId);
   }
