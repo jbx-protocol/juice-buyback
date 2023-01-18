@@ -1,62 +1,31 @@
-# Juice Buyback Delegate
+# Juice Buyback Delegate - ETH-Project token
 
-## Motivation
+## Summary
 
-With JBX V3 live now, so going forward we want to give project owners the option of having a buyback delegate which is a delegate which will always take the most advantageous path for users between minting and swapping token project when triggering pay(). 
+Provides a datasource and delegate which maximise the project token received by the contributor when they call `pay` on the terminal. In order to do so, the delegate will either mint now tokens ("vanilla" path) or swap existing token in an Uniswap V3 pool ("buyback" path), depending on the best quote available at the time of the call.
 
-So as jbx issuance happnes the contributors will have an option to get the jbx with the best quote available on a amm like Uniswap V3
+This first iteration is optimised for ETH as terminal token.
 
-## Mechanic
+## Design
+### Flow
+- The frontend passes a quote from the correct Uniswap V3 pool as well as a maximum slippage allowed (in 1/10000th) while calling `pay(..)`. These should be encoded as uint256 and passed as third and fourth words of the metadata parameter (the first 2 32bytes being reserved for the protocol).
+- Pay(..) will use the buyback delegate as datasource and, based on the quote (taking slippage into account) and the funding cycle weight, will either mint (bypassing the delegate and using the regular terminal logic) or swap (signaling this by returning the delegate address and a 0 weight to the terminal).
+- If swap is privilegied, the terminal will call the delegate's `didPay` method, which will wrap and swap the eth, and transfer the correct amount of project tokens to the contributor (ie the non-reserved ones).
+NB: The whole amount contributed will be swapped, including what should be considered as reserved. The delegate will then burn/mint/burn again the non-transfered to account for the reserved tokens (ie burn them all, then mint an amount which will return the correct amount of reserved token, then burn the non-reserved token just minted)
+- In case of failure of the swap (eg max slippage, low liquidity), the delegate will mint the tokens instead (using the original funding cycle weight and reserved rate).
 
-As the contributors call `pay` on the project's terminal the `payParams` method decides whether the buyback delegate will be used for a `termianl token - project token` i.e `eth-jbx` for the current version. A swap on uniswap v3 is based on whether if the amount of `project token` i.e `jbx` that should be received by the contributor is greater than the `quote` passed in the `metadata` if not the delegate is not used and we follow the `mint` route in the temrinal
+### Contracts/Interfaces
+- JBXBuyBackDelegate: the datasource, pay delegate and uniswap pool callback contract
 
-On `didPay` assuming the buyback delegate is used if `preferClaimedTokens` is false then we go with the mint route else we swap depending if the slippage at that point isn't too high.
+## Usage
+Anyone can deploy this delegate using the provided forge script.
+To run this repo, you'll need [Foundry](https://book.getfoundry.sh/) and [NodeJS](https://nodejs.dev/en/learn/how-to-install-nodejs/) installed.
+Install the dependencies with `npm install && git submodule update --init --force --recursive`, you should then be able to run the tests using `forge test` or deploy a new registry using `forge script Deploy` (and the correct arguments, based on the chain and key you want to use - see the [Foundry docs](https://book.getfoundry.sh/)).
 
-If we go with the swap route so we execute `_swap` and in case the swap fails we again go to the mint route, else once the tokens are swapped then based on the `reserved rate` we first send the `non-reserved` tokens and burn/mint reserved & non-reserved tokens to the delegate, to make sure at the end the token accounting is consistent.
+## Use-case
+Maximizing the project token received by the contributor while leveling the funding cycle/secondary market price.
 
-## Architecture
-
-An understanding of how the Juicebox protocol's mechanics & architecture is required
-
-`JBXBuybackDelegate` is the primary contract with all the swap/mint logic based on various conditions explained in the `mechanic` section.
-
-
-# Install
-
-Quick all-in-one command:
-
-```bash
-git clone https://github.com/jbx-protocol/juice-buyback && cd juice-buyback && foundryup && git submodule update --init --recursive --force && yarn install && forge test --gas-report
-```
-
-To get set up:
-
-1. Install [Foundry](https://github.com/gakonst/foundry).
-
-```bash
-curl -L https://foundry.paradigm.xyz | sh
-```
-
-2. Install external lib(s)
-
-```bash
-git submodule update --init --recursive --force && yarn install
-```
-
-then run
-
-```bash
-forge update
-```
-
-3. Run tests:
-
-```bash
-forge test
-```
-
-4. Update Foundry periodically:
-
-```bash
-foundryup
-```
+## Risk & trade-offs
+ - This delegate is, for now, only compatible with ETH as terminal token.
+ - This delegate relies on the liquidity available in an Uniswap V3. If LP migrate to a new pool or another DEX, this delegate would need to be redeployed.
+ - A low liquidity might, if the max slippage isn't set properly, lead to an actual amount of token received lower than expected.
