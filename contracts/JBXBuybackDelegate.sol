@@ -129,12 +129,6 @@ contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
   uint256 private reservedRate = 1;
 
   /**
-    @notice
-    The address of the original contract, to prevent delegatecalling
-  */
-  address private immutable originalAddress;
-
-  /**
     @dev
     No other logic besides initializing the immutables
   */
@@ -145,7 +139,6 @@ contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
     jbxTerminal = _jbxTerminal;
     _projectTokenIsZero = address(_projectToken) < address(_terminalToken);
     weth = _weth;
-    originalAddress = address(this);
   }
     
   //*********************************************************************//
@@ -210,8 +203,8 @@ contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
       @param _data the delegate data passed by the terminal
   */
   function didPay(JBDidPayData calldata _data) external payable override {
-    // Access control as minting is authorized to this delegate (+no delegate call)
-    if(msg.sender != address(jbxTerminal) || address(this) != originalAddress) revert JuiceBuyback_Unauthorized();
+    // Access control as minting is authorized to this delegate
+    if(msg.sender != address(jbxTerminal)) revert JuiceBuyback_Unauthorized();
 
     // Retrieve the number of token created if minting and reset the mutex (not exposed in JBDidPayData)
     uint256 _tokenCount = mintedAmount;
