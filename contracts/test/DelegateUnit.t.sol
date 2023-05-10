@@ -62,7 +62,7 @@ contract TestUnitJBXBuybackDelegate is TestBaseWorkflowV3 {
 
     controller = jbController();
 
-    _delegate = new JBXBuybackDelegate(IERC20(address(jbx)), IERC20(address(weth)), pool, jbETHPaymentTerminal(), weth);
+    _delegate = new JBXBuybackDelegate(IERC20(address(jbx)), IERC20(address(weth)), pool, IJBPayoutRedemptionPaymentTerminal3_1(address(jbETHPaymentTerminal())), weth);
 
     _projectMetadata = JBProjectMetadata({content: 'myIPFSHash', domain: 1});
 

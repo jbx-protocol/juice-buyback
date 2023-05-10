@@ -4,7 +4,7 @@ pragma solidity ^0.8.16;
 import '../interfaces/external/IWETH9.sol';
 import './helpers/TestBaseWorkflowV3.sol';
 
-import '@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController.sol';
+import '@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController3_1.sol';
 import '@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleStore.sol';
 import '@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleBallot.sol';
 import '@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleDataSource.sol';
@@ -14,6 +14,7 @@ import '@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBRedemptionDeleg
 import '@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayoutRedemptionPaymentTerminal.sol';
 import '@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBSingleTokenPaymentTerminalStore.sol';
 import '@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBToken.sol';
+
 import '@jbx-protocol/juice-contracts-v3/contracts/libraries/JBConstants.sol';
 import '@jbx-protocol/juice-contracts-v3/contracts/libraries/JBCurrencies.sol';
 import '@jbx-protocol/juice-contracts-v3/contracts/libraries/JBFundingCycleMetadataResolver.sol';
@@ -28,20 +29,18 @@ import '@uniswap/v3-core/contracts/interfaces/callback/IUniswapV3SwapCallback.so
 import '../JBXBuybackDelegate.sol';
 import '../mock/MockAllocator.sol';
 
-contract TestUnitJBXBuybackDelegate {
+import 'forge-std/Test.sol';
+
+contract TestUnitJBXBuybackDelegate is Test {
   using JBFundingCycleMetadataResolver for JBFundingCycle;
 
   // Contracts needed
-  IJBController oldJbController;
-  IJBMigratable newJbController;
-  IJBDirectory jbDirectory;
   IJBFundingCycleStore jbFundingCycleStore;
-  IJBOperatorStore jbOperatorStore;
-  IJBPayoutRedemptionPaymentTerminal jbEthTerminal;
-  IJBPayoutRedemptionPaymentTerminal3_1 jbEthPaymentTerminal3_1;
   IJBProjects jbProjects;
-  IJBSingleTokenPaymentTerminalStore jbTerminalStore;
   IJBSplitsStore jbSplitsStore;
+  IJBPayoutRedemptionPaymentTerminal3_1 jbEthPaymentTerminal;
+  IJBSingleTokenPaymentTerminalStore jbTerminalStore;
+  IJBController3_1 jbController;
   IJBTokenStore jbTokenStore;
 
   // Structure needed
@@ -52,63 +51,91 @@ contract TestUnitJBXBuybackDelegate {
   IJBPaymentTerminal[] terminals;
   JBGroupedSplits[] groupedSplits;
 
-  JBXBuybackDelegate _delegate;
+  JBXBuybackDelegate delegate;
 
-  function setUp() public override {
-    evm.label(address(pool), 'uniswapPool');
-    evm.label(address(weth), '$WETH');
-    evm.label(address(jbx), '$JBX');
+  IUniswapV3Pool pool = IUniswapV3Pool(0x48598Ff1Cee7b4d31f8f9050C2bbAE98e17E6b17);
+  IWETH9 weth = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
+  IERC20 jbx = IERC20(0x3abF2A4f8452cCC2CF7b4C1e4663147600646f66);
 
-    _delegate = new JBXBuybackDelegate(IERC20(address(jbx)), IERC20(address(weth)), pool, terminal, weth);
+  function setUp() public {
 
+    vm.label(address(pool), 'uniswapPool');
+    vm.label(address(weth), '$WETH');
+    vm.label(address(jbx), '$JBX');
+
+    delegate = new JBXBuybackDelegate(IERC20(address(jbx)), IERC20(address(weth)), pool, jbEthPaymentTerminal, weth);
+
+    // Quote uniV3: 
+    // 
     vm.createSelectFork("https://rpc.ankr.com/eth", 16_677_461);
 
     // Collect the mainnet deployment addresses
-    jbEthTerminal = IJBPayoutRedemptionPaymentTerminal(
-        stdJson.readAddress(
-            vm.readFile("node_modules/@jbx-protocol/juice-contracts-v3/deployments/mainnet/JBETHPaymentTerminal.json"), ".address"
-        )
-    );
-    vm.label(address(jbEthTerminal), "jbEthTerminal");
-
-    jbEthPaymentTerminal3_1 = IJBPayoutRedemptionPaymentTerminal3_1(
+    jbEthPaymentTerminal = IJBPayoutRedemptionPaymentTerminal3_1(
         stdJson.readAddress(
             vm.readFile("node_modules/@jbx-protocol/juice-contracts-v3/deployments/mainnet/JBETHPaymentTerminal3_1.json"), ".address"
         )
     );
-    vm.label(address(jbEthPaymentTerminal3_1), "jbEthPaymentTerminal3_1");
+    vm.label(address(jbEthPaymentTerminal), "jbEthPaymentTerminal3_1");
 
-    oldJbController = IJBController(
-        stdJson.readAddress(vm.readFile("node_modules/@jbx-protocol/juice-contracts-v3/deployments/mainnet/JBController.json"), ".address")
-    );
-
-    newJbController = IJBMigratable(
+    jbController = IJBController3_1(
         stdJson.readAddress(vm.readFile("node_modules/@jbx-protocol/juice-contracts-v3/deployments/mainnet/JBController3_1.json"), ".address")
     );
-    vm.label(address(newJbController), "newJbController");
+    vm.label(address(jbController), "jbController");
 
-    jbOperatorStore = IJBOperatorStore(
-        stdJson.readAddress(vm.readFile("deployments/mainnet/JBOperatorStore.json"), ".address")
-    );
-    vm.label(address(jbOperatorStore), "jbOperatorStore");
-
-    jbProjects = oldJbController.projects();
-    jbDirectory = oldJbController.directory();
-    jbFundingCycleStore = oldJbController.fundingCycleStore();
-    jbTokenStore = oldJbController.tokenStore();
-    jbSplitsStore = oldJbController.splitsStore();
-    jbTerminalStore = jbEthTerminal.store();
+    jbTokenStore = jbController.tokenStore();
+    jbFundingCycleStore = jbController.fundingCycleStore();
+    jbProjects = jbController.projects();
+    jbSplitsStore = jbController.splitsStore();
   }
 
   /**
-   + @notice If the amount of token returned by minting is greater then by swapping, mint
+   * @notice If the amount of token returned by minting is greater than by swapping, mint
+   *
+   * @dev    Should mint for both beneficiary and reserve
    */
   function test_mintIfWeightGreatherThanPrice() public {
 
   }
 
   /**
-   + @notice If the amount of token returned by swapping is greater then by minting, swap
+   * @notice If the amount of token returned by swapping is greater than by minting, swap
+   *
+   * @dev    Should swap for both beneficiary and reserve (by burning/minting)
    */
   function test_swapIfQuoteBetter() public {}
+
+  /**
+   * @notice If the amount of token returned by swapping is greater than by minting but slippage is too high, mint
+   */
+  function test_mintIfSlippageTooHigh() public {}
+
+  function _reconfigure(uint256 _projectId, address _delegate, uint256 _weight, uint256 _reservedRate) internal {
+    address _projectOwner = jbProjects.ownerOf(_projectId);
+
+    JBFundingCycle memory _fundingCycle = jbFundingCycleStore.currentOf(_projectId);
+    metadata = _fundingCycle.expandMetadata();
+
+    JBGroupedSplits[] memory _groupedSplits = new JBGroupedSplits[](1);
+    _groupedSplits[0] = JBGroupedSplits({
+        group: 1,
+        splits: jbSplitsStore.splitsOf(
+            _projectId,
+            _fundingCycle.configuration, /*domain*/
+            JBSplitsGroups.ETH_PAYOUT /*group*/)
+    });
+
+    metadata.useDataSourceForPay = true;
+    metadata.dataSource = _delegate;
+
+    metadata.reservedRate = _reservedRate;
+
+    data.weight = _weight;
+    data.duration = 14 days;
+
+    // reconfigure
+    vm.prank(_projectOwner);
+    jbController.reconfigureFundingCyclesOf(
+        _projectId, data, metadata, block.timestamp, _groupedSplits, fundAccessConstraints, ""
+    );
+  }
 }
