@@ -24,7 +24,11 @@ import '@jbx-protocol/juice-contracts-v3/contracts/structs/JBFundingCycle.sol';
 
 import '@paulrberg/contracts/math/PRBMath.sol';
 import '@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol';
+import '@uniswap/v3-core/contracts/interfaces/IUniswapV3Factory.sol';
 import '@uniswap/v3-core/contracts/interfaces/callback/IUniswapV3SwapCallback.sol';
+import '@uniswap/v3-periphery/contracts/interfaces/INonfungiblePositionManager.sol';
+import '@uniswap/v3-core/contracts/libraries/TickMath.sol';
+
 
 import '../JBXBuybackDelegate.sol';
 import '../mock/MockAllocator.sol';
@@ -53,21 +57,13 @@ contract TestUnitJBXBuybackDelegate is Test {
 
   JBXBuybackDelegate delegate;
 
-  IUniswapV3Pool pool = IUniswapV3Pool(0x48598Ff1Cee7b4d31f8f9050C2bbAE98e17E6b17);
+  IUniswapV3Pool pool;
   IWETH9 weth = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
   IERC20 jbx = IERC20(0x3abF2A4f8452cCC2CF7b4C1e4663147600646f66);
 
   uint256 price = 845672.4 ether;
 
   function setUp() public {
-
-    vm.label(address(pool), 'uniswapPool');
-    vm.label(address(weth), '$WETH');
-    vm.label(address(jbx), '$JBX');
-
-    delegate = new JBXBuybackDelegate(IERC20(address(jbx)), IERC20(address(weth)), pool, jbEthPaymentTerminal, weth);
-
-    // Quote uniV3: 845,672.44 jbx/eth block 17239357
     vm.createSelectFork("https://rpc.ankr.com/eth", 17239357);
 
     // Collect the mainnet deployment addresses
@@ -87,6 +83,44 @@ contract TestUnitJBXBuybackDelegate is Test {
     jbFundingCycleStore = jbController.fundingCycleStore();
     jbProjects = jbController.projects();
     jbSplitsStore = jbController.splitsStore();
+
+    pool = IUniswapV3Pool(IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984).createPool(address(weth), address(jbx), 100));
+    pool.initialize(79228162514264337593543950336000000000); // 1 eth <=> 69420 jbx
+
+    vm.startPrank(address(123));
+    vm.deal(address(123), 1000 ether);
+    deal(address(jbx), address(123), 1000 ether);
+    
+    // approve:
+    address POSITION_MANAGER = 0xC36442b4a4522E871399CD717aBDD847Ab11FE88;
+    jbx.approve(POSITION_MANAGER, 1000 ether);
+    weth.approve(POSITION_MANAGER, 1000 ether);
+
+    // mint full range
+    INonfungiblePositionManager.MintParams memory params =
+            INonfungiblePositionManager.MintParams({
+                token0: address(weth),
+                token1: address(jbx),
+                fee: 100,
+                tickLower: TickMath.MIN_TICK,
+                tickUpper: TickMath.MAX_TICK,
+                amount0Desired: 1000 ether,
+                amount1Desired: 1000 ether,
+                amount0Min: 0,
+                amount1Min: 0,
+                recipient: address(this),
+                deadline: block.timestamp
+            });
+
+    INonfungiblePositionManager(POSITION_MANAGER).mint(params);
+
+    vm.stopPrank();
+
+    delegate = new JBXBuybackDelegate(IERC20(address(jbx)), IERC20(address(weth)), pool, jbEthPaymentTerminal, weth);
+
+    vm.label(address(pool), 'uniswapPool');
+    vm.label(address(weth), '$WETH');
+    vm.label(address(jbx), '$JBX');
   }
 
   /**
