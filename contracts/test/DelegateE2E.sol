@@ -108,7 +108,7 @@ contract TestUnitJBXBuybackDelegate is Test {
                 amount1Desired: 1000 ether,
                 amount0Min: 0,
                 amount1Min: 0,
-                recipient: address(this),
+                recipient: address(123),
                 deadline: block.timestamp
             });
 
