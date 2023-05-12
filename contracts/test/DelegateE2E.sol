@@ -57,6 +57,8 @@ contract TestUnitJBXBuybackDelegate is Test {
   IWETH9 weth = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
   IERC20 jbx = IERC20(0x3abF2A4f8452cCC2CF7b4C1e4663147600646f66);
 
+  uint256 price = 845672.4 ether;
+
   function setUp() public {
 
     vm.label(address(pool), 'uniswapPool');
@@ -65,9 +67,8 @@ contract TestUnitJBXBuybackDelegate is Test {
 
     delegate = new JBXBuybackDelegate(IERC20(address(jbx)), IERC20(address(weth)), pool, jbEthPaymentTerminal, weth);
 
-    // Quote uniV3: 
-    // 
-    vm.createSelectFork("https://rpc.ankr.com/eth", 16_677_461);
+    // Quote uniV3: 845,672.44 jbx/eth block 17239357
+    vm.createSelectFork("https://rpc.ankr.com/eth", 17239357);
 
     // Collect the mainnet deployment addresses
     jbEthPaymentTerminal = IJBPayoutRedemptionPaymentTerminal3_1(
@@ -94,6 +95,36 @@ contract TestUnitJBXBuybackDelegate is Test {
    * @dev    Should mint for both beneficiary and reserve
    */
   function test_mintIfWeightGreatherThanPrice() public {
+    // Reconfigure with a weight bigger than the quote
+    _reconfigure(1, address(delegate), price + 1, 0);
+
+    // Build the metadata using the quote at that block
+    bytes memory _metadata = abi.encode(
+        bytes32(0),
+        bytes32(0),
+        price, //quote
+        1 //slippage
+      );
+    
+    // Pay the project
+    jbEthPaymentTerminal.pay{value: 1 ether}(
+      1,
+      1 ether,
+      address(0),
+      address(123),
+      /* _minReturnedTokens */
+      0,
+      /* _preferClaimedTokens */
+      false,
+      /* _memo */
+      'Take my money!',
+      /* _delegateMetadata */
+      _metadata
+    );
+
+    // Check: token minted
+
+    // Check: event for mint
 
   }
 
@@ -102,7 +133,34 @@ contract TestUnitJBXBuybackDelegate is Test {
    *
    * @dev    Should swap for both beneficiary and reserve (by burning/minting)
    */
-  function test_swapIfQuoteBetter() public {}
+  function test_swapIfQuoteBetter() public {
+        // Reconfigure with a weight bigger than the quote
+    _reconfigure(1, address(delegate), price - 1, 0);
+
+    // Build the metadata using the quote at that block
+    bytes memory _metadata = abi.encode(
+        bytes32(0),
+        bytes32(0),
+        price, //quote
+        1 //slippage
+      );
+    
+    // Pay the project
+    jbEthPaymentTerminal.pay{value: 1 ether}(
+      1,
+      1 ether,
+      address(0),
+      address(123),
+      /* _minReturnedTokens */
+      0,
+      /* _preferClaimedTokens */
+      false,
+      /* _memo */
+      'Take my money!',
+      /* _delegateMetadata */
+      _metadata
+    );
+  }
 
   /**
    * @notice If the amount of token returned by swapping is greater than by minting but slippage is too high, mint
