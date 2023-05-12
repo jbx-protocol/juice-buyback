@@ -61,7 +61,7 @@ contract TestUnitJBXBuybackDelegate is Test {
   IWETH9 weth = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
   IERC20 jbx = IERC20(0x3abF2A4f8452cCC2CF7b4C1e4663147600646f66);
 
-  uint256 price = 845672.4 ether;
+  uint256 price = 69420 ether;
 
   function setUp() public {
     vm.createSelectFork("https://rpc.ankr.com/eth", 17239357);
