@@ -88,7 +88,7 @@ contract TestUnitJBXBuybackDelegate is Test {
     pool.initialize(79228162514264337593543950336000000000); // 1 eth <=> 69420 jbx
 
     vm.startPrank(address(123), address(123));
-    vm.deal(address(123), 1000 ether);
+    deal(address(weth), address(123), 1000 ether);
     deal(address(jbx), address(123), 1000 ether);
     
     // approve:
@@ -99,8 +99,8 @@ contract TestUnitJBXBuybackDelegate is Test {
     // mint full range
     INonfungiblePositionManager.MintParams memory params =
             INonfungiblePositionManager.MintParams({
-                token0: address(weth),
-                token1: address(jbx),
+                token0: address(jbx),
+                token1: address(weth),
                 fee: 100,
                 tickLower: TickMath.MIN_TICK,
                 tickUpper: TickMath.MAX_TICK,
