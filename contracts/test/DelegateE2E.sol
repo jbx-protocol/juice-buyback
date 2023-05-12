@@ -229,5 +229,8 @@ contract TestUnitJBXBuybackDelegate is Test {
     jbController.reconfigureFundingCyclesOf(
         _projectId, data, metadata, block.timestamp, _groupedSplits, fundAccessConstraints, ""
     );
+
+    // Move to next fc
+    vm.warp(block.timestamp + 14 days + 1);
   }
 }
