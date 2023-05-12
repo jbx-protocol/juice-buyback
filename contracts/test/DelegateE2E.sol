@@ -59,7 +59,7 @@ contract TestUnitJBXBuybackDelegate is Test {
 
   IUniswapV3Pool pool;
   IWETH9 weth = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
-  IERC20 jbx = IERC20(0x3abF2A4f8452cCC2CF7b4C1e4663147600646f66);
+  IERC20 jbx = IERC20(0x4554CC10898f92D45378b98D6D6c2dD54c687Fb2);
 
   uint256 price = 69420 ether;
 
@@ -87,7 +87,7 @@ contract TestUnitJBXBuybackDelegate is Test {
     pool = IUniswapV3Pool(IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984).createPool(address(weth), address(jbx), 100));
     pool.initialize(79228162514264337593543950336000000000); // 1 eth <=> 69420 jbx
 
-    vm.startPrank(address(123));
+    vm.startPrank(address(123), address(123));
     vm.deal(address(123), 1000 ether);
     deal(address(jbx), address(123), 1000 ether);
     
