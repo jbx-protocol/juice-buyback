@@ -38,6 +38,17 @@ import 'forge-std/Test.sol';
 contract TestUnitJBXBuybackDelegate is Test {
   using JBFundingCycleMetadataResolver for JBFundingCycle;
 
+  event JBXBuybackDelegate_Swap(uint256 projectId, uint256 amountEth, uint256 amountOut);
+  event JBXBuybackDelegate_Mint(uint256 projectId);
+  event Mint(
+    address indexed holder,
+    uint256 indexed projectId,
+    uint256 amount,
+    bool tokensWereClaimed,
+    bool preferClaimedTokens,
+    address caller
+  ); // IJBTokenStore
+
   // Contracts needed
   IJBFundingCycleStore jbFundingCycleStore;
   IJBProjects jbProjects;
@@ -147,6 +158,18 @@ contract TestUnitJBXBuybackDelegate is Test {
         price, //quote
         500 //slippage
       );
+
+    // This shouldn't mint via the delegate -> todo: how to test if event *npt* emitted?
+    // JBXBuybackDelegate_Mint shouldn't be emitted here (trace: ok)
+    vm.expectEmit(true, true, true, true);
+    emit Mint({
+      holder: address(123),
+      projectId: 1,
+      amount: 69420*10**18 + 1,
+      tokensWereClaimed: true,
+      preferClaimedTokens: true,
+      caller: address(jbController)
+    });
     
     // Pay the project
     jbEthPaymentTerminal.pay{value: 1 ether}(
@@ -187,6 +210,9 @@ contract TestUnitJBXBuybackDelegate is Test {
         500 //slippage 500/10000 = 5%
       );
     
+    vm.expectEmit(true, false, false, false);
+    emit JBXBuybackDelegate_Swap(1, 1, 1);
+    
     // Pay the project
     jbEthPaymentTerminal.pay{value: 1 ether}(
       1,
@@ -207,9 +233,18 @@ contract TestUnitJBXBuybackDelegate is Test {
   /**
    * @notice If the amount of token returned by swapping is greater than by minting but slippage is too high, mint
    */
-  function test_mintIfSlippageTooHigh() public {}
+  function test_mintIfSlippageTooHigh() public {
 
-  function test_mintIfPreferClaimedIsFalse() public {}
+    // Fall back on delegate minting
+    vm.expectEmit(true, true, true, true);
+    emit JBXBuybackDelegate_Mint(1);
+  }
+
+  function test_mintIfPreferClaimedIsFalse() public {
+    // Fall back on delegate minting
+    vm.expectEmit(true, true, true, true);
+    emit JBXBuybackDelegate_Mint(1);
+  }
 
   function _reconfigure(uint256 _projectId, address _delegate, uint256 _weight, uint256 _reservedRate) internal {
     address _projectOwner = jbProjects.ownerOf(_projectId);

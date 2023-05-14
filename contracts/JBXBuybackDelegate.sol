@@ -19,6 +19,7 @@ import '@paulrberg/contracts/math/PRBMath.sol';
 
 import '@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol';
 import '@uniswap/v3-core/contracts/interfaces/callback/IUniswapV3SwapCallback.sol';
+import '@uniswap/v3-core/contracts/libraries/TickMath.sol';
 
 import './interfaces/external/IWETH9.sol';
 
@@ -223,7 +224,7 @@ contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
 
     // The minimum amount of token received if swapping
     (, , uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (bytes32, bytes32, uint256, uint256));
-    uint256 _minimumReceivedFromSwap = _quote * _slippage / SLIPPAGE_DENOMINATOR;
+    uint256 _minimumReceivedFromSwap = _quote - (_quote * _slippage / SLIPPAGE_DENOMINATOR);
 
     // Pick the appropriate pathway (swap vs mint), use mint if non-claimed prefered
     if (_data.preferClaimedTokens) {
@@ -299,7 +300,7 @@ contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
       recipient: address(this),
         zeroForOne: !_projectTokenIsZero,
         amountSpecified: int256(_data.amount.value),
-        sqrtPriceLimitX96: 0,
+        sqrtPriceLimitX96: _projectTokenIsZero ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1 ,
         data: abi.encode(_minimumReceivedFromSwap)
     }) returns (int256 amount0, int256 amount1) {
       // Swap succeded, take note of the amount of projectToken received (negative as it is an exact input)
