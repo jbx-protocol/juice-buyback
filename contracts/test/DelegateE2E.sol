@@ -62,6 +62,7 @@ contract TestUnitJBXBuybackDelegate is Test {
   IERC20 jbx = IERC20(0x4554CC10898f92D45378b98D6D6c2dD54c687Fb2);
 
   uint256 price = 69420 ether;
+  uint160 sqrtPriceX96 = 79228162514264337593543950336000000000;
 
   function setUp() public {
     vm.createSelectFork("https://rpc.ankr.com/eth", 17239357);
@@ -85,7 +86,7 @@ contract TestUnitJBXBuybackDelegate is Test {
     jbSplitsStore = jbController.splitsStore();
 
     pool = IUniswapV3Pool(IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984).createPool(address(weth), address(jbx), 100));
-    pool.initialize(79228162514264337593543950336000000000); // 1 eth <=> 69420 jbx
+    pool.initialize(sqrtPriceX96); // 1 eth <=> 69420 jbx
 
     vm.startPrank(address(123), address(123));
     deal(address(weth), address(123), 1000 ether);
@@ -96,14 +97,14 @@ contract TestUnitJBXBuybackDelegate is Test {
     jbx.approve(POSITION_MANAGER, 1000 ether);
     weth.approve(POSITION_MANAGER, 1000 ether);
 
-    // mint full range
+    // mint concentrated position 
     INonfungiblePositionManager.MintParams memory params =
             INonfungiblePositionManager.MintParams({
                 token0: address(jbx),
                 token1: address(weth),
                 fee: 100,
-                tickLower: TickMath.MIN_TICK,
-                tickUpper: TickMath.MAX_TICK,
+                tickLower: TickMath.getTickAtSqrtRatio(sqrtPriceX96) - pool.tickSpacing(),
+                tickUpper: TickMath.getTickAtSqrtRatio(sqrtPriceX96) + pool.tickSpacing(),
                 amount0Desired: 1000 ether,
                 amount1Desired: 1000 ether,
                 amount0Min: 0,
@@ -149,7 +150,7 @@ contract TestUnitJBXBuybackDelegate is Test {
       /* _minReturnedTokens */
       0,
       /* _preferClaimedTokens */
-      false,
+      true,
       /* _memo */
       'Take my money!',
       /* _delegateMetadata */
@@ -168,14 +169,14 @@ contract TestUnitJBXBuybackDelegate is Test {
    * @dev    Should swap for both beneficiary and reserve (by burning/minting)
    */
   function test_swapIfQuoteBetter() public {
-        // Reconfigure with a weight bigger than the quote
-    _reconfigure(1, address(delegate), price - 1, 0);
+    // Reconfigure with a weight smaller than the quote
+    _reconfigure(1, address(delegate), price - 100, 1);
 
     // Build the metadata using the quote at that block
     bytes memory _metadata = abi.encode(
         bytes32(0),
         bytes32(0),
-        price, //quote
+        sqrtPriceX96, //quote
         1 //slippage
       );
     
@@ -188,7 +189,7 @@ contract TestUnitJBXBuybackDelegate is Test {
       /* _minReturnedTokens */
       0,
       /* _preferClaimedTokens */
-      false,
+      true,
       /* _memo */
       'Take my money!',
       /* _delegateMetadata */
@@ -200,6 +201,8 @@ contract TestUnitJBXBuybackDelegate is Test {
    * @notice If the amount of token returned by swapping is greater than by minting but slippage is too high, mint
    */
   function test_mintIfSlippageTooHigh() public {}
+
+  function test_mintIfPreferClaimedIsFalse() public {}
 
   function _reconfigure(uint256 _projectId, address _delegate, uint256 _weight, uint256 _reservedRate) internal {
     address _projectOwner = jbProjects.ownerOf(_projectId);
