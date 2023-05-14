@@ -228,8 +228,8 @@ contract TestUnitJBXBuybackDelegate is TestBaseWorkflowV3 {
 
   // if claimed token flag is true then we go for the swap route
   function testDatasourceDelegateSwapIfPreferenceIsToClaimTokens() public {
-    uint256 payAmountInWei = 10 ether;
-    uint256 quoteOnUniswap = 1 ether;
+    uint256 payAmountInWei = 1 ether;
+    uint256 quoteOnUniswap = weight + 1;
 
     // Mock the swap returned value, which is the amount of token transfered (negative = exact amount)
     evm.mockCall(
