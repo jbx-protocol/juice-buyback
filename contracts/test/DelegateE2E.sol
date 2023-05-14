@@ -58,11 +58,18 @@ contract TestUnitJBXBuybackDelegate is Test {
   JBXBuybackDelegate delegate;
 
   IUniswapV3Pool pool;
-  IWETH9 weth = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
-  IERC20 jbx = IERC20(0x4554CC10898f92D45378b98D6D6c2dD54c687Fb2);
+
+  IERC20 jbx = IERC20(0x4554CC10898f92D45378b98D6D6c2dD54c687Fb2);  // 0 - 69420*10**18
+  IWETH9 weth = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2); // 1 - 1*10**18
+  // sqrtPriceX96 = sqrt(1*10**18 << 192 / 69420*10**18) = 300702666377442711115399168 (?)
+
+  // const numerator = JSBI.leftShift(JSBI.BigInt(amount1), JSBI.BigInt(192))
+  // const denominator = JSBI.BigInt(amount0)
+  // const ratioX192 = JSBI.divide(numerator, denominator)
+  // return sqrt(ratioX192)
 
   uint256 price = 69420 ether;
-  uint160 sqrtPriceX96 = 79228162514264337593543950336000000000;
+  uint160 sqrtPriceX96 = 300702666377442711115399168;
 
   function setUp() public {
     vm.createSelectFork("https://rpc.ankr.com/eth", 17239357);
@@ -138,7 +145,7 @@ contract TestUnitJBXBuybackDelegate is Test {
         bytes32(0),
         bytes32(0),
         price, //quote
-        1 //slippage
+        500 //slippage
       );
     
     // Pay the project
@@ -177,7 +184,7 @@ contract TestUnitJBXBuybackDelegate is Test {
         bytes32(0),
         bytes32(0),
         sqrtPriceX96, //quote
-        1 //slippage
+        500 //slippage 500/10000 = 5%
       );
     
     // Pay the project

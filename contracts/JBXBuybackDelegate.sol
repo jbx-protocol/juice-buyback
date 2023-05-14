@@ -177,7 +177,7 @@ contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
       (, , uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (bytes32, bytes32, uint256, uint256));
 
       // If the amount swapped is bigger than the lowest received when minting, use the swap pathway
-      if (_tokenCount >= _quote * _slippage / SLIPPAGE_DENOMINATOR) {
+      if (_tokenCount < _quote - (_quote * _slippage / SLIPPAGE_DENOMINATOR)) {
         // Pass the quote and reserve rate via a mutex
         mintedAmount = _tokenCount;
         reservedRate = _data.reservedRate;
