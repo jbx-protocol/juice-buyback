@@ -107,13 +107,13 @@ contract TestUnitJBXBuybackDelegate is Test {
     pool.initialize(sqrtPriceX96); // 1 eth <=> 69420 jbx
 
     vm.startPrank(address(123), address(123));
-    deal(address(weth), address(123), 1000 ether);
-    deal(address(jbx), address(123), 1000 ether);
+    deal(address(weth), address(123), 10000000 ether);
+    deal(address(jbx), address(123),  10000000 ether);
     
     // approve:
     address POSITION_MANAGER = 0xC36442b4a4522E871399CD717aBDD847Ab11FE88;
-    jbx.approve(POSITION_MANAGER, 1000 ether);
-    weth.approve(POSITION_MANAGER, 1000 ether);
+    jbx.approve(POSITION_MANAGER, 10000000 ether);
+    weth.approve(POSITION_MANAGER, 10000000 ether);
 
     // mint concentrated position 
     INonfungiblePositionManager.MintParams memory params =
@@ -121,10 +121,10 @@ contract TestUnitJBXBuybackDelegate is Test {
                 token0: address(jbx),
                 token1: address(weth),
                 fee: 100,
-                tickLower: TickMath.getTickAtSqrtRatio(sqrtPriceX96) - pool.tickSpacing(),
-                tickUpper: TickMath.getTickAtSqrtRatio(sqrtPriceX96) + pool.tickSpacing(),
-                amount0Desired: 1000 ether,
-                amount1Desired: 1000 ether,
+                tickLower: TickMath.getTickAtSqrtRatio(sqrtPriceX96) - 10 * pool.tickSpacing(),
+                tickUpper: TickMath.getTickAtSqrtRatio(sqrtPriceX96) + 10 * pool.tickSpacing(),
+                amount0Desired: 10000000 ether,
+                amount1Desired: 10000000 ether,
                 amount0Min: 0,
                 amount1Min: 0,
                 recipient: address(123),
@@ -149,7 +149,7 @@ contract TestUnitJBXBuybackDelegate is Test {
    */
   function test_mintIfWeightGreatherThanPrice() public {
     // Reconfigure with a weight bigger than the quote
-    _reconfigure(1, address(delegate), price + 1, 0);
+    _reconfigure(1, address(delegate), price + 100, 0);
 
     // Build the metadata using the quote at that block
     bytes memory _metadata = abi.encode(
@@ -199,16 +199,16 @@ contract TestUnitJBXBuybackDelegate is Test {
    * @dev    Should swap for both beneficiary and reserve (by burning/minting)
    */
   function test_swapIfQuoteBetter() public {
-    // Reconfigure with a weight smaller than the quote
-    _reconfigure(1, address(delegate), price - 100, 1);
+    // Reconfigure with a weight smaller than the quote, slippagfe included
+    _reconfigure(1, address(delegate), price - (price * 500 / 10000) - 10, 1);
 
     // Build the metadata using the quote at that block
     bytes memory _metadata = abi.encode(
-        bytes32(0),
-        bytes32(0),
-        sqrtPriceX96, //quote
-        500 //slippage 500/10000 = 5%
-      );
+      bytes32(0),
+      bytes32(0),
+      price, //quote
+      500 //slippage 500/10000 = 5%
+    );
     
     vm.expectEmit(true, false, false, false);
     emit JBXBuybackDelegate_Swap(1, 1, 1);

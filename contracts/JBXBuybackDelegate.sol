@@ -235,7 +235,7 @@ contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
       if (_amountReceived == 0) _mint(_data, _tokenCount);
     } else _mint(_data, _tokenCount);
   }
-
+event Test(uint);
   /**
     @notice
     The Uniswap V3 pool callback (where token transfer should happens)
@@ -256,7 +256,7 @@ contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
 
     // Assign 0 and 1 accordingly
     uint256 _amountReceived = uint256(-(_projectTokenIsZero ? amount0Delta : amount1Delta));
-    uint256 _amountToSend = uint256(-(_projectTokenIsZero ? amount1Delta : amount0Delta));
+    uint256 _amountToSend = uint256(_projectTokenIsZero ? amount1Delta : amount0Delta);
 
     // Revert if slippage is too high
     if (_amountReceived < _minimumAmountReceived) revert JuiceBuyback_MaximumSlippage();
