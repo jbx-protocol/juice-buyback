@@ -234,16 +234,69 @@ contract TestIntegrationJBXBuybackDelegate is Test {
    * @notice If the amount of token returned by swapping is greater than by minting but slippage is too high, mint
    */
   function test_mintIfSlippageTooHigh() public {
+    // Reconfigure with a weight smaller than the quote, slippagfe included
+    _reconfigure(1, address(delegate), price - (price * 500 / 10000) - 10, 1);
 
+    // Build the metadata using the quote at that block
+    bytes memory _metadata = abi.encode(
+      bytes32(0),
+      bytes32(0),
+      price, //quote
+      0 //slippage 500/10000 = 5%
+    );
+    
     // Fall back on delegate minting
     vm.expectEmit(true, true, true, true);
     emit JBXBuybackDelegate_Mint(1);
+    
+    // Pay the project
+    jbEthPaymentTerminal.pay{value: 1 ether}(
+      1,
+      1 ether,
+      address(0),
+      address(123),
+      /* _minReturnedTokens */
+      0,
+      /* _preferClaimedTokens */
+      true,
+      /* _memo */
+      'Take my money!',
+      /* _delegateMetadata */
+      _metadata
+    );
   }
 
-  function test_mintIfPreferClaimedIsFalse() public {
+  function test_mintIfPreferClaimedIsFalse() public {    
+    // Reconfigure with a weight smaller than the quote, slippagfe included
+    _reconfigure(1, address(delegate), price - (price * 500 / 10000) - 10, 1);
+
+    // Build the metadata using the quote at that block
+    bytes memory _metadata = abi.encode(
+      bytes32(0),
+      bytes32(0),
+      price, //quote
+      500 //slippage 500/10000 = 5%
+    );
+    
     // Fall back on delegate minting
     vm.expectEmit(true, true, true, true);
     emit JBXBuybackDelegate_Mint(1);
+    
+    // Pay the project
+    jbEthPaymentTerminal.pay{value: 1 ether}(
+      1,
+      1 ether,
+      address(0),
+      address(123),
+      /* _minReturnedTokens */
+      0,
+      /* _preferClaimedTokens */
+      false,
+      /* _memo */
+      'Take my money!',
+      /* _delegateMetadata */
+      _metadata
+    );
   }
 
   function _reconfigure(uint256 _projectId, address _delegate, uint256 _weight, uint256 _reservedRate) internal {
