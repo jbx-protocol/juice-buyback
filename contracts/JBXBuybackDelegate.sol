@@ -235,7 +235,7 @@ contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
       if (_amountReceived == 0) _mint(_data, _tokenCount);
     } else _mint(_data, _tokenCount);
   }
-event Test(uint);
+
   /**
     @notice
     The Uniswap V3 pool callback (where token transfer should happens)

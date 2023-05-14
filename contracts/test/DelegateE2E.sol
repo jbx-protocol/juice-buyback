@@ -35,7 +35,7 @@ import '../mock/MockAllocator.sol';
 
 import 'forge-std/Test.sol';
 
-contract TestUnitJBXBuybackDelegate is Test {
+contract TestIntegrationJBXBuybackDelegate is Test {
   using JBFundingCycleMetadataResolver for JBFundingCycle;
 
   event JBXBuybackDelegate_Swap(uint256 projectId, uint256 amountEth, uint256 amountOut);
@@ -165,7 +165,7 @@ contract TestUnitJBXBuybackDelegate is Test {
     emit Mint({
       holder: address(123),
       projectId: 1,
-      amount: 69420*10**18 + 1,
+      amount: 69420*10**18 + 100,
       tokensWereClaimed: true,
       preferClaimedTokens: true,
       caller: address(jbController)
