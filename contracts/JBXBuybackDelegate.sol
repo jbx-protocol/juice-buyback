@@ -156,7 +156,7 @@ contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
   /**
     @notice
     The datasource implementation
-    @dev   
+      
     @param _data the data passed to the data source in terminal.pay(..). _data.metadata need to have the Uniswap quote
     @return weight the weight to use (the one passed if not max reserved rate, 0 if swapping or the one corresponding
             to the reserved token to mint if minting)

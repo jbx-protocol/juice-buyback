@@ -151,7 +151,9 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
   function test_mintIfWeightGreatherThanPrice(uint256 _weight) public {
     // Reconfigure with a weight bigger than the quote
     uint256 _weight = bound(_weight, amountOutForOneEth + 1, type(uint88).max);
-    _reconfigure(1, address(delegate), _weight, 0);
+    _reconfigure(1, address(delegate), _weight, 5000);
+
+    uint256 _reservedBalanceBefore = jbController.reservedTokenBalanceOf(1);
 
     // Build the metadata using the quote at that block
     bytes memory _metadata = abi.encode(
@@ -166,7 +168,7 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
     emit Mint({
       holder: address(123),
       projectId: 1,
-      amount: _weight,
+      amount: _weight / 2, // Half is reserved
       tokensWereClaimed: true,
       preferClaimedTokens: true,
       caller: address(jbController)
@@ -188,7 +190,11 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
       _metadata
     );
 
-    // Check: token minted
+    // Check: token received by the beneficiary
+    assertEq(jbx.balanceOf(address(123)), _weight / 2);
+
+    // Check: token added to the reserve - 1 wei sensitivity for rounding errors
+    assertApproxEqAbs(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore + _weight / 2, 1);
   }
 
   /**
@@ -199,7 +205,9 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
   function test_swapIfQuoteBetter(uint256 _weight) public {
     // Reconfigure with a weight smaller than the quote, slippagfe included
     uint256 _weight = bound(_weight, 0, amountOutForOneEth - (amountOutForOneEth * 500 / 10000) - 1);
-    _reconfigure(1, address(delegate), _weight, 1);
+    _reconfigure(1, address(delegate), _weight, 5000);
+
+    uint256 _reservedBalanceBefore = jbController.reservedTokenBalanceOf(1);
 
     // Build the metadata using the quote at that block
     bytes memory _metadata = abi.encode(
@@ -209,8 +217,8 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
       500 //slippage 500/10000 = 5%
     );
     
-    vm.expectEmit(true, false, false, false);
-    emit JBXBuybackDelegate_Swap(1, 1, 1);
+    vm.expectEmit(true, true, true, true);
+    emit JBXBuybackDelegate_Swap(1, 1 ether, amountOutForOneEth);
     
     // Pay the project
     jbEthPaymentTerminal.pay{value: 1 ether}(
@@ -227,6 +235,61 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
       /* _delegateMetadata */
       _metadata
     );
+
+    // Check: token received by the beneficiary
+    assertEq(jbx.balanceOf(address(123)), amountOutForOneEth / 2);
+
+    // Check: token added to the reserve - 1 wei sensitivity for rounding errors
+    assertApproxEqAbs(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore + amountOutForOneEth / 2, 1);
+  }
+
+    /**
+   * @notice If the amount of token returned by swapping is greater than by minting, swap
+   *
+   * @dev    Should swap for both beneficiary and reserve (by burning/minting)
+   */
+  function test_swapRandomAmountIn(uint256 _amountIn) public {
+    _amountIn = bound(_amountIn, 100, 100 ether);
+
+    uint256 _quote = getAmountOut(pool, _amountIn, address(weth));
+
+    // Reconfigure with a weight of 1  
+    _reconfigure(1, address(delegate), 1, 0);
+
+    uint256 _reservedBalanceBefore = jbController.reservedTokenBalanceOf(1);
+
+    // Build the metadata using the quote
+    bytes memory _metadata = abi.encode(
+      bytes32(0),
+      bytes32(0),
+      _quote, //quote
+      500 //slippage 500/10000 = 5%
+    );
+    
+    vm.expectEmit(true, true, true, true);
+    emit JBXBuybackDelegate_Swap(1, _amountIn, _quote);
+    
+    // Pay the project
+    jbEthPaymentTerminal.pay{value: _amountIn}(
+      1,
+      _amountIn,
+      address(0),
+      address(123),
+      /* _minReturnedTokens */
+      0,
+      /* _preferClaimedTokens */
+      true,
+      /* _memo */
+      'Take my money!',
+      /* _delegateMetadata */
+      _metadata
+    );
+
+    // Check: token received by the beneficiary
+    assertEq(jbx.balanceOf(address(123)), _quote);
+
+    // Check: reserve unchanged
+    assertEq(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore);
   }
 
   /**
