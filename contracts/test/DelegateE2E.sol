@@ -246,7 +246,83 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
     assertApproxEqAbs(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore + amountOutForOneEth / 2, 1);
   }
 
-    /**
+  /**
+   * @notice Use the delegate multiple times to swap, with different quotes
+   */
+  function test_swapMultiple() public {
+    // Reconfigure with a weight of 1 wei, to force swapping
+    uint256 _weight = 1;
+    _reconfigure(1, address(delegate), _weight, 5000);
+
+    uint256 _reservedBalanceBefore = jbController.reservedTokenBalanceOf(1);
+
+    // Build the metadata using the quote at that block
+    bytes memory _metadata = abi.encode(
+      bytes32(0),
+      bytes32(0),
+      amountOutForOneEth, //quote
+      500 //slippage 500/10000 = 5%
+    );
+    
+    // Pay the project
+    jbEthPaymentTerminal.pay{value: 1 ether}(
+      1,
+      1 ether,
+      address(0),
+      address(123),
+      /* _minReturnedTokens */
+      0,
+      /* _preferClaimedTokens */
+      true,
+      /* _memo */
+      'Take my money!',
+      /* _delegateMetadata */
+      _metadata
+    );
+
+    uint256 _balanceBeneficiary = jbx.balanceOf(address(123));
+
+    uint256 _reserveBalance = jbController.reservedTokenBalanceOf(1);
+
+    // Update the quote, this is now a different one as we already swapped
+    uint256 _previousQuote = amountOutForOneEth;
+    amountOutForOneEth = getAmountOut(pool, 1 ether, address(weth));
+
+    // Sanity check
+    assert(_previousQuote != amountOutForOneEth);
+
+    // Update the metadata
+    _metadata = abi.encode(
+      bytes32(0),
+      bytes32(0),
+      amountOutForOneEth, //quote
+      500 //slippage 500/10000 = 5%
+    );
+    
+    // Pay the project
+    jbEthPaymentTerminal.pay{value: 1 ether}(
+      1,
+      1 ether,
+      address(0),
+      address(123),
+      /* _minReturnedTokens */
+      0,
+      /* _preferClaimedTokens */
+      true,
+      /* _memo */
+      'Take my money!',
+      /* _delegateMetadata */
+      _metadata
+    );
+
+    // Check: token received by the beneficiary
+    assertEq(jbx.balanceOf(address(123)), _balanceBeneficiary + amountOutForOneEth / 2);
+
+    // Check: token added to the reserve - 1 wei sensitivity for rounding errors
+    assertApproxEqAbs(jbController.reservedTokenBalanceOf(1), _reserveBalance + amountOutForOneEth / 2, 1);
+  }
+
+  /**
    * @notice If the amount of token returned by swapping is greater than by minting, swap
    *
    * @dev    Should swap for both beneficiary and reserve (by burning/minting)
