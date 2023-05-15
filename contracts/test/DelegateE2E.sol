@@ -36,6 +36,9 @@ import '../mock/MockAllocator.sol';
 
 import 'forge-std/Test.sol';
 
+/**
+ * @notice JBXBuyback fork integration tests, using $jbx v3
+ */
 contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
   using JBFundingCycleMetadataResolver for JBFundingCycle;
 
@@ -48,7 +51,7 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
     bool tokensWereClaimed,
     bool preferClaimedTokens,
     address caller
-  ); // IJBTokenStore
+  );
 
   // Contracts needed
   IJBFundingCycleStore jbFundingCycleStore;
