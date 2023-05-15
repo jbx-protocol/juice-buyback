@@ -29,13 +29,14 @@ import '@uniswap/v3-core/contracts/interfaces/callback/IUniswapV3SwapCallback.so
 import '@uniswap/v3-periphery/contracts/interfaces/INonfungiblePositionManager.sol';
 import '@uniswap/v3-core/contracts/libraries/TickMath.sol';
 
+import '@exhausted-pigeon/uniswap-v3-forge-quoter/src/UniswapV3ForgeQuoter.sol';
 
 import '../JBXBuybackDelegate.sol';
 import '../mock/MockAllocator.sol';
 
 import 'forge-std/Test.sol';
 
-contract TestIntegrationJBXBuybackDelegate is Test {
+contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
   using JBFundingCycleMetadataResolver for JBFundingCycle;
 
   event JBXBuybackDelegate_Swap(uint256 projectId, uint256 amountEth, uint256 amountOut);
@@ -72,15 +73,13 @@ contract TestIntegrationJBXBuybackDelegate is Test {
 
   IERC20 jbx = IERC20(0x4554CC10898f92D45378b98D6D6c2dD54c687Fb2);  // 0 - 69420*10**18
   IWETH9 weth = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2); // 1 - 1*10**18
-  // sqrtPriceX96 = sqrt(1*10**18 << 192 / 69420*10**18) = 300702666377442711115399168 (?)
-
-  // const numerator = JSBI.leftShift(JSBI.BigInt(amount1), JSBI.BigInt(192))
-  // const denominator = JSBI.BigInt(amount0)
-  // const ratioX192 = JSBI.divide(numerator, denominator)
-  // return sqrt(ratioX192)
 
   uint256 price = 69420 ether;
+  
+  // sqrtPriceX96 = sqrt(1*10**18 << 192 / 69420*10**18) = 300702666377442711115399168 (?)
   uint160 sqrtPriceX96 = 300702666377442711115399168;
+
+  uint256 amountOutForOneEth;
 
   function setUp() public {
     vm.createSelectFork("https://rpc.ankr.com/eth", 17239357);
@@ -135,6 +134,8 @@ contract TestIntegrationJBXBuybackDelegate is Test {
 
     vm.stopPrank();
 
+    amountOutForOneEth = getAmountOut(pool, 1 ether, address(weth));
+
     delegate = new JBXBuybackDelegate(IERC20(address(jbx)), IERC20(address(weth)), pool, jbEthPaymentTerminal, weth);
 
     vm.label(address(pool), 'uniswapPool');
@@ -147,25 +148,25 @@ contract TestIntegrationJBXBuybackDelegate is Test {
    *
    * @dev    Should mint for both beneficiary and reserve
    */
-  function test_mintIfWeightGreatherThanPrice() public {
+  function test_mintIfWeightGreatherThanPrice(uint256 _weight) public {
     // Reconfigure with a weight bigger than the quote
-    _reconfigure(1, address(delegate), price + 100, 0);
+    uint256 _weight = bound(_weight, amountOutForOneEth + 1, type(uint88).max);
+    _reconfigure(1, address(delegate), _weight, 0);
 
     // Build the metadata using the quote at that block
     bytes memory _metadata = abi.encode(
         bytes32(0),
         bytes32(0),
-        price, //quote
+        amountOutForOneEth, //quote
         500 //slippage
       );
 
-    // This shouldn't mint via the delegate -> todo: how to test if event *npt* emitted?
-    // JBXBuybackDelegate_Mint shouldn't be emitted here (trace: ok)
+    // This shouldn't mint via the delegate
     vm.expectEmit(true, true, true, true);
     emit Mint({
       holder: address(123),
       projectId: 1,
-      amount: 69420*10**18 + 100,
+      amount: _weight,
       tokensWereClaimed: true,
       preferClaimedTokens: true,
       caller: address(jbController)
@@ -188,9 +189,6 @@ contract TestIntegrationJBXBuybackDelegate is Test {
     );
 
     // Check: token minted
-
-    // Check: event for mint
-
   }
 
   /**
@@ -198,15 +196,16 @@ contract TestIntegrationJBXBuybackDelegate is Test {
    *
    * @dev    Should swap for both beneficiary and reserve (by burning/minting)
    */
-  function test_swapIfQuoteBetter() public {
+  function test_swapIfQuoteBetter(uint256 _weight) public {
     // Reconfigure with a weight smaller than the quote, slippagfe included
-    _reconfigure(1, address(delegate), price - (price * 500 / 10000) - 10, 1);
+    uint256 _weight = bound(_weight, 0, amountOutForOneEth - (amountOutForOneEth * 500 / 10000) - 1);
+    _reconfigure(1, address(delegate), _weight, 1);
 
     // Build the metadata using the quote at that block
     bytes memory _metadata = abi.encode(
       bytes32(0),
       bytes32(0),
-      price, //quote
+      amountOutForOneEth, //quote
       500 //slippage 500/10000 = 5%
     );
     

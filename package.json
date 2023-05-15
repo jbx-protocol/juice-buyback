@@ -10,6 +10,7 @@
   "version": "0.0.1",
   "license": "MIT",
   "devDependencies": {
+    "@exhausted-pigeon/uniswap-v3-forge-quoter": "^1.0.1",
     "prettier": "^2.4.0",
     "prettier-plugin-solidity": "^1.0.0-beta.19",
     "solhint": "^3.3.6",

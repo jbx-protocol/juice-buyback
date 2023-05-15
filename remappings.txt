@@ -4,6 +4,7 @@
 @paulrberg/=node_modules/@paulrberg/
 @uniswap/v3-core/=node_modules/@uniswap/v3-core/
 @uniswap/v3-periphery/=lib/v3-periphery/
+@exhausted-pigeon/uniswap-v3-forge-quoter=node_modules/@exhausted-pigeon/uniswap-v3-forge-quoter/
 ds-test/=lib/ds-test/src/
 forge-std/=lib/forge-std/src/
 prb-math/=node_modules/prb-math/
