@@ -50,9 +50,10 @@ contract TestUnitJBXBuybackDelegate is TestBaseWorkflowV3 {
 
   JBXBuybackDelegate _delegate;
 
+  // Using fixed addresses to insure token0/token1 consistency
   IWETH9 private constant weth = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
   IJBToken private constant jbx = IJBToken(0x3abF2A4f8452cCC2CF7b4C1e4663147600646f66);
-  IUniswapV3Pool private constant pool = IUniswapV3Pool(0x48598Ff1Cee7b4d31f8f9050C2bbAE98e17E6b17);
+  IUniswapV3Pool private constant pool = IUniswapV3Pool(address(69420));
 
   /**
    * @notice Set up a new JBX project and use the buyback delegate as the datasource
