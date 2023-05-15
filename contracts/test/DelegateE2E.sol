@@ -153,7 +153,7 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
    */
   function test_mintIfWeightGreatherThanPrice(uint256 _weight) public {
     // Reconfigure with a weight bigger than the quote
-    uint256 _weight = bound(_weight, amountOutForOneEth + 1, type(uint88).max);
+    _weight = bound(_weight, amountOutForOneEth + 1, type(uint88).max);
     _reconfigure(1, address(delegate), _weight, 5000);
 
     uint256 _reservedBalanceBefore = jbController.reservedTokenBalanceOf(1);
@@ -207,7 +207,7 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
    */
   function test_swapIfQuoteBetter(uint256 _weight) public {
     // Reconfigure with a weight smaller than the quote, slippage included
-    uint256 _weight = bound(_weight, 0, amountOutForOneEth - (amountOutForOneEth * 500 / 10000) - 1);
+    _weight = bound(_weight, 0, amountOutForOneEth - (amountOutForOneEth * 500 / 10000) - 1);
     _reconfigure(1, address(delegate), _weight, 5000);
 
     uint256 _reservedBalanceBefore = jbController.reservedTokenBalanceOf(1);
@@ -253,8 +253,6 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
     // Reconfigure with a weight of 1 wei, to force swapping
     uint256 _weight = 1;
     _reconfigure(1, address(delegate), _weight, 5000);
-
-    uint256 _reservedBalanceBefore = jbController.reservedTokenBalanceOf(1);
 
     // Build the metadata using the quote at that block
     bytes memory _metadata = abi.encode(
