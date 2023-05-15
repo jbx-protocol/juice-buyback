@@ -12,8 +12,8 @@ import '@jbx-protocol/juice-contracts-v3/contracts/libraries/JBTokens.sol';
 import '@jbx-protocol/juice-contracts-v3/contracts/structs/JBDidPayData.sol';
 import '@jbx-protocol/juice-contracts-v3/contracts/structs/JBPayParamsData.sol';
 
-import '@openzeppelin/contracts/interfaces/IERC20.sol';
 import '@openzeppelin/contracts/access/Ownable.sol';
+import '@openzeppelin/contracts/interfaces/IERC20.sol';
 
 import '@paulrberg/contracts/math/PRBMath.sol';
 
@@ -24,15 +24,17 @@ import '@uniswap/v3-core/contracts/libraries/TickMath.sol';
 import './interfaces/external/IWETH9.sol';
 
 /**
-	@custom:benediction DEVS BENEDICAT ET PROTEGAT CONTRACTVS MEAM
-
-  @title
-  Delegate buyback
-  
-  @notice
-  Based on the amount received if minting versus swapped on Uniswap V3, provide the best
-  quote for the user when contributing to a project.
-*/
+ * @custom:benediction DEVS BENEDICAT ET PROTEGAT CONTRACTVS MEAM
+ *
+ * @title  Buyback Delegate
+ * 
+ * @notice Datasource and delegate allowing pay beneficiary to get the highest amount
+ *         of project tokens between minting using the project weigh and swapping in a
+ *         given Uniswap V3 pool
+ *
+ * @dev    This only supports ETH terminal. The pool is fixed, if a new pool offers deeper
+ *         liquidity, this delegate needs to be redeployed.
+ */
 
 contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3SwapCallback, Ownable {
   using JBFundingCycleMetadataResolver for JBFundingCycle;
@@ -40,6 +42,7 @@ contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
   //*********************************************************************//
   // --------------------------- custom errors ------------------------- //
   //*********************************************************************//
+
   error JuiceBuyback_Unauthorized();
   error JuiceBuyback_MaximumSlippage();
 
@@ -72,26 +75,17 @@ contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
 
   /**
     @notice
-    The other token paired with the project token in the Uniswap pool/the terminal currency.
-
-    @dev
-    In this context, this is the token in
-  */
-  IERC20 public immutable terminalToken;
-
-  /**
-    @notice
     The project token address
 
     @dev
-    In this context, this is the token out
+    In this context, this is the tokenOut
   */
   IERC20 public immutable projectToken;
 
   /**
     @notice
     The uniswap pool corresponding to the project token-other token market
-    (this should be carefully chose liquidity wise)
+    (this should be carefully chosen liquidity wise)
   */
   IUniswapV3Pool public immutable pool;
 
@@ -130,38 +124,29 @@ contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
   uint256 private reservedRate = 1;
 
   /**
-    @notice
-    The address of the original contract, to prevent delegatecalling
-  */
-  address private immutable originalAddress;
-
-  /**
     @dev
     No other logic besides initializing the immutables
   */
-  constructor(IERC20 _projectToken, IERC20 _terminalToken, IUniswapV3Pool _pool, IJBPayoutRedemptionPaymentTerminal3_1 _jbxTerminal, IWETH9 _weth) {
+  constructor(IERC20 _projectToken, IWETH9 _weth, IUniswapV3Pool _pool, IJBPayoutRedemptionPaymentTerminal3_1 _jbxTerminal) {
     projectToken = _projectToken;
-    terminalToken = _terminalToken;
     pool = _pool;
     jbxTerminal = _jbxTerminal;
-    _projectTokenIsZero = address(_projectToken) < address(_terminalToken);
+    _projectTokenIsZero = address(_projectToken) < address(_weth);
     weth = _weth;
-    originalAddress = address(this);
   }
-    
+
   //*********************************************************************//
   // ---------------------- external functions ------------------------- //
   //*********************************************************************//
 
   /**
-    @notice
-    The datasource implementation
-      
-    @param _data the data passed to the data source in terminal.pay(..). _data.metadata need to have the Uniswap quote
-    @return weight the weight to use (the one passed if not max reserved rate, 0 if swapping or the one corresponding
-            to the reserved token to mint if minting)
-    @return memo the original memo passed
-    @return delegateAllocations The amount to send to delegates instead of adding to the local balance.
+   * @notice The datasource implementation
+   *
+   * @param  _data the data passed to the data source in terminal.pay(..). _data.metadata need to have the Uniswap quote
+   * @return weight the weight to use (the one passed if not max reserved rate, 0 if swapping or the one corresponding
+   *         to the reserved token to mint if minting)
+   * @return memo the original memo passed
+   * @return delegateAllocations The amount to send to delegates instead of adding to the local balance.
   */
   function payParams(JBPayParamsData calldata _data)
     external
@@ -198,21 +183,18 @@ contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
     }
 
   /**
-      @notice
-      Delegate to either swap to the beneficiary or mint to the beneficiary
-
-      @dev
-      This delegate is called only if the quote for the swap is bigger than the lowest received when minting.
-      If the swap reverts (slippage, liquidity, etc), the delegate will then mint the same amount of token as
-      if the delegate was not used.
-
-      If the beneficiary requests non claimed token, the swap is not used (as it is, per definition, claimed token)
-
-      @param _data the delegate data passed by the terminal
+   * @notice Delegate to either swap to the beneficiary or mint to the beneficiary
+   *
+   * @dev    This delegate is called only if the quote for the swap is bigger than the lowest received when minting.
+   *         If the swap reverts (slippage, liquidity, etc), the delegate will then mint the same amount of token as
+   *         if the delegate was not used.
+   *         If the beneficiary requests non claimed token, the swap is not used (as it is, per definition, claimed token)
+   * 
+   * @param _data the delegate data passed by the terminal
   */
   function didPay(JBDidPayData calldata _data) external payable override {
-    // Access control as minting is authorized to this delegate (+no delegate call)
-    if(msg.sender != address(jbxTerminal) || address(this) != originalAddress) revert JuiceBuyback_Unauthorized();
+    // Access control as minting is authorized to this delegate
+    if(msg.sender != address(jbxTerminal)) revert JuiceBuyback_Unauthorized();
 
     // Retrieve the number of token created if minting and reset the mutex (not exposed in JBDidPayData)
     uint256 _tokenCount = mintedAmount;
@@ -237,11 +219,9 @@ contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
   }
 
   /**
-    @notice
-    The Uniswap V3 pool callback (where token transfer should happens)
-
-    @dev
-    Slippage controle is done here
+   * @notice The Uniswap V3 pool callback (where token transfer should happens)
+   *
+   * @dev    Slippage controle is achieved here
   */
   function uniswapV3SwapCallback(
     int256 amount0Delta,
@@ -280,19 +260,17 @@ contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
   //*********************************************************************//
 
   /**
-    @notice
-    Swap the terminal token to receive the project toke_beforeTransferTon
-
-    @dev
-    This delegate first receive the whole amount of project token,
-    then send the non-reserved token to the beneficiary,
-    then burn the rest of this delegate balance (ie the amount of reserved token),
-    then mint the same amount as received (this will add the reserved token, following the fc rate)
-    then burn the difference (ie this delegate balance)
-    -> End result is having the correct balances (beneficiary and reserve), according to the reserve rate
-    
-    @param _data the didPayData passed by the terminal
-    @param _minimumReceivedFromSwap the minimum amount received, to prevent slippage
+   * @notice Swap the terminal token to receive the project toke_beforeTransferTon
+   *
+   * @dev    This delegate first receive the whole amount of project token,
+   *         then send the non-reserved token to the beneficiary,
+   *         then burn the rest of this delegate balance (ie the amount of reserved token),
+   *         then mint the same amount as received (this will add the reserved token, following the fc rate)
+   *         then burn the difference (ie this delegate balance)
+   *         -> End result is having the correct balances (beneficiary and reserve), according to the reserve rate
+   *
+   * @param  _data the didPayData passed by the terminal
+   * @param  _minimumReceivedFromSwap the minimum amount received, to prevent slippage
   */
   function _swap(JBDidPayData calldata _data, uint256 _minimumReceivedFromSwap, uint256 _reservedRate) internal returns(uint256 _amountReceived){
     // Pass the token and min amount to receive as extra data
@@ -362,11 +340,10 @@ contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
   }
 
   /**
-    @notice
-    Mint the token out, sending back the token in in the terminal
-
-    @param _data the didPayData passed by the terminal
-    @param _amount the amount of token out to mint
+   * @notice Mint the token out, sending back the token in in the terminal
+   *
+   * @param  _data the didPayData passed by the terminal
+   * @param  _amount the amount of token out to mint
   */
   function _mint(JBDidPayData calldata _data, uint256 _amount ) internal {
     IJBController controller = IJBController(jbxTerminal.directory().controllerOf(_data.projectId));

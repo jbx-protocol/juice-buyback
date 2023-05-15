@@ -136,7 +136,7 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
 
     amountOutForOneEth = getAmountOut(pool, 1 ether, address(weth));
 
-    delegate = new JBXBuybackDelegate(IERC20(address(jbx)), IERC20(address(weth)), pool, jbEthPaymentTerminal, weth);
+    delegate = new JBXBuybackDelegate(IERC20(address(jbx)), weth, pool, jbEthPaymentTerminal);
 
     vm.label(address(pool), 'uniswapPool');
     vm.label(address(weth), '$WETH');
