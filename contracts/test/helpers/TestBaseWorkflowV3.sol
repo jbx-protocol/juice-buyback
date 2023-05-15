@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.16;
 
-import 'ds-test/test.sol';
-import 'forge-std/Vm.sol';
+import 'forge-std/Test.sol';
 
 import '@jbx-protocol/juice-contracts-v3/contracts/JBController.sol';
 import '@jbx-protocol/juice-contracts-v3/contracts/JBDirectory.sol';
@@ -40,7 +39,7 @@ import '@paulrberg/contracts/math/PRBMath.sol';
 // Base contract for Juicebox system tests.
 //
 // Provides common functionality, such as deploying contracts on test setup for v3.
-contract TestBaseWorkflowV3 is DSTest {
+contract TestBaseWorkflowV3 is Test {
   //*********************************************************************//
   // --------------------- private stored properties ------------------- //
   //*********************************************************************//
