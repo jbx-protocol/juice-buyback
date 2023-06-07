@@ -147,7 +147,7 @@ contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
         returns (uint256 weight, string memory memo, JBPayDelegateAllocation[] memory delegateAllocations)
     {
         // Find the total number of tokens to mint, as a fixed point number with 18 decimals
-        uint256 _tokenCount = PRBMath.mulDiv(_data.amount.value, _data.weight, 10 ** 18);
+        uint256 _tokenCount = PRBMath.mulDivFixedPoint(_data.amount.value, _data.weight);
 
         // Unpack the quote from the pool, given by the frontend
         (,, uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (bytes32, bytes32, uint256, uint256));
@@ -166,8 +166,8 @@ contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
             return (0, _data.memo, delegateAllocations);
         }
 
-        // If minting, do not use this as delegate
-        return (_data.weight, _data.memo, new JBPayDelegateAllocation[](0));
+        // If minting, do not use this as delegate (delegateAllocations is left uninitialised)
+        return (_data.weight, _data.memo, delegateAllocations);
     }
 
     /**
@@ -346,7 +346,7 @@ contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
 
         // Send the eth back to the terminal balance
         jbxTerminal.addToBalanceOf{value: _data.amount.value}(
-            _data.projectId, _data.amount.value, JBTokens.ETH, "", new bytes(0)
+            _data.projectId, _data.amount.value, JBTokens.ETH, "", ""
         );
 
         emit JBXBuybackDelegate_Mint(_data.projectId);
