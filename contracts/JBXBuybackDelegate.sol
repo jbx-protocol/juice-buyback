@@ -12,6 +12,8 @@ import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBTokens.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/structs/JBDidPayData.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/structs/JBPayParamsData.sol";
 
+import "@jbx-protocol/juice-ownable/JBOwnable.sol";
+
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
 
 import "@paulrberg/contracts/math/PRBMath.sol";
@@ -19,6 +21,8 @@ import "@paulrberg/contracts/math/PRBMath.sol";
 import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import "@uniswap/v3-core/contracts/interfaces/callback/IUniswapV3SwapCallback.sol";
 import "@uniswap/v3-core/contracts/libraries/TickMath.sol";
+
+import '@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol';
 
 import "./interfaces/external/IWETH9.sol";
 
@@ -35,7 +39,7 @@ import "./interfaces/external/IWETH9.sol";
  *         liquidity, this delegate needs to be redeployed.
  */
 
-contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3SwapCallback {
+contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3SwapCallback {
     using JBFundingCycleMetadataResolver for JBFundingCycle;
 
     //*********************************************************************//
@@ -44,6 +48,7 @@ contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
 
     error JuiceBuyback_Unauthorized();
     error JuiceBuyback_MaximumSlippage();
+    error JuiceBuyback_NewCardinalityTooLow();
 
     //*********************************************************************//
     // -----------------------------  events ----------------------------- //
@@ -51,6 +56,7 @@ contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
 
     event JBXBuybackDelegate_Swap(uint256 projectId, uint256 amountEth, uint256 amountOut);
     event JBXBuybackDelegate_Mint(uint256 projectId);
+    event JBXBuybackDelegate_CardinalityIncrease(uint256 oldCardinality, uint256 newCardinality);
 
     //*********************************************************************//
     // --------------------- private constant properties ----------------- //
@@ -94,6 +100,12 @@ contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
     IWETH9 public immutable WETH;
 
     //*********************************************************************//
+    // --------------------- public stored properties -------------------- //
+    //*********************************************************************//
+
+    uint256 public cardinality;
+
+    //*********************************************************************//
     // --------------------- private stored properties ------------------- //
     //*********************************************************************//
 
@@ -118,6 +130,7 @@ contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
         IERC20 _projectToken,
         IWETH9 _weth,
         IUniswapV3Pool _pool,
+        uint256 _cardinality, 
         IJBPayoutRedemptionPaymentTerminal3_1 _jbxTerminal
     ) {
         PROJECT_TOKEN = _projectToken;
@@ -148,11 +161,19 @@ contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
         // Find the total number of tokens to mint, as a fixed point number with 18 decimals
         uint256 _tokenCount = PRBMath.mulDivFixedPoint(_data.amount.value, _data.weight);
 
-        // Unpack the quote from the pool, given by the frontend
-        (,, uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (bytes32, bytes32, uint256, uint256));
+        // Get a quote based on either the uni SDK quote or a twap from the pool
+        uint256 _swapAmountOut;
 
-        // If the amount swapped is bigger than the lowest received when minting, use the swap pathway
-        if (_tokenCount < _quote - (_quote * _slippage / SLIPPAGE_DENOMINATOR)) {
+        // todo: fix with metadata parsing lib
+        if(_data.metadata.length >= 128) {
+            // Unpack the quote from the pool, given by the frontend - this one takes precedence on the twap
+            // as it should be closer to the current pool state, if not, use the twap
+            (,, uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (bytes32, bytes32, uint256, uint256));
+            _swapAmountOut = _quote - (_quote * _slippage / SLIPPAGE_DENOMINATOR);
+        } else _swapAmountOut = _getQuote(_data.amount.value);
+
+        // If the minimum amount received from swapping is greather than received when minting, use the swap pathway
+        if (_tokenCount < _swapAmount) {
             // Pass the quote and reserve rate via a mutex
             mutexMintedAmount = _tokenCount;
             mutexReservedRate = _data.reservedRate;
@@ -233,15 +254,37 @@ contract JBXBuybackDelegate is IJBFundingCycleDataSource, IJBPayDelegate, IUnisw
 
     function redeemParams(JBRedeemParamsData calldata _data)
         external
+        pure
         override
         returns (uint256 reclaimAmount, string memory memo, JBRedemptionDelegateAllocation[] memory delegateAllocations)
     {
          return (_data.reclaimAmount.value, _data.memo, delegateAllocations);
     }
 
+    function increaseCardinality(uint256 _newCardinality) external onlyOwner {
+        uint256 _oldCardinality = cardinality;
+
+        if(_newCardinality <= _oldCardinality) revert JuiceBuyback_NewCardinalityTooLow();
+
+        cardinality = _newCardinality;
+
+        emit JBXBuybackDelegate_CardinalityIncrease(_oldCardinality, _newCardinality);
+    }
+
     //*********************************************************************//
     // ---------------------- internal functions ------------------------- //
     //*********************************************************************//
+
+    function _getQuote(uint256 _amountIn) internal view returns (uint256 _amountOut) {
+        // Get the twap tick
+        (int24 arithmeticMeanTick, ) = OracleLibrary.consult(
+        POOL,
+        cardinality
+        );
+
+        // Return a quote based on this twap tick
+        return OracleLibrary.getQuoteAtTick(arithmeticMeanTick, _amountIn, WETH, PROJECT_TOKEN);
+    }
 
     /**
      * @notice Swap the terminal token to receive the project toke_beforeTransferTon
