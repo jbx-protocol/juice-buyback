@@ -103,7 +103,7 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
     // --------------------- public stored properties -------------------- //
     //*********************************************************************//
 
-    uint256 public cardinality;
+    uint32 public cardinality;
 
     //*********************************************************************//
     // --------------------- private stored properties ------------------- //
@@ -130,14 +130,17 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
         IERC20 _projectToken,
         IWETH9 _weth,
         IUniswapV3Pool _pool,
-        uint256 _cardinality, 
-        IJBPayoutRedemptionPaymentTerminal3_1 _jbxTerminal
-    ) JBOwnable(){
+        uint32 _cardinality, 
+        IJBPayoutRedemptionPaymentTerminal3_1 _jbxTerminal,
+        IJBProjects _projects,
+        IJBOperatorStore _operatorStore
+    ) JBOwnable(_projects, _operatorStore) {
         PROJECT_TOKEN = _projectToken;
         POOL = _pool;
         JBX_TERMINAL = _jbxTerminal;
         PROJECT_TOKEN_IS_TOKEN_ZERO = address(_projectToken) < address(_weth);
         WETH = _weth;
+        cardinality = _cardinality;
     }
 
     //*********************************************************************//
@@ -261,8 +264,8 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
          return (_data.reclaimAmount.value, _data.memo, delegateAllocations);
     }
 
-    function increaseCardinality(uint256 _newCardinality) external onlyOwner {
-        uint256 _oldCardinality = cardinality;
+    function increaseCardinality(uint32 _newCardinality) external onlyOwner {
+        uint32 _oldCardinality = cardinality;
 
         if(_newCardinality <= _oldCardinality) revert JuiceBuyback_NewCardinalityTooLow();
 
@@ -278,12 +281,12 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
     function _getQuote(uint256 _amountIn) internal view returns (uint256 _amountOut) {
         // Get the twap tick
         (int24 arithmeticMeanTick, ) = OracleLibrary.consult(
-        POOL,
+        address(POOL),
         cardinality
         );
 
         // Return a quote based on this twap tick
-        return OracleLibrary.getQuoteAtTick(arithmeticMeanTick, _amountIn, WETH, PROJECT_TOKEN);
+        return OracleLibrary.getQuoteAtTick(arithmeticMeanTick, uint128(_amountIn), address(WETH), address(PROJECT_TOKEN));
     }
 
     /**

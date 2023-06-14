@@ -62,6 +62,8 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
   IJBController3_1 jbController;
   IJBTokenStore jbTokenStore;
 
+  IJBOperatorStore jbOperatorStore;
+
   // Structure needed
   JBProjectMetadata projectMetadata;
   JBFundingCycleData data;
@@ -78,6 +80,8 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
   IWETH9 weth = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2); // 1 - 1*10**18
 
   uint256 price = 69420 ether;
+
+  uint32 cardinality = 1000;
   
   // sqrtPriceX96 = sqrt(1*10**18 << 192 / 69420*10**18) = 300702666377442711115399168 (?)
   uint160 sqrtPriceX96 = 300702666377442711115399168;
@@ -103,6 +107,7 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
     jbTokenStore = jbController.tokenStore();
     jbFundingCycleStore = jbController.fundingCycleStore();
     jbProjects = jbController.projects();
+    jbOperatorStore = IJBOperatable(address(jbTokenStore)).operatorStore();
     jbSplitsStore = jbController.splitsStore();
 
     pool = IUniswapV3Pool(IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984).createPool(address(weth), address(jbx), 100));
@@ -139,7 +144,7 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
 
     amountOutForOneEth = getAmountOut(pool, 1 ether, address(weth));
 
-    delegate = new JBXBuybackDelegate(IERC20(address(jbx)), weth, pool, jbEthPaymentTerminal);
+    delegate = new JBXBuybackDelegate(IERC20(address(jbx)), weth, pool, cardinality, jbEthPaymentTerminal, jbProjects, jbOperatorStore);
 
     vm.label(address(pool), 'uniswapPool');
     vm.label(address(weth), '$WETH');

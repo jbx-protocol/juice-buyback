@@ -36,6 +36,7 @@ contract TestUnitJBXBuybackDelegate is TestBaseWorkflowV3 {
   using JBFundingCycleMetadataResolver for JBFundingCycle;
 
   JBController controller;
+
   JBProjectMetadata _projectMetadata;
   JBFundingCycleData _data;
   JBFundingCycleData _dataReconfiguration;
@@ -47,6 +48,8 @@ contract TestUnitJBXBuybackDelegate is TestBaseWorkflowV3 {
   uint256 _projectId;
   uint256 reservedRate = 4500;
   uint256 weight = 10**18; // Minting 1 token per eth
+
+  uint32 cardinality = 1000; 
 
   JBXBuybackDelegate _delegate;
 
@@ -73,7 +76,7 @@ contract TestUnitJBXBuybackDelegate is TestBaseWorkflowV3 {
     super.setUp();
 
     // Deploy the delegate
-    _delegate = new JBXBuybackDelegate(IERC20(address(jbx)), weth, pool, IJBPayoutRedemptionPaymentTerminal3_1(address(jbETHPaymentTerminal())));
+    _delegate = new JBXBuybackDelegate(IERC20(address(jbx)), weth, pool, cardinality, IJBPayoutRedemptionPaymentTerminal3_1(address(jbETHPaymentTerminal())), jbProjects(), jbOperatorStore());
 
     // Configure a new project using it
     controller = jbController();
