@@ -12,7 +12,7 @@ import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBTokens.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/structs/JBDidPayData.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/structs/JBPayParamsData.sol";
 
-import "@jbx-protocol/juice-ownable/JBOwnable.sol";
+import "@jbx-protocol/juice-ownable/src/JBOwnable.sol";
 
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
 
@@ -132,7 +132,7 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
         IUniswapV3Pool _pool,
         uint256 _cardinality, 
         IJBPayoutRedemptionPaymentTerminal3_1 _jbxTerminal
-    ) {
+    ) JBOwnable(){
         PROJECT_TOKEN = _projectToken;
         POOL = _pool;
         JBX_TERMINAL = _jbxTerminal;
@@ -173,7 +173,7 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
         } else _swapAmountOut = _getQuote(_data.amount.value);
 
         // If the minimum amount received from swapping is greather than received when minting, use the swap pathway
-        if (_tokenCount < _swapAmount) {
+        if (_tokenCount < _swapAmountOut) {
             // Pass the quote and reserve rate via a mutex
             mutexMintedAmount = _tokenCount;
             mutexReservedRate = _data.reservedRate;
