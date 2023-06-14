@@ -336,16 +336,7 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
         if (_reservedToken != 0) {
             IJBController controller = IJBController(JBX_TERMINAL.directory().controllerOf(_data.projectId));
 
-            // 1) Burn all the reserved token, which are in this address -> result: 0 here, 0 in reserve
-            controller.burnTokensOf({
-                _holder: address(this),
-                _projectId: _data.projectId,
-                _tokenCount: _reservedToken,
-                _memo: "",
-                _preferClaimedTokens: true
-            });
-
-            // 2) Mint the reserved token with this address as beneficiary -> result: _amountReceived-reserved here, reservedToken in reserve
+            // Mint the reserved token with this address as beneficiary -> result: _amountReceived-reserved here, reservedToken in reserve
             controller.mintTokensOf({
                 _projectId: _data.projectId,
                 _tokenCount: _amountReceived,
@@ -355,18 +346,15 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
                 _useReservedRate: true
             });
 
-            // 3) Burn the non-reserve token which are now left in this address (can be 0) -> result: 0 here, reservedToken in reserve
-            uint256 _nonReservedTokenInContract = _amountReceived - _reservedToken;
-
-            if (_nonReservedTokenInContract != 0) {
-                controller.burnTokensOf({
-                    _holder: address(this),
-                    _projectId: _data.projectId,
-                    _tokenCount: _nonReservedTokenInContract,
-                    _memo: "",
-                    _preferClaimedTokens: false
-                });
-            }
+            // Burn all the token received here (kept as reserved from the swap + minted just above)
+            // ie when _preferClaimed is true, burn starts with the claimed token, then continue with unclaimed ones
+            controller.burnTokensOf({
+                _holder: address(this),
+                _projectId: _data.projectId,
+                _tokenCount: _amountReceived,
+                _memo: "",
+                _preferClaimedTokens: true
+            });
         }
 
         emit JBXBuybackDelegate_Swap(_data.projectId, _data.amount.value, _amountReceived);
