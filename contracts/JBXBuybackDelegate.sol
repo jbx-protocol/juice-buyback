@@ -48,7 +48,7 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
 
     error JuiceBuyback_Unauthorized();
     error JuiceBuyback_MaximumSlippage();
-    error JuiceBuyback_NewCardinalityTooLow();
+    error JuiceBuyback_NewSecondsAgoTooLow();
 
     //*********************************************************************//
     // -----------------------------  events ----------------------------- //
@@ -56,7 +56,8 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
 
     event JBXBuybackDelegate_Swap(uint256 projectId, uint256 amountEth, uint256 amountOut);
     event JBXBuybackDelegate_Mint(uint256 projectId);
-    event JBXBuybackDelegate_CardinalityIncrease(uint256 oldCardinality, uint256 newCardinality);
+    event JBXBuybackDelegate_SecondsAgoIncrease(uint256 oldSecondsAgo, uint256 newSecondsAgo);
+    event JBXBuybackDelegate_TwapDeltaChanged(uint256 oldTwapDelta, uint256 newTwapDelta);
 
     //*********************************************************************//
     // --------------------- private constant properties ----------------- //
@@ -103,18 +104,25 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
     // --------------------- public stored properties -------------------- //
     //*********************************************************************//
 
-    uint32 public cardinality;
+    // the timeframe to use for the pool twap (from secondAgo to now)
+    uint32 public secondsAgo;
+
+    // the twap max deviation acepted (in 10_000th)
+    uint256 public twapDelta;
 
     //*********************************************************************//
     // --------------------- private stored properties ------------------- //
     //*********************************************************************//
 
     /**
-     * @notice The amount of token created if minted is prefered
+     * @notice The minted amount, min twap quote and reserved rate
      * 
-     * @dev    This is a mutex 1-x-1
+     * @dev    This is a mutex 1-x-1. This serves as common mutex for both 3
+     *         variable below, unless one of the amounts > uint120 max (then the
+     *         3 mutexes are used instead). The reserved rate max
+     *         is 10_000 per protocol constraint.
      */
-    uint256 private mutexMintedAmount = 1;
+    uint256 private mutexCommon = 1;
 
     /**
      * @notice The current reserved rate
@@ -124,13 +132,20 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
     uint256 private mutexReservedRate = 1;
 
     /**
+     * @notice The min swap quote (including slippage), from frontend or twap
+     *
+     * @dev    This is a mutex 1-x-1
+     */
+    uint256 private mutexTwapQuote = 1;
+
+    /**
      * @dev No other logic besides initializing the immutables
      */
     constructor(
         IERC20 _projectToken,
         IWETH9 _weth,
         IUniswapV3Pool _pool,
-        uint32 _cardinality, 
+        uint32 _secondsAgo, 
         IJBPayoutRedemptionPaymentTerminal3_1 _jbxTerminal,
         IJBProjects _projects,
         IJBOperatorStore _operatorStore
@@ -140,7 +155,7 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
         JBX_TERMINAL = _jbxTerminal;
         PROJECT_TOKEN_IS_TOKEN_ZERO = address(_projectToken) < address(_weth);
         WETH = _weth;
-        cardinality = _cardinality;
+        secondsAgo = _secondsAgo;
     }
 
     //*********************************************************************//
@@ -177,9 +192,16 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
 
         // If the minimum amount received from swapping is greather than received when minting, use the swap pathway
         if (_tokenCount < _swapAmountOut) {
-            // Pass the quote and reserve rate via a mutex
-            mutexMintedAmount = _tokenCount;
-            mutexReservedRate = _data.reservedRate;
+            // Pass the quotes and reserve rate via a mutex
+            if(_tokenCount > type(uint120).max || _swapAmountOut > type(uint120).max) {
+                // If the amount is too big, use the 3 mutexes (use common mutex for minted token, see unpacking logic)
+                mutexCommon = _tokenCount;
+                mutexReservedRate = _data.reservedRate;
+                mutexTwapQuote = _swapAmountOut;
+            } else {
+                // Otherwise, use the common mutex
+                mutexCommon = _tokenCount | (_swapAmountOut << 120) | (_data.reservedRate << 240);
+            }
 
             // Return this delegate as the one to use, and do not mint from the terminal
             delegateAllocations = new JBPayDelegateAllocation[](1);
@@ -206,23 +228,30 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
     function didPay(JBDidPayData calldata _data) external payable override {
         // Access control as minting is authorized to this delegate
         if (msg.sender != address(JBX_TERMINAL)) revert JuiceBuyback_Unauthorized();
+        
+        // Retrieve and reset the common mutex
+        uint256 _commonMutex = mutexCommon;
+        mutexCommon = 1;
 
-        // Retrieve the number of token created if minting and reset the mutex (not exposed in JBDidPayData)
-        uint256 _tokenCount = mutexMintedAmount;
-        mutexMintedAmount = 1;
+        // Max 120 bits for token count, 120 bits for min swap amount out, 16 bits for reserved rate
+        uint256 _tokenCount = _commonMutex & type(uint120).max;
+        uint256 _swapMinAmountOut = _commonMutex >> 120 & type(uint120).max;
+        uint256 _reservedRate = _commonMutex >> 240;
 
-        // Retrieve the fc reserved rate and reset the mutex
-        uint256 _reservedRate = mutexReservedRate;
-        mutexReservedRate = 1;
+        // Check if it was really the 3 packed or if the 3 mutexes need to be used (didPay called iff _tokenCount < _swapAmountOut)
+        if(_tokenCount >= _swapMinAmountOut ) {
+                _reservedRate = mutexReservedRate;
+                _swapMinAmountOut = mutexTwapQuote;
 
-        // The minimum amount of token received if swapping
-        (,, uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (bytes32, bytes32, uint256, uint256));
-        uint256 _minimumReceivedFromSwap = _quote - (_quote * _slippage / SLIPPAGE_DENOMINATOR);
+                // reset mutexes
+                mutexReservedRate = 1;
+                mutexTwapQuote = 1;
+        }
 
         // Pick the appropriate pathway (swap vs mint), use mint if non-claimed prefered
         if (_data.preferClaimedTokens) {
             // Try swapping
-            uint256 _amountReceived = _swap(_data, _minimumReceivedFromSwap, _reservedRate);
+            uint256 _amountReceived = _swap(_data, _swapMinAmountOut, _reservedRate);
 
             // If swap failed, mint instead, with the original weight + add to balance the token in
             if (_amountReceived == 0) _mint(_data, _tokenCount);
@@ -264,14 +293,22 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
          return (_data.reclaimAmount.value, _data.memo, delegateAllocations);
     }
 
-    function increaseCardinality(uint32 _newCardinality) external onlyOwner {
-        uint32 _oldCardinality = cardinality;
+    function increaseSecondsAgo(uint32 _newSecondsAgo) external onlyOwner {
+        uint32 _oldSecondsAgo = secondsAgo;
 
-        if(_newCardinality <= _oldCardinality) revert JuiceBuyback_NewCardinalityTooLow();
+        if(_newSecondsAgo <= _oldSecondsAgo) revert JuiceBuyback_NewSecondsAgoTooLow();
 
-        cardinality = _newCardinality;
+        secondsAgo = _newSecondsAgo;
 
-        emit JBXBuybackDelegate_CardinalityIncrease(_oldCardinality, _newCardinality);
+        emit JBXBuybackDelegate_SecondsAgoIncrease(_oldSecondsAgo, _newSecondsAgo);
+    }
+
+    function setTwapDelta(uint256 _newDelta) external onlyOwner {
+        uint256 _oldDelta = twapDelta;
+
+        twapDelta = _newDelta;
+
+        emit JBXBuybackDelegate_TwapDeltaChanged(_oldDelta, _newDelta);
     }
 
     //*********************************************************************//
@@ -282,11 +319,14 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
         // Get the twap tick
         (int24 arithmeticMeanTick, ) = OracleLibrary.consult(
         address(POOL),
-        cardinality
+        secondsAgo
         );
 
-        // Return a quote based on this twap tick
-        return OracleLibrary.getQuoteAtTick(arithmeticMeanTick, uint128(_amountIn), address(WETH), address(PROJECT_TOKEN));
+        // Get a quote based on this twap tick
+        _amountOut = OracleLibrary.getQuoteAtTick(arithmeticMeanTick, uint128(_amountIn), address(WETH), address(PROJECT_TOKEN));
+
+        // Return the lowest twap accepted
+        _amountOut -= _amountOut * twapDelta / SLIPPAGE_DENOMINATOR;
     }
 
     /**
