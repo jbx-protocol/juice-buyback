@@ -15,6 +15,7 @@ import "@jbx-protocol/juice-contracts-v3/contracts/structs/JBPayParamsData.sol";
 import "@jbx-protocol/juice-ownable/src/JBOwnable.sol";
 
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
+import '@openzeppelin/contracts/utils/introspection/ERC165.sol';
 
 import "@paulrberg/contracts/math/PRBMath.sol";
 
@@ -38,7 +39,7 @@ import "./interfaces/external/IWETH9.sol";
  *         liquidity, this delegate needs to be redeployed.
  */
 
-contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3SwapCallback {
+contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3SwapCallback {
     using JBFundingCycleMetadataResolver for JBFundingCycle;
 
     //*********************************************************************//
@@ -453,8 +454,9 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
     // ---------------------- peripheral functions ----------------------- //
     //*********************************************************************//
 
-    function supportsInterface(bytes4 _interfaceId) external pure override returns (bool) {
+    function supportsInterface(bytes4 _interfaceId) public view override(ERC165, IERC165) returns (bool) {
         return _interfaceId == type(IJBFundingCycleDataSource).interfaceId
-            || _interfaceId == type(IJBPayDelegate).interfaceId;
+            || _interfaceId == type(IJBPayDelegate).interfaceId
+            || super.supportsInterface(_interfaceId);
     }
 }
