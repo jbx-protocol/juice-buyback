@@ -235,8 +235,8 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
         mutexCommon = 1;
 
         // Max 120 bits for token count, 120 bits for min swap amount out, 16 bits for reserved rate
-        uint256 _tokenCount = _commonMutex;
-        uint256 _swapMinAmountOut = _commonMutex >> 120;
+        uint256 _tokenCount = _commonMutex & type(uint120).max;
+        uint256 _swapMinAmountOut = _commonMutex >> 120 & type(uint120).max;
         uint256 _reservedRate = _commonMutex >> 240;
 
         // Check if it was really the 3 packed or if the 3 mutexes need to be used (didPay called iff _tokenCount < _swapAmountOut)

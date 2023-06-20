@@ -81,7 +81,9 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
 
   uint256 price = 69420 ether;
 
-  uint32 cardinality = 1000;
+  uint32 cardinality = 100000;
+
+  uint256 twapDelta = 500;
   
   // sqrtPriceX96 = sqrt(1*10**18 << 192 / 69420*10**18) = 300702666377442711115399168 (?)
   uint160 sqrtPriceX96 = 300702666377442711115399168;
@@ -144,7 +146,7 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
 
     amountOutForOneEth = getAmountOut(pool, 1 ether, address(weth));
 
-    delegate = new JBXBuybackDelegate(IERC20(address(jbx)), weth, pool, cardinality, jbEthPaymentTerminal, jbProjects, jbOperatorStore);
+    delegate = new JBXBuybackDelegate(IERC20(address(jbx)), weth, pool, cardinality, twapDelta, jbEthPaymentTerminal, jbProjects, jbOperatorStore);
 
     vm.label(address(pool), 'uniswapPool');
     vm.label(address(weth), '$WETH');
@@ -369,6 +371,133 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
 
     // Check: token received by the beneficiary
     assertEq(jbx.balanceOf(address(123)), _quote);
+
+    // Check: reserve unchanged
+    assertEq(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore);
+  }
+
+    /**
+   * @notice If the amount of token returned by swapping is greater than by minting, swap & use quote from uniswap lib
+   *
+   * @dev    Should swap for both beneficiary and reserve (by burning/minting)
+   */
+  function test_swapWhenQuoteNotProvidedInMetadata(uint256 _amountIn) public {
+    _amountIn = bound(_amountIn, 100, 100 ether);
+  
+    // Reconfigure with a weight of 1  
+    _reconfigure(1, address(delegate), 1, 0);
+
+    uint256 _reservedBalanceBefore = jbController.reservedTokenBalanceOf(1);
+
+    uint256 _quote = getAmountOut(pool, _amountIn, address(weth));
+    
+    vm.expectEmit(true, true, true, true);
+    emit JBXBuybackDelegate_Swap(1, _amountIn, _quote);
+
+    // Pay the project
+    jbEthPaymentTerminal.pay{value: _amountIn}(
+      1,
+      _amountIn,
+      address(0),
+      address(123),
+      /* _minReturnedTokens */
+      0,
+      /* _preferClaimedTokens */
+      true,
+      /* _memo */
+      'Take my money!',
+      /* _delegateMetadata */
+      new bytes(0)
+    );
+
+    // Check: token received by the beneficiary
+    assertLe(jbx.balanceOf(address(123)), _quote);
+
+    // Check: reserve unchanged
+    assertEq(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore);
+  }
+
+  /**
+   * @notice If the amount of token returned by swapping is greater than by minting, swap & use quote from uniswap lib when cardinality is increased
+   *
+   * @dev    Should swap for both beneficiary and reserve (by burning/minting)
+   */
+  function test_swapWhenCardinalityIsIncreased(uint256 _amountIn) public {
+    _amountIn = bound(_amountIn, 100, 100 ether);
+  
+    // Reconfigure with a weight of 1  
+    _reconfigure(1, address(delegate), 1, 0);
+
+    uint256 _reservedBalanceBefore = jbController.reservedTokenBalanceOf(1);
+
+    uint256 _quote = getAmountOut(pool, _amountIn, address(weth));
+
+    delegate.increaseSecondsAgo(200000);
+    
+    vm.expectEmit(true, true, true, true);
+    emit JBXBuybackDelegate_Swap(1, _amountIn, _quote);
+
+    // Pay the project
+    jbEthPaymentTerminal.pay{value: _amountIn}(
+      1,
+      _amountIn,
+      address(0),
+      address(123),
+      /* _minReturnedTokens */
+      0,
+      /* _preferClaimedTokens */
+      true,
+      /* _memo */
+      'Take my money!',
+      /* _delegateMetadata */
+      new bytes(0)
+    );
+
+    // Check: token received by the beneficiary
+    assertLe(jbx.balanceOf(address(123)), _quote);
+
+    // Check: reserve unchanged
+    assertEq(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore);
+  }
+
+  /**
+   * @notice If the amount of token returned by swapping is greater than by minting, swap & use quote from uniswap lib when twapDelta is updated
+   *
+   * @dev    Should swap for both beneficiary and reserve (by burning/minting)
+   */
+  function test_swapWhenTwapDeltaIsUpdated(uint256 _amountIn) public {
+    _amountIn = bound(_amountIn, 100, 100 ether);
+  
+    // Reconfigure with a weight of 1  
+    _reconfigure(1, address(delegate), 1, 0);
+
+    uint256 _reservedBalanceBefore = jbController.reservedTokenBalanceOf(1);
+
+    uint256 _quote = getAmountOut(pool, _amountIn, address(weth));
+
+    delegate.setTwapDelta(700);
+    
+    vm.expectEmit(true, true, true, true);
+    emit JBXBuybackDelegate_Swap(1, _amountIn, _quote);
+
+    // Pay the project
+    jbEthPaymentTerminal.pay{value: _amountIn}(
+      1,
+      _amountIn,
+      address(0),
+      address(123),
+      /* _minReturnedTokens */
+      0,
+      /* _preferClaimedTokens */
+      true,
+      /* _memo */
+      'Take my money!',
+      /* _delegateMetadata */
+      new bytes(0)
+    );
+
+    // Check: token received by the beneficiary
+    assertLe(jbx.balanceOf(address(123)), _quote);
 
     // Check: reserve unchanged
     assertEq(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore);
