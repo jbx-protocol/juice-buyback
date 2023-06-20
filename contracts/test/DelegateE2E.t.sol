@@ -548,48 +548,6 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
     assertApproxEqAbs(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore + _weight / 2, 1);
   }
 
-  function test_mintIfPreferClaimedIsFalse() public {    
-    uint256 _weight = price - (price * 500 / 10000) - 10;
-    // Reconfigure with a weight smaller than the quote, slippage included
-    _reconfigure(1, address(delegate), _weight, 5000);
-
-    uint256 _reservedBalanceBefore = jbController.reservedTokenBalanceOf(1);
-
-    // Build the metadata using the quote at that block
-    bytes memory _metadata = abi.encode(
-      bytes32(0),
-      bytes32(0),
-      price, //quote
-      500 //slippage 500/10000 = 5%
-    );
-    
-    // Fall back on delegate minting
-    vm.expectEmit(true, true, true, true);
-    emit JBXBuybackDelegate_Mint(1);
-    
-    // Pay the project
-    jbEthPaymentTerminal.pay{value: 1 ether}(
-      1,
-      1 ether,
-      address(0),
-      address(123),
-      /* _minReturnedTokens */
-      0,
-      /* _preferClaimedTokens */
-      false,
-      /* _memo */
-      'Take my money!',
-      /* _delegateMetadata */
-      _metadata
-    );
-
-    // Check: token received by the beneficiary
-    assertEq(jbTokenStore.balanceOf(address(123), 1), _weight / 2);
-
-    // Check: token added to the reserve - 1 wei sensitivity for rounding errors
-    assertApproxEqAbs(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore + _weight / 2, 1);
-  }
-
   function _reconfigure(uint256 _projectId, address _delegate, uint256 _weight, uint256 _reservedRate) internal {
     address _projectOwner = jbProjects.ownerOf(_projectId);
 

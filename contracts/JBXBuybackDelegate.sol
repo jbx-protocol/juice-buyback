@@ -65,7 +65,7 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
     /**
      * @notice Address project token < address terminal token ?
      */
-    bool private immutable PROJECT_TOKEN_IS_TOKEN_ZERO;
+    bool private immutable PROJECT_TOKEN_IS_TOKEN0;
 
     /**
      * @notice The unit of the max slippage (expressed in 1/10000th)
@@ -153,7 +153,7 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
         PROJECT_TOKEN = _projectToken;
         POOL = _pool;
         JBX_TERMINAL = _jbxTerminal;
-        PROJECT_TOKEN_IS_TOKEN_ZERO = address(_projectToken) < address(_weth);
+        PROJECT_TOKEN_IS_TOKEN0 = address(_projectToken) < address(_weth);
         WETH = _weth;
         secondsAgo = _secondsAgo;
         twapDelta = _twapDelta;
@@ -167,6 +167,7 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
      * @notice The datasource implementation
      *
      * @param  _data the data passed to the data source in terminal.pay(..). _data.metadata need to have the Uniswap quote
+     *               this quote should be set as 0 if the user wants to use the vanilla minting path
      * @return weight the weight to use (the one passed if not max reserved rate, 0 if swapping or the one corresponding
      *         to the reserved token to mint if minting)
      * @return memo the original memo passed
@@ -249,16 +250,11 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
                 mutexTwapQuote = 1;
         }
 
-        // Pick the appropriate pathway (swap vs mint), use mint if non-claimed prefered
-        if (_data.preferClaimedTokens) {
-            // Try swapping
-            uint256 _amountReceived = _swap(_data, _swapMinAmountOut, _reservedRate);
+        // Try swapping
+        uint256 _amountReceived = _swap(_data, _swapMinAmountOut, _reservedRate);
 
-            // If swap failed, mint instead, with the original weight + add to balance the token in
-            if (_amountReceived == 0) _mint(_data, _tokenCount);
-        } else {
-            _mint(_data, _tokenCount);
-        }
+        // If swap failed, mint instead, with the original weight + add to balance the token in
+        if (_amountReceived == 0) _mint(_data, _tokenCount);
     }
 
     /**
@@ -274,8 +270,8 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
         (uint256 _minimumAmountReceived) = abi.decode(data, (uint256));
 
         // Assign 0 and 1 accordingly
-        uint256 _amountReceived = uint256(-(PROJECT_TOKEN_IS_TOKEN_ZERO ? amount0Delta : amount1Delta));
-        uint256 _amountToSend = uint256(PROJECT_TOKEN_IS_TOKEN_ZERO ? amount1Delta : amount0Delta);
+        uint256 _amountReceived = uint256(-(PROJECT_TOKEN_IS_TOKEN0 ? amount0Delta : amount1Delta));
+        uint256 _amountToSend = uint256(PROJECT_TOKEN_IS_TOKEN0 ? amount1Delta : amount0Delta);
 
         // Revert if slippage is too high
         if (_amountReceived < _minimumAmountReceived) revert JuiceBuyback_MaximumSlippage();
@@ -351,13 +347,13 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
         // Pass the token and min amount to receive as extra data
         try POOL.swap({
             recipient: address(this),
-            zeroForOne: !PROJECT_TOKEN_IS_TOKEN_ZERO,
+            zeroForOne: !PROJECT_TOKEN_IS_TOKEN0,
             amountSpecified: int256(_data.amount.value),
-            sqrtPriceLimitX96: PROJECT_TOKEN_IS_TOKEN_ZERO ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
+            sqrtPriceLimitX96: PROJECT_TOKEN_IS_TOKEN0 ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
             data: abi.encode(_minimumReceivedFromSwap)
         }) returns (int256 amount0, int256 amount1) {
             // Swap succeded, take note of the amount of PROJECT_TOKEN received (negative as it is an exact input)
-            _amountReceived = uint256(-(PROJECT_TOKEN_IS_TOKEN_ZERO ? amount0 : amount1));
+            _amountReceived = uint256(-(PROJECT_TOKEN_IS_TOKEN0 ? amount0 : amount1));
         } catch {
             // implies _amountReceived = 0 -> will later mint when back in didPay
             return _amountReceived;
