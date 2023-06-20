@@ -411,7 +411,7 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
     );
 
     // Check: token received by the beneficiary
-    assertLe(jbx.balanceOf(address(123)), _quote);
+    assertEq(jbx.balanceOf(address(123)), _quote);
 
     // Check: reserve unchanged
     assertEq(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore);
@@ -454,7 +454,7 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
     );
 
     // Check: token received by the beneficiary
-    assertLe(jbx.balanceOf(address(123)), _quote);
+    assertEq(jbx.balanceOf(address(123)), _quote);
 
     // Check: reserve unchanged
     assertEq(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore);
@@ -497,7 +497,7 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
     );
 
     // Check: token received by the beneficiary
-    assertLe(jbx.balanceOf(address(123)), _quote);
+    assertEq(jbx.balanceOf(address(123)), _quote);
 
     // Check: reserve unchanged
     assertEq(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore);
