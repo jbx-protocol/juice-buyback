@@ -230,7 +230,7 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
     function didPay(JBDidPayData calldata _data) external payable override {
         // Access control as minting is authorized to this delegate
         if (msg.sender != address(JBX_TERMINAL)) revert JuiceBuyback_Unauthorized();
-        
+
         // Retrieve and reset the common mutex
         uint256 _commonMutex = mutexCommon;
         mutexCommon = 1;
@@ -282,6 +282,13 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
         WETH.transfer(address(POOL), _amountToSend);
     }
 
+    /**
+     * @notice Generic redeem params, for interface completion
+     *
+     * @dev This is a passthrough of the redemption parameters
+     *
+     * @param _data the redeem data passed by the terminal
+     */
     function redeemParams(JBRedeemParamsData calldata _data)
         external
         pure
@@ -291,6 +298,11 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
          return (_data.reclaimAmount.value, _data.memo, delegateAllocations);
     }
 
+    /**
+     * @notice Increase the period over which the twap is computed
+     *
+     * @param  _newSecondsAgo the new period
+     */
     function increaseSecondsAgo(uint32 _newSecondsAgo) external onlyOwner {
         uint32 _oldSecondsAgo = secondsAgo;
 
@@ -301,6 +313,11 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
         emit JBXBuybackDelegate_SecondsAgoIncrease(_oldSecondsAgo, _newSecondsAgo);
     }
 
+    /**
+     * @notice Set the maximum deviation allowed between amount received and twap
+     *
+     * @param  _newDelta the new delta, in 10_000th
+     */
     function setTwapDelta(uint256 _newDelta) external onlyOwner {
         uint256 _oldDelta = twapDelta;
 
@@ -313,6 +330,13 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
     // ---------------------- internal functions ------------------------- //
     //*********************************************************************//
 
+    /**
+     * @notice  Get a quote based on twap over a secondsAgo period, taking into account a twapDelta max deviation
+     *
+     * @param   _amountIn the amount to swap
+     *
+     * @return  _amountOut the minimum amount received according to the twap
+     */
     function _getQuote(uint256 _amountIn) internal view returns (uint256 _amountOut) {
         // Get the twap tick
         (int24 arithmeticMeanTick, ) = OracleLibrary.consult(
