@@ -25,7 +25,6 @@ import "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import '@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol';
 
 import "./interfaces/external/IWETH9.sol";
-
 /**
  * @custom:benediction DEVS BENEDICAT ET PROTEGAT CONTRACTVS MEAM
  *
@@ -146,6 +145,7 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
         IWETH9 _weth,
         IUniswapV3Pool _pool,
         uint32 _secondsAgo, 
+        uint256  _twapDelta,
         IJBPayoutRedemptionPaymentTerminal3_1 _jbxTerminal,
         IJBProjects _projects,
         IJBOperatorStore _operatorStore
@@ -156,6 +156,7 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
         PROJECT_TOKEN_IS_TOKEN_ZERO = address(_projectToken) < address(_weth);
         WETH = _weth;
         secondsAgo = _secondsAgo;
+        twapDelta = _twapDelta;
     }
 
     //*********************************************************************//
@@ -234,8 +235,8 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
         mutexCommon = 1;
 
         // Max 120 bits for token count, 120 bits for min swap amount out, 16 bits for reserved rate
-        uint256 _tokenCount = _commonMutex & type(uint120).max;
-        uint256 _swapMinAmountOut = _commonMutex >> 120 & type(uint120).max;
+        uint256 _tokenCount = _commonMutex;
+        uint256 _swapMinAmountOut = _commonMutex >> 120;
         uint256 _reservedRate = _commonMutex >> 240;
 
         // Check if it was really the 3 packed or if the 3 mutexes need to be used (didPay called iff _tokenCount < _swapAmountOut)
@@ -278,6 +279,7 @@ contract JBXBuybackDelegate is JBOwnable, IJBFundingCycleDataSource, IJBPayDeleg
 
         // Revert if slippage is too high
         if (_amountReceived < _minimumAmountReceived) revert JuiceBuyback_MaximumSlippage();
+
 
         // Wrap and transfer the WETH to the pool
         WETH.deposit{value: _amountToSend}();
