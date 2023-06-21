@@ -66,12 +66,12 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
     /**
      * @notice Address project token < address terminal token ?
      */
-    bool private immutable PROJECT_TOKEN_IS_TOKEN0;
+    bool immutable PROJECT_TOKEN_IS_TOKEN0;
 
     /**
      * @notice The unit of the max slippage (expressed in 1/10000th)
      */
-    uint256 private constant SLIPPAGE_DENOMINATOR = 10000;
+    uint256 constant SLIPPAGE_DENOMINATOR = 10000;
 
     //*********************************************************************//
     // --------------------- public constant properties ------------------ //
