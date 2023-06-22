@@ -517,6 +517,46 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
   }
 
   /**
+   * @notice If the amount of token returned by minting is greater than by swapping, we mint outside of the delegate & when there is no user provided quote presemt in metadata
+   *
+   * @dev    Should mint for both beneficiary and reserve
+   */
+  function test_swapWhenMintIsPreferredEvenWhenMetadataIsNotPresent(uint256 _amountIn) public {
+    _amountIn = bound(_amountIn, 1 ether, 1000 ether);
+
+    uint256 _reservedBalanceBefore = jbController.reservedTokenBalanceOf(1);
+
+    // Reconfigure with a weight of amountOutForOneEth + 1
+    _reconfigure(1, address(delegate), amountOutForOneEth + 1, 0);
+
+    uint256 _quote = _getTwapQuote(_amountIn, cardinality, twapDelta);
+
+    // Pay the project
+    jbEthPaymentTerminal.pay{value: _amountIn}(
+      1,
+      _amountIn,
+      address(0),
+      address(123),
+      /* _minReturnedTokens */
+      0,
+      /* _preferClaimedTokens */
+      true,
+      /* _memo */
+      'Take my money!',
+      /* _delegateMetadata */
+      new bytes(0)
+    );
+
+    uint256 expectedTokenCount = PRBMath.mulDiv(_amountIn, amountOutForOneEth + 1, 10**18);
+
+    // Check: token received by the beneficiary
+    assertEq(jbx.balanceOf(address(123)), expectedTokenCount);
+
+    // Check: reserve unchanged
+    assertEq(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore);
+  }
+
+  /**
    * @notice If the amount of token returned by swapping is greater than by minting but slippage is too high, mint
    */
   function test_mintIfSlippageTooHigh() public {
