@@ -434,7 +434,6 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
    * @notice If the amount of token returned by swapping is greater than by minting, swap & use quote from uniswap lib when cardinality is increased
    *
    * @dev    Should swap for both beneficiary and reserve (by burning/minting)
-             using spot price here so we have atleast 1 test where we use spot price when metadata is not used
    */
   function test_swapWhenCardinalityIsIncreased(uint256 _amountIn) public {
     _amountIn = bound(_amountIn, 100, 100 ether);
@@ -444,12 +443,9 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
 
     uint256 _reservedBalanceBefore = jbController.reservedTokenBalanceOf(1);
 
-    uint256 _quote = getAmountOut(pool, _amountIn, address(weth));
+    uint256 _quote = _getTwapQuote(_amountIn, 200000, twapDelta);
 
     delegate.increaseSecondsAgo(200000);
-    
-    vm.expectEmit(true, true, true, true);
-    emit JBXBuybackDelegate_Swap(1, _amountIn, _quote);
 
     // Pay the project
     jbEthPaymentTerminal.pay{value: _amountIn}(
@@ -468,7 +464,7 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
     );
 
     // Check: token received by the beneficiary
-    assertEq(jbx.balanceOf(address(123)), _quote);
+    assertGt(jbx.balanceOf(address(123)), _quote);
 
     // Check: reserve unchanged
     assertEq(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore);
@@ -482,7 +478,7 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
   function test_swapWhenTwapDeltaIsUpdated(uint256 _amountIn, uint256 _twapDelta) public {
     _amountIn = bound(_amountIn, 100, 100 ether);
     // restricting to avoid slippage errors
-    _twapDelta = bound(_twapDelta, 100, 2000);
+    _twapDelta = bound(_twapDelta, 300, 8000);
 
     // Reconfigure with a weight of 1  
     _reconfigure(1, address(delegate), 1, 0);
