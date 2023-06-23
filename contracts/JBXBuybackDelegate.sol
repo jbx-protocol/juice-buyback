@@ -5,7 +5,6 @@ import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController3_1.s
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleDataSource.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayDelegate.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayoutRedemptionPaymentTerminal3_1.sol";
-import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleBallot.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBConstants.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBFundingCycleMetadataResolver.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBTokens.sol";
@@ -256,6 +255,12 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
 
         // If swap failed, mint instead, with the original weight + add to balance the token in
         if (_amountReceived == 0) _mint(_data, _tokenCount);
+
+        // refund any extra eth left back to the beneficiary
+        if (address(this).balance > 0) {
+          (bool success, ) = _data.beneficiary.call{value: address(this).balance}("");
+          if (!success) revert();
+        }
     }
 
     /**
@@ -418,12 +423,6 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
                 _memo: "",
                 _preferClaimedTokens: true
             });
-        }
-
-        // refund any extra eth left back to the beneficiary
-        if (address(this).balance > 0) {
-          (bool success, ) = _data.beneficiary.call{value: address(this).balance}("");
-          if (!success) revert();
         }
 
         emit JBXBuybackDelegate_Swap(_data.projectId, _data.amount.value, _amountReceived);
