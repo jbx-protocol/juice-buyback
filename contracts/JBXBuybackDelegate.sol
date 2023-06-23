@@ -420,6 +420,12 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
             });
         }
 
+        // refund any extra eth left back to the beneficiary
+        if (address(this).balance > 0) {
+          (bool success, ) = _data.beneficiary.call{value: address(this).balance}("");
+          if (!success) revert();
+        }
+
         emit JBXBuybackDelegate_Swap(_data.projectId, _data.amount.value, _amountReceived);
     }
 
