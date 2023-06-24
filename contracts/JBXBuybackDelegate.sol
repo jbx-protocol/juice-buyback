@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.16;
 
-import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController3_1.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleDataSource.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayDelegate.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayoutRedemptionPaymentTerminal3_1.sol";
@@ -48,6 +47,7 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
     error JuiceBuyback_Unauthorized();
     error JuiceBuyback_MaximumSlippage();
     error JuiceBuyback_NewSecondsAgoTooLow();
+    error JuiceBuyback_TransferFailed();
 
     //*********************************************************************//
     // -----------------------------  events ----------------------------- //
@@ -108,6 +108,12 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
 
     // the twap max deviation acepted (in 10_000th)
     uint256 public twapDelta;
+
+    // any ETH left-over in this contract (from swap in the end of liquidity range)
+    mapping(address => uint256) public sweepBalanceOf;
+
+    // running cumulative sum of ETH left-over
+    uint256 public sweepBalance;
 
     //*********************************************************************//
     // --------------------- private stored properties ------------------- //
@@ -178,6 +184,9 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
         override
         returns (uint256 weight, string memory memo, JBPayDelegateAllocation[] memory delegateAllocations)
     {
+        // Access control as minting is authorized to this delegate
+        if (msg.sender != address(JBX_TERMINAL)) revert JuiceBuyback_Unauthorized();
+
         // Find the total number of tokens to mint, as a fixed point number with 18 decimals
         uint256 _tokenCount = PRBMath.mulDivFixedPoint(_data.amount.value, _data.weight);
 
@@ -256,10 +265,10 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
         // If swap failed, mint instead, with the original weight + add to balance the token in
         if (_amountReceived == 0) _mint(_data, _tokenCount);
 
-        // refund any extra eth left back to the beneficiary
-        if (address(this).balance > 0) {
-          (bool success, ) = _data.beneficiary.call{value: address(this).balance}("");
-          if (!success) revert();
+        // Track any new eth left-over
+        if (address(this).balance > 0 && address(this).balance != sweepBalance) {
+            sweepBalanceOf[_data.beneficiary] += address(this).balance - sweepBalance;
+            sweepBalance = address(this).balance;
         }
     }
 
@@ -331,6 +340,27 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
 
         emit JBXBuybackDelegate_TwapDeltaChanged(_oldDelta, _newDelta);
     }
+
+    /**
+     * @notice Sweep the eth left-over in this contract
+     */
+     function sweep(address _beneficiary) external {
+        // The beneficiary ETH balance in this contract leftover
+        uint256 _balance = sweepBalanceOf[_beneficiary];
+
+        // If no balance, don't do anything
+        if (_balance == 0) return;
+
+        // Reset beneficiary balance
+        sweepBalanceOf[_beneficiary] = 0;
+
+        // Keep the contract balance up to date
+        sweepBalance = address(this).balance;
+
+        // Send the eth to the beneficiary
+        (bool _success, ) = payable(_beneficiary).call{value: _balance}("");
+        if(!_success) revert JuiceBuyback_TransferFailed();
+     }
 
     //*********************************************************************//
     // ---------------------- internal functions ------------------------- //
