@@ -525,8 +525,6 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
     // Reconfigure with a weight of amountOutForOneEth + 1
     _reconfigure(1, address(delegate), amountOutForOneEth + 1, 0);
 
-    uint256 _quote = _getTwapQuote(_amountIn, cardinality, twapDelta);
-
     // Pay the project
     jbEthPaymentTerminal.pay{value: _amountIn}(
       1,

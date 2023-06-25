@@ -377,9 +377,9 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
      */
     function _getQuote(uint256 _amountIn) internal view returns (uint256 _amountOut) {
         // If non-existing or non-initialized pool, quote 0
-        try POOL.slot0() returns (uint160, int24, uint16, uint16, uint16, uint8, bool locked) {
+        try POOL.slot0() returns (uint160, int24, uint16, uint16, uint16, uint8, bool unlocked) {
             // non initialized?
-            if (locked) return 0;
+            if (!unlocked) return 0;
         } catch {
             // invalid address or not deployed yet?
             return 0;
