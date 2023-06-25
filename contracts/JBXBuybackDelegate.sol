@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.16;
 
+import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController3_1.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleDataSource.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayDelegate.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayoutRedemptionPaymentTerminal3_1.sol";
@@ -185,7 +186,7 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
         returns (uint256 weight, string memory memo, JBPayDelegateAllocation[] memory delegateAllocations)
     {
         // Access control as minting is authorized to this delegate
-        if (msg.sender != address(JBX_TERMINAL)) revert JuiceBuyback_Unauthorized();
+        if (msg.sender != address(JBX_TERMINAL.store())) revert JuiceBuyback_Unauthorized();
 
         // Find the total number of tokens to mint, as a fixed point number with 18 decimals
         uint256 _tokenCount = PRBMath.mulDivFixedPoint(_data.amount.value, _data.weight);
