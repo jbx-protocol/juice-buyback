@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.16;
 
-
-import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController.sol";
+import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController3_1.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleDataSource.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayDelegate.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayoutRedemptionPaymentTerminal3_1.sol";
@@ -15,7 +14,7 @@ import "@jbx-protocol/juice-contracts-v3/contracts/structs/JBPayParamsData.sol";
 import "@jbx-protocol/juice-ownable/src/JBOwnable.sol";
 
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
-import '@openzeppelin/contracts/utils/introspection/ERC165.sol';
+import "@openzeppelin/contracts/utils/introspection/ERC165.sol";
 
 import "@paulrberg/contracts/math/PRBMath.sol";
 
@@ -23,7 +22,7 @@ import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import "@uniswap/v3-core/contracts/interfaces/callback/IUniswapV3SwapCallback.sol";
 import "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 
-import '@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol';
+import "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
 
 import "./interfaces/external/IWETH9.sol";
 /**
@@ -80,7 +79,7 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
 
     /**
      * @notice The project token address
-     * 
+     *
      * @dev In this context, this is the tokenOut
      */
     IERC20 public immutable PROJECT_TOKEN;
@@ -123,7 +122,7 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
 
     /**
      * @notice The minted amount, min twap quote and reserved rate
-     * 
+     *
      * @dev    This is a mutex 1-x-1. This serves as common mutex for both 3
      *         variable below, unless one of the amounts > uint120 max (then the
      *         3 mutexes are used instead). The reserved rate max
@@ -133,7 +132,7 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
 
     /**
      * @notice The current reserved rate
-     * 
+     *
      * @dev    This is a mutex 1-x-1
      */
     uint256 private mutexReservedRate = 1;
@@ -152,8 +151,8 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
         IERC20 _projectToken,
         IWETH9 _weth,
         IUniswapV3Pool _pool,
-        uint32 _secondsAgo, 
-        uint256  _twapDelta,
+        uint32 _secondsAgo,
+        uint256 _twapDelta,
         IJBPayoutRedemptionPaymentTerminal3_1 _jbxTerminal,
         IJBProjects _projects,
         IJBOperatorStore _operatorStore
@@ -187,7 +186,7 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
         returns (uint256 weight, string memory memo, JBPayDelegateAllocation[] memory delegateAllocations)
     {
         // Access control as minting is authorized to this delegate
-        if (msg.sender != address(JBX_TERMINAL)) revert JuiceBuyback_Unauthorized();
+        if (msg.sender != address(JBX_TERMINAL.store())) revert JuiceBuyback_Unauthorized();
 
         // Find the total number of tokens to mint, as a fixed point number with 18 decimals
         uint256 _tokenCount = PRBMath.mulDivFixedPoint(_data.amount.value, _data.weight);
@@ -196,17 +195,19 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
         uint256 _swapAmountOut;
 
         // todo: fix with metadata parsing lib
-        if(_data.metadata.length >= 128) {
+        if (_data.metadata.length >= 128) {
             // Unpack the quote from the pool, given by the frontend - this one takes precedence on the twap
             // as it should be closer to the current pool state, if not, use the twap
             (,, uint256 _quote, uint256 _slippage) = abi.decode(_data.metadata, (bytes32, bytes32, uint256, uint256));
             _swapAmountOut = _quote - (_quote * _slippage / SLIPPAGE_DENOMINATOR);
-        } else _swapAmountOut = _getQuote(_data.amount.value);
+        } else {
+            _swapAmountOut = _getQuote(_data.amount.value);
+        }
 
         // If the minimum amount received from swapping is greather than received when minting, use the swap pathway
         if (_tokenCount < _swapAmountOut) {
             // Pass the quotes and reserve rate via a mutex
-            if(_tokenCount > type(uint120).max || _swapAmountOut > type(uint120).max) {
+            if (_tokenCount > type(uint120).max || _swapAmountOut > type(uint120).max) {
                 // If the amount is too big, use the 3 mutexes (use common mutex for minted token, see unpacking logic)
                 mutexCommon = _tokenCount;
                 mutexReservedRate = _data.reservedRate;
@@ -252,13 +253,13 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
         uint256 _reservedRate = _commonMutex >> 240;
 
         // Check if it was really the 3 packed or if the 3 mutexes need to be used (didPay called iff _tokenCount < _swapAmountOut)
-        if(_tokenCount >= _swapMinAmountOut ) {
-                _reservedRate = mutexReservedRate;
-                _swapMinAmountOut = mutexTwapQuote;
+        if (_tokenCount >= _swapMinAmountOut) {
+            _reservedRate = mutexReservedRate;
+            _swapMinAmountOut = mutexTwapQuote;
 
-                // reset mutexes
-                mutexReservedRate = 1;
-                mutexTwapQuote = 1;
+            // reset mutexes
+            mutexReservedRate = 1;
+            mutexTwapQuote = 1;
         }
 
         // Try swapping
@@ -293,7 +294,6 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
         // Revert if slippage is too high
         if (_amountReceived < _minimumAmountReceived) revert JuiceBuyback_MaximumSlippage();
 
-
         // Wrap and transfer the WETH to the pool
         WETH.deposit{value: _amountToSend}();
         WETH.transfer(address(POOL), _amountToSend);
@@ -312,7 +312,7 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
         override
         returns (uint256 reclaimAmount, string memory memo, JBRedemptionDelegateAllocation[] memory delegateAllocations)
     {
-         return (_data.reclaimAmount.value, _data.memo, delegateAllocations);
+        return (_data.reclaimAmount.value, _data.memo, delegateAllocations);
     }
 
     /**
@@ -323,7 +323,7 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
     function increaseSecondsAgo(uint32 _newSecondsAgo) external onlyOwner {
         uint32 _oldSecondsAgo = secondsAgo;
 
-        if(_newSecondsAgo <= _oldSecondsAgo) revert JuiceBuyback_NewSecondsAgoTooLow();
+        if (_newSecondsAgo <= _oldSecondsAgo) revert JuiceBuyback_NewSecondsAgoTooLow();
 
         secondsAgo = _newSecondsAgo;
 
@@ -346,7 +346,7 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
     /**
      * @notice Sweep the eth left-over in this contract
      */
-     function sweep(address _beneficiary) external {
+    function sweep(address _beneficiary) external {
         // The beneficiary ETH balance in this contract leftover
         uint256 _balance = sweepBalanceOf[_beneficiary];
 
@@ -360,9 +360,9 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
         sweepBalance = address(this).balance;
 
         // Send the eth to the beneficiary
-        (bool _success, ) = payable(_beneficiary).call{value: _balance}("");
-        if(!_success) revert JuiceBuyback_TransferFailed();
-     }
+        (bool _success,) = payable(_beneficiary).call{value: _balance}("");
+        if (!_success) revert JuiceBuyback_TransferFailed();
+    }
 
     //*********************************************************************//
     // ---------------------- internal functions ------------------------- //
@@ -377,22 +377,20 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
      */
     function _getQuote(uint256 _amountIn) internal view returns (uint256 _amountOut) {
         // If non-existing or non-initialized pool, quote 0
-        try POOL.slot0() returns (uint160,int24,uint16,uint16,uint16,uint8,bool locked) {
+        try POOL.slot0() returns (uint160, int24, uint16, uint16, uint16, uint8, bool locked) {
             // non initialized?
-            if(locked) return 0;
+            if (locked) return 0;
         } catch {
             // invalid address or not deployed yet?
             return 0;
         }
 
-         // Get the twap tick
-        (int24 arithmeticMeanTick, ) = OracleLibrary.consult(
-        address(POOL),
-        secondsAgo
-        );
+        // Get the twap tick
+        (int24 arithmeticMeanTick,) = OracleLibrary.consult(address(POOL), secondsAgo);
 
         // Get a quote based on this twap tick
-        _amountOut = OracleLibrary.getQuoteAtTick(arithmeticMeanTick, uint128(_amountIn), address(WETH), address(PROJECT_TOKEN));
+        _amountOut =
+            OracleLibrary.getQuoteAtTick(arithmeticMeanTick, uint128(_amountIn), address(WETH), address(PROJECT_TOKEN));
 
         // Return the lowest twap accepted
         _amountOut -= _amountOut * twapDelta / SLIPPAGE_DENOMINATOR;
@@ -502,7 +500,6 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
 
     function supportsInterface(bytes4 _interfaceId) public view override(ERC165, IERC165) returns (bool) {
         return _interfaceId == type(IJBFundingCycleDataSource).interfaceId
-            || _interfaceId == type(IJBPayDelegate).interfaceId
-            || super.supportsInterface(_interfaceId);
+            || _interfaceId == type(IJBPayDelegate).interfaceId || super.supportsInterface(_interfaceId);
     }
 }
