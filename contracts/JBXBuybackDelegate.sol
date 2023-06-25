@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.16;
 
+
+import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleDataSource.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayDelegate.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayoutRedemptionPaymentTerminal3_1.sol";
@@ -374,7 +376,16 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
      * @return  _amountOut the minimum amount received according to the twap
      */
     function _getQuote(uint256 _amountIn) internal view returns (uint256 _amountOut) {
-        // Get the twap tick
+        // If non-existing or non-initialized pool, quote 0
+        try POOL.slot0() returns (uint160,int24,uint16,uint16,uint16,uint8,bool locked) {
+            // non initialized?
+            if(locked) return 0;
+        } catch {
+            // invalid address or not deployed yet?
+            return 0;
+        }
+
+         // Get the twap tick
         (int24 arithmeticMeanTick, ) = OracleLibrary.consult(
         address(POOL),
         secondsAgo
