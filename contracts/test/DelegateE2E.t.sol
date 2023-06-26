@@ -431,6 +431,57 @@ contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
   }
 
   /**
+   * @notice If the amount of token returned by swapping is greater than by minting, swap & use quote from uniswap lib rather than a user provided quote & some amount is refunded after the swap
+   *
+   * @dev    Should swap for both beneficiary and reserve (by burning/minting)
+   */
+  function test_swapWhenQuoteNotProvidedInMetadataAndWhenRefundHappensAfterTheSwap() public {
+    // we need to swap with a large amount to go near the price limit and trigger a refund
+    uint256 _largeSwapAmount = 150 ether;
+    deal(address(123), _largeSwapAmount);
+  
+    // Reconfigure with a weight of 1  
+    _reconfigure(1, address(delegate), 1, 0);
+
+    uint256 _reservedBalanceBefore = jbController.reservedTokenBalanceOf(1);
+
+    uint256 _quote = _getTwapQuote(_largeSwapAmount, cardinality, twapDelta);
+
+    // Pay the project
+    jbEthPaymentTerminal.pay{value: _largeSwapAmount}(
+      1,
+      _largeSwapAmount,
+      address(0),
+      address(123),
+      /* _minReturnedTokens */
+      0,
+      /* _preferClaimedTokens */
+      true,
+      /* _memo */
+      'Take my money!',
+      /* _delegateMetadata */
+      new bytes(0)
+    );
+
+    // Check: token received by the beneficiary
+    assertGt(jbx.balanceOf(address(123)), _quote);
+
+    // Check: reserve unchanged
+    assertEq(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore);
+
+    // beneficiary sweeping the leftover amount
+    uint256 _balanceBeforeSweepingLeftOverFunds = address(123).balance;
+
+    uint256 _currentSweepBalance = delegate.sweepBalance();
+
+    delegate.sweep(address(123));
+
+    uint256 _balanceAftereSweepingLeftOverFunds = address(123).balance;
+
+    assertEq(_balanceAftereSweepingLeftOverFunds - _balanceBeforeSweepingLeftOverFunds, _currentSweepBalance);
+  }
+
+  /**
    * @notice If the amount of token returned by swapping is greater than by minting, swap & use quote from uniswap lib when cardinality is increased
    *
    * @dev    Should swap for both beneficiary and reserve (by burning/minting)
