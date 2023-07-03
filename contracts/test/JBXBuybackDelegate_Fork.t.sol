@@ -39,7 +39,7 @@ import 'forge-std/Test.sol';
 /**
  * @notice JBXBuyback fork integration tests, using $jbx v3
  */
-contract TestIntegrationJBXBuybackDelegate is Test, UniswapV3ForgeQuoter {
+contract TestJBXBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
   using JBFundingCycleMetadataResolver for JBFundingCycle;
 
   event JBXBuybackDelegate_Swap(uint256 projectId, uint256 amountEth, uint256 amountOut);

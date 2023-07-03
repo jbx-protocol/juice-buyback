@@ -29,10 +29,10 @@ import '../JBXBuybackDelegate.sol';
 import '../mock/MockAllocator.sol';
 
 /**
- * @notice Unit tests for the JBXBuybackDelegate contract.
+ * @notice Integration tests for the JBXBuybackDelegate contract.
  *
  */
-contract TestUnitJBXBuybackDelegate is TestBaseWorkflowV3 {
+contract TestJBXBuybackDelegate_Integration is TestBaseWorkflowV3 {
   using JBFundingCycleMetadataResolver for JBFundingCycle;
 
   JBController controller;
