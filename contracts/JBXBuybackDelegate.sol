@@ -117,7 +117,7 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
     uint256 public sweepBalance;
 
     //*********************************************************************//
-    // --------------------- private stored properties ------------------- //
+    // --------------------- internal stored properties ------------------ //
     //*********************************************************************//
 
     /**
@@ -128,21 +128,21 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
      *         3 mutexes are used instead). The reserved rate max
      *         is 10_000 per protocol constraint.
      */
-    uint256 private mutexCommon = 1;
+    uint256 internal mutexCommon = 1;
 
     /**
      * @notice The current reserved rate
      *
      * @dev    This is a mutex 1-x-1
      */
-    uint256 private mutexReservedRate = 1;
+    uint256 internal mutexReservedRate = 1;
 
     /**
      * @notice The min swap quote (including slippage), from frontend or twap
      *
      * @dev    This is a mutex 1-x-1
      */
-    uint256 private mutexTwapQuote = 1;
+    uint256 internal mutexTwapQuote = 1;
 
     /**
      * @dev No other logic besides initializing the immutables
