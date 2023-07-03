@@ -2,13 +2,13 @@
 pragma solidity ^0.8.16;
 
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController.sol";
-import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleDataSource.sol";
-import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayDelegate.sol";
+import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleDataSource3_1_1.sol";
+import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayDelegate3_1_1.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayoutRedemptionPaymentTerminal3_1.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBConstants.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBFundingCycleMetadataResolver.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBTokens.sol";
-import "@jbx-protocol/juice-contracts-v3/contracts/structs/JBDidPayData.sol";
+import "@jbx-protocol/juice-contracts-v3/contracts/structs/JBDidPayData3_1_1.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/structs/JBPayParamsData.sol";
 
 import "@jbx-protocol/juice-ownable/src/JBOwnable.sol";
@@ -25,10 +25,13 @@ import "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
 
 import "./interfaces/external/IWETH9.sol";
+
+import 'forge-std/Test.sol';
+
 /**
  * @custom:benediction DEVS BENEDICAT ET PROTEGAT CONTRACTVS MEAM
  *
- * @title  Buyback Delegate
+ * @title  Buyback Delegate 1.1 to support jb terminal version 3.1.1
  *
  * @notice Datasource and delegate allowing pay beneficiary to get the highest amount
  *         of project tokens between minting using the project weigh and swapping in a
@@ -38,7 +41,7 @@ import "./interfaces/external/IWETH9.sol";
  *         liquidity, this delegate needs to be redeployed.
  */
 
-contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3SwapCallback {
+contract JBXBuybackDelegate_1_1 is Test, JBOwnable, ERC165, IJBFundingCycleDataSource3_1_1, IJBPayDelegate3_1_1, IUniswapV3SwapCallback {
     using JBFundingCycleMetadataResolver for JBFundingCycle;
 
     //*********************************************************************//
@@ -183,7 +186,7 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
     function payParams(JBPayParamsData calldata _data)
         external
         override
-        returns (uint256 weight, string memory memo, JBPayDelegateAllocation[] memory delegateAllocations)
+        returns (uint256 weight, string memory memo, JBPayDelegateAllocation3_1_1[] memory delegateAllocations)
     {
         // Access control as minting is authorized to this delegate
         if (msg.sender != address(JBX_TERMINAL.store())) revert JuiceBuyback_Unauthorized();
@@ -218,9 +221,9 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
             }
 
             // Return this delegate as the one to use, and do not mint from the terminal
-            delegateAllocations = new JBPayDelegateAllocation[](1);
+            delegateAllocations = new JBPayDelegateAllocation3_1_1[](1);
             delegateAllocations[0] =
-                JBPayDelegateAllocation({delegate: IJBPayDelegate(this), amount: _data.amount.value});
+                JBPayDelegateAllocation3_1_1({delegate: IJBPayDelegate3_1_1(this), amount: _data.amount.value, metadata: new bytes(0)});
 
             return (0, _data.memo, delegateAllocations);
         }
@@ -239,7 +242,7 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
      *
      * @param _data the delegate data passed by the terminal
      */
-    function didPay(JBDidPayData calldata _data) external payable override {
+    function didPay(JBDidPayData3_1_1 calldata _data) external payable override {
         // Access control as minting is authorized to this delegate
         if (msg.sender != address(JBX_TERMINAL)) revert JuiceBuyback_Unauthorized();
 
@@ -270,6 +273,7 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
 
         // Track any new eth left-over
         if (address(this).balance > 0 && address(this).balance != sweepBalance) {
+            emit log("459595954ffdfdffddf");
             sweepBalanceOf[_data.beneficiary] += address(this).balance - sweepBalance;
             sweepBalance = address(this).balance;
         }
@@ -291,6 +295,9 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
         uint256 _amountReceived = uint256(-(PROJECT_TOKEN_IS_TOKEN0 ? amount0Delta : amount1Delta));
         uint256 _amountToSend = uint256(PROJECT_TOKEN_IS_TOKEN0 ? amount1Delta : amount0Delta);
 
+        emit log_uint(_amountReceived);
+                emit log_uint(_minimumAmountReceived);
+
         // Revert if slippage is too high
         if (_amountReceived < _minimumAmountReceived) revert JuiceBuyback_MaximumSlippage();
 
@@ -310,7 +317,7 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
         external
         pure
         override
-        returns (uint256 reclaimAmount, string memory memo, JBRedemptionDelegateAllocation[] memory delegateAllocations)
+        returns (uint256 reclaimAmount, string memory memo, JBRedemptionDelegateAllocation3_1_1[] memory delegateAllocations)
     {
         return (_data.reclaimAmount.value, _data.memo, delegateAllocations);
     }
@@ -409,7 +416,7 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
      * @param  _data the didPayData passed by the terminal
      * @param  _minimumReceivedFromSwap the minimum amount received, to prevent slippage
      */
-    function _swap(JBDidPayData calldata _data, uint256 _minimumReceivedFromSwap, uint256 _reservedRate)
+    function _swap(JBDidPayData3_1_1 calldata _data, uint256 _minimumReceivedFromSwap, uint256 _reservedRate)
         internal
         returns (uint256 _amountReceived)
     {
@@ -474,7 +481,7 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
      * @param  _data the didPayData passed by the terminal
      * @param  _amount the amount of token out to mint
      */
-    function _mint(JBDidPayData calldata _data, uint256 _amount) internal {
+    function _mint(JBDidPayData3_1_1 calldata _data, uint256 _amount) internal {
         IJBController controller = IJBController(JBX_TERMINAL.directory().controllerOf(_data.projectId));
 
         // Mint to the beneficiary with the fc reserve rate
@@ -500,7 +507,7 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
     //*********************************************************************//
 
     function supportsInterface(bytes4 _interfaceId) public view override(ERC165, IERC165) returns (bool) {
-        return _interfaceId == type(IJBFundingCycleDataSource).interfaceId
-            || _interfaceId == type(IJBPayDelegate).interfaceId || super.supportsInterface(_interfaceId);
+        return _interfaceId == type(IJBFundingCycleDataSource3_1_1).interfaceId
+            || _interfaceId == type(IJBPayDelegate3_1_1).interfaceId || super.supportsInterface(_interfaceId);
     }
 }
