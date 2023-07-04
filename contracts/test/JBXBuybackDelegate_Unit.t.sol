@@ -5,6 +5,7 @@ import '../interfaces/external/IWETH9.sol';
 import './helpers/TestBaseWorkflowV3.sol';
 
 import '@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController.sol';
+import '@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBDirectory.sol';
 import '@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleStore.sol';
 import '@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleBallot.sol';
 import '@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleDataSource.sol';
@@ -37,21 +38,24 @@ import '../JBXBuybackDelegate.sol';
 contract TestJBXBuybackDelegate_Units is Test {
   ForTest_JBXBuybackDelegate delegate;
 
-  IERC20 projectToken;
-  IWETH9 weth;
-  IUniswapV3Pool pool;
-  IJBPayoutRedemptionPaymentTerminal3_1 jbxTerminal;
-  IJBProjects projects;
-  IJBOperatorStore operatorStore;
+  event JBXBuybackDelegate_Swap(uint256 _projectId, uint256 amountEth, uint256 amountOut);
 
-  address terminalStore;
+  IERC20 projectToken = IERC20(makeAddr('projectToken'));
+  IWETH9 weth = IWETH9(makeAddr('IWETH9'));
+  IUniswapV3Pool pool = IUniswapV3Pool(makeAddr('IUniswapV3Pool'));
+  IJBPayoutRedemptionPaymentTerminal3_1 jbxTerminal = IJBPayoutRedemptionPaymentTerminal3_1(makeAddr('IJBPayoutRedemptionPaymentTerminal3_1'));
+  IJBProjects projects = IJBProjects(makeAddr('IJBProjects'));
+  IJBOperatorStore operatorStore = IJBOperatorStore(makeAddr('IJBOperatorStore'));
+  IJBController controller = IJBController(makeAddr('controller'));
+  IJBDirectory directory = IJBDirectory(makeAddr('directory'));
 
-  address dude;
+  address terminalStore = makeAddr('terminalStore');
+
+  address dude = makeAddr('dude');
 
   uint32 secondsAgo = 100;
   uint256 twapDelta = 100;
 
-  // Create payParams data
   JBPayParamsData payParams = JBPayParamsData({
     terminal: jbxTerminal,
     payer: dude,
@@ -95,28 +99,14 @@ contract TestJBXBuybackDelegate_Units is Test {
   });
 
   function setUp() external {
-
-    projectToken = IERC20(makeAddr('projectToken'));
     vm.etch(address(projectToken), '6969');
-
-    weth = IWETH9(makeAddr('weth'));
     vm.etch(address(weth), '6969');
-
-    pool = IUniswapV3Pool(makeAddr('pool'));
     vm.etch(address(pool), '6969');
-
-    jbxTerminal = IJBPayoutRedemptionPaymentTerminal3_1(makeAddr('jbxTerminal'));
     vm.etch(address(jbxTerminal), '6969');
-
-    projects = IJBProjects(makeAddr('projects'));
     vm.etch(address(projects), '6969');
-
-    operatorStore = IJBOperatorStore(makeAddr('operatorStore'));
     vm.etch(address(operatorStore), '6969');
-
-    terminalStore = makeAddr('terminalStore');
-
-    dude = makeAddr('dude');
+    vm.etch(address(controller), '6969');
+    vm.etch(address(directory), '6969');
 
     vm.mockCall(address(jbxTerminal), abi.encodeCall(jbxTerminal.store, ()), abi.encode(terminalStore));
 
@@ -377,14 +367,20 @@ contract TestJBXBuybackDelegate_Units is Test {
   /**
    * @notice Test didPay with 1 mutex and token received from swapping
    */
-  function test_didPay_oneMutex(uint256 _tokenCount, uint256 _twapQuote) public {
-    _tokenCount = bound(_tokenCount, 1, type(uint120).max);
-    _twapQuote = bound(_twapQuote, 1, type(uint120).max);
+  function test_didPay_oneMutex(uint256 _tokenCount, uint256 _twapQuote, uint256 _reservedRate) public {
+    _tokenCount = bound(_tokenCount, 2, type(uint120).max - 1);
+    _twapQuote = bound(_twapQuote, _tokenCount + 1, type(uint120).max);
+    _reservedRate = bound(_reservedRate, 0, 10000);
 
-    uint256 _mutex = _tokenCount | _twapQuote << 120 | payParams.reservedRate << 240;
+    uint256 _mutex = _tokenCount | _twapQuote << 120 | _reservedRate << 240; // no reserved
 
     // Set as one mutex, the other are uninit, at 1
     delegate.ForTest_setMutexes(_mutex, 1, 1);
+
+    // The amount the beneficiary should receive
+    uint256 _nonReservedToken = PRBMath.mulDiv(
+            _twapQuote, JBConstants.MAX_RESERVED_RATE - _reservedRate, JBConstants.MAX_RESERVED_RATE
+        );
 
     // mock the swap call
     vm.mockCall(
@@ -392,23 +388,33 @@ contract TestJBXBuybackDelegate_Units is Test {
       abi.encodeCall(pool.swap,
         (
           address(delegate),
-          address(projectToken) < address(weth),
+          address(weth) < address(projectToken),
           int256(1 ether),
           address(projectToken) < address(weth) ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
           abi.encode(_twapQuote)
         )),
-      abi.encode(1, 1)
+      abi.encode(-int256(_twapQuote), -int256(_twapQuote))
     );
 
     // mock the transfer call
-    vm.mockCall(address(projectToken), abi.encodeCall(projectToken.transfer, (address(jbxTerminal), _tokenCount)), abi.encode(true));
+    vm.mockCall(address(projectToken), abi.encodeCall(projectToken.transfer, (dude, _nonReservedToken)), abi.encode(true));
 
+    // If there are reserved token, mock and expect accordingly
+    if(_reservedRate != 0) {
+      // mock the call to the directory, to get the controller
+      vm.mockCall(address(jbxTerminal), abi.encodeCall(jbxTerminal.directory, ()), abi.encode(address(directory)));
+      vm.mockCall(address(directory), abi.encodeCall(directory.controllerOf, (didPayData.projectId)), abi.encode(address(controller)));
 
-    // mock call to terminal controller of
+      // mock the minting call
+      vm.mockCall(address(controller), abi.encodeCall(controller.mintTokensOf, (didPayData.projectId, _twapQuote, address(delegate), didPayData.memo, false, true)), abi.encode(true));
 
-    // mock calls to mint and burn tokens of
+      // mock the burn call
+      vm.mockCall(address(controller), abi.encodeCall(controller.burnTokensOf, (address(delegate), didPayData.projectId, _twapQuote, "", true)), abi.encode(true));
+    }
 
     // expect event
+    vm.expectEmit(true, true, true, true);
+    emit JBXBuybackDelegate_Swap(didPayData.projectId, didPayData.amount.value, _twapQuote);
 
     vm.prank(address(jbxTerminal));
     delegate.didPay(didPayData);
@@ -417,6 +423,56 @@ contract TestJBXBuybackDelegate_Units is Test {
   /**
    * @notice Test didPay with 3 mutexes
    */
+  function test_didPay_threeMutex(uint256 _tokenCount, uint256 _twapQuote, uint256 _reservedRate) public {
+    _tokenCount = bound(_tokenCount, 2, type(uint256).max - 1);
+    _twapQuote = bound(_twapQuote, _tokenCount + 1, type(uint256).max);
+    _reservedRate = bound(_reservedRate, 0, 10000);
+
+    // Set the three mutex
+    delegate.ForTest_setMutexes(_tokenCount, _twapQuote, _reservedRate);
+
+    // The amount the beneficiary should receive
+    uint256 _nonReservedToken = PRBMath.mulDiv(
+        _twapQuote, JBConstants.MAX_RESERVED_RATE - _reservedRate, JBConstants.MAX_RESERVED_RATE
+      );
+
+    // mock the swap call
+    vm.mockCall(
+      address(pool),
+      abi.encodeCall(pool.swap,
+        (
+          address(delegate),
+          address(weth) < address(projectToken),
+          int256(1 ether),
+          address(projectToken) < address(weth) ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
+          abi.encode(_twapQuote)
+        )),
+      abi.encode(-int256(_twapQuote), -int256(_twapQuote))
+    );
+
+    // mock the transfer call
+    vm.mockCall(address(projectToken), abi.encodeCall(projectToken.transfer, (dude, _nonReservedToken)), abi.encode(true));
+
+    // If there are reserved token, mock and expect accordingly
+    if(_reservedRate != 0) {
+      // mock the call to the directory, to get the controller
+      vm.mockCall(address(jbxTerminal), abi.encodeCall(jbxTerminal.directory, ()), abi.encode(address(directory)));
+      vm.mockCall(address(directory), abi.encodeCall(directory.controllerOf, (didPayData.projectId)), abi.encode(address(controller)));
+
+      // mock the minting call
+      vm.mockCall(address(controller), abi.encodeCall(controller.mintTokensOf, (didPayData.projectId, _twapQuote, address(delegate), didPayData.memo, false, true)), abi.encode(true));
+
+      // mock the burn call
+      vm.mockCall(address(controller), abi.encodeCall(controller.burnTokensOf, (address(delegate), didPayData.projectId, _twapQuote, "", true)), abi.encode(true));
+    }
+
+    // expect event
+    vm.expectEmit(true, true, true, true);
+    emit JBXBuybackDelegate_Swap(didPayData.projectId, didPayData.amount.value, _twapQuote);
+
+    vm.prank(address(jbxTerminal));
+    delegate.didPay(didPayData);
+  }
 
   /**
    * @notice Test didPay with swap reverting
@@ -480,7 +536,7 @@ contract ForTest_JBXBuybackDelegate is JBXBuybackDelegate {
     return mutexTwapQuote;
   }
 
-  function ForTest_setMutexes(uint256 _mutexCommon, uint256 _mutexReservedRate, uint256 _mutexSwap) external {
+  function ForTest_setMutexes(uint256 _mutexCommon, uint256 _mutexSwap, uint256 _mutexReservedRate) external {
     mutexCommon = _mutexCommon;
     mutexReservedRate = _mutexReservedRate;
     mutexTwapQuote = _mutexSwap;
