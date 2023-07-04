@@ -561,6 +561,7 @@ contract TestJBXBuybackDelegate_Units is Test {
     // mock and expect weth calls
     vm.mockCall(address(weth), abi.encodeCall(weth.deposit, ()), '');
 
+
     vm.mockCall(address(weth), abi.encodeCall(weth.transfer, (address(pool), uint256(_delta1))), '');
 
     vm.prank(address(pool));
@@ -595,10 +596,58 @@ contract TestJBXBuybackDelegate_Units is Test {
   /**
    * @notice Test uniswapCallback revert if wrong caller
    */
+   function test_uniswapCallback_revertIfWrongCaller() public {
+    int256 _delta0 = - 1 ether;
+    int256 _delta1 = 1 ether;
+    uint256 _minReceived = 25;
+
+    /** First branch */
+    delegate = new ForTest_JBXBuybackDelegate({
+      _projectToken: projectToken,
+      _weth: weth,
+      _pool: pool,
+      _secondsAgo: secondsAgo,
+      _twapDelta: twapDelta,
+      _jbxTerminal: jbxTerminal,
+      _projects: projects,
+      _operatorStore: operatorStore
+    });
+
+    // If project is token0, then received is delta0 (the negative value)    
+    (_delta0, _delta1) = address(projectToken) < address(weth) ? (_delta0, _delta1) : (_delta1, _delta0);
+
+    vm.expectRevert(abi.encodeWithSelector(JBXBuybackDelegate.JuiceBuyback_Unauthorized.selector));
+    delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(_minReceived));
+   }
+   
    
   /**
    * @notice Test uniswapCallback revert if max slippage
    */
+   function test_uniswapCallback_revertIfMaxSlippage() public {
+    int256 _delta0 = - 1 ether;
+    int256 _delta1 = 1 ether;
+    uint256 _minReceived = 25 ether;
+
+    /** First branch */
+    delegate = new ForTest_JBXBuybackDelegate({
+      _projectToken: projectToken,
+      _weth: weth,
+      _pool: pool,
+      _secondsAgo: secondsAgo,
+      _twapDelta: twapDelta,
+      _jbxTerminal: jbxTerminal,
+      _projects: projects,
+      _operatorStore: operatorStore
+    });
+
+    // If project is token0, then received is delta0 (the negative value)    
+    (_delta0, _delta1) = address(projectToken) < address(weth) ? (_delta0, _delta1) : (_delta1, _delta0);
+
+    vm.prank(address(pool));
+    vm.expectRevert(abi.encodeWithSelector(JBXBuybackDelegate.JuiceBuyback_MaximumSlippage.selector));
+    delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(_minReceived));
+   }
 
   /**
    * @notice Test sweep 
