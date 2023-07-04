@@ -4,7 +4,7 @@ pragma solidity ^0.8.16;
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleDataSource3_1_1.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayDelegate3_1_1.sol";
-import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayoutRedemptionPaymentTerminal3_1.sol";
+import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayoutRedemptionPaymentTerminal3_1_1.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBConstants.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBFundingCycleMetadataResolver.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBTokens.sol";
@@ -96,7 +96,7 @@ contract JBXBuybackDelegate_1_1 is Test, JBOwnable, ERC165, IJBFundingCycleDataS
     /**
      * @notice The project terminal using this extension
      */
-    IJBPayoutRedemptionPaymentTerminal3_1 public immutable JBX_TERMINAL;
+    IJBPayoutRedemptionPaymentTerminal3_1_1 public immutable JBX_TERMINAL;
 
     /**
      * @notice The WETH contract
@@ -156,7 +156,7 @@ contract JBXBuybackDelegate_1_1 is Test, JBOwnable, ERC165, IJBFundingCycleDataS
         IUniswapV3Pool _pool,
         uint32 _secondsAgo,
         uint256 _twapDelta,
-        IJBPayoutRedemptionPaymentTerminal3_1 _jbxTerminal,
+        IJBPayoutRedemptionPaymentTerminal3_1_1 _jbxTerminal,
         IJBProjects _projects,
         IJBOperatorStore _operatorStore
     ) JBOwnable(_projects, _operatorStore) {
