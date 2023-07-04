@@ -160,7 +160,7 @@ contract TestJBXBuybackDelegate_Units is Test {
       // mutex unchanged
       assertEq(delegate.ForTest_mutexCommon(), 1);
       assertEq(delegate.ForTest_mutexReservedRate(), 1);
-      assertEq(delegate.ForTest_mutexTwapQuote(), 1);
+      assertEq(delegate.ForTest_mutexSwapQuote(), 1);
     }
 
     // Swap pathway (set the mutexes and return the delegate allocation)
@@ -174,7 +174,7 @@ contract TestJBXBuybackDelegate_Units is Test {
       // Check the mutexes (nothing should be > uint120 -> only one mutex used)
       assertEq(delegate.ForTest_mutexCommon(), _tokenCount | (_swapOutCount - (_swapOutCount * _slippage / 10000)) << 120 | payParams.reservedRate << 240);
       assertEq(delegate.ForTest_mutexReservedRate(), 1);
-      assertEq(delegate.ForTest_mutexTwapQuote(), 1);
+      assertEq(delegate.ForTest_mutexSwapQuote(), 1);
     }
 
     // Same memo in any case
@@ -237,7 +237,7 @@ contract TestJBXBuybackDelegate_Units is Test {
       // mutex unchanged
       assertEq(delegate.ForTest_mutexCommon(), 1);
       assertEq(delegate.ForTest_mutexReservedRate(), 1);
-      assertEq(delegate.ForTest_mutexTwapQuote(), 1);
+      assertEq(delegate.ForTest_mutexSwapQuote(), 1);
     }
 
     // Swap pathway (set the mutexes and return the delegate allocation)
@@ -251,7 +251,7 @@ contract TestJBXBuybackDelegate_Units is Test {
       // Check the mutexes (nothing should be > uint120 -> only one mutex used)
       assertEq(delegate.ForTest_mutexCommon(), _tokenCount | _twapAmountOut << 120 | payParams.reservedRate << 240);
       assertEq(delegate.ForTest_mutexReservedRate(), 1);
-      assertEq(delegate.ForTest_mutexTwapQuote(), 1);
+      assertEq(delegate.ForTest_mutexSwapQuote(), 1);
     }
 
     // Same memo in any case
@@ -294,7 +294,7 @@ contract TestJBXBuybackDelegate_Units is Test {
     // mutex unchanged
     assertEq(delegate.ForTest_mutexCommon(), 1);
     assertEq(delegate.ForTest_mutexReservedRate(), 1);
-    assertEq(delegate.ForTest_mutexTwapQuote(), 1);
+    assertEq(delegate.ForTest_mutexSwapQuote(), 1);
   }
 
   /**
@@ -343,7 +343,7 @@ contract TestJBXBuybackDelegate_Units is Test {
       // Check the mutexes
       assertEq(delegate.ForTest_mutexCommon(), _tokenCount);
       assertEq(delegate.ForTest_mutexReservedRate(), payParams.reservedRate);
-      assertEq(delegate.ForTest_mutexTwapQuote(), _swapOutCount);
+      assertEq(delegate.ForTest_mutexSwapQuote(), _swapOutCount);
     }
 
     // Same memo in any case
@@ -375,7 +375,7 @@ contract TestJBXBuybackDelegate_Units is Test {
     uint256 _mutex = _tokenCount | _twapQuote << 120 | _reservedRate << 240; // no reserved
 
     // Set as one mutex, the other are uninit, at 1
-    delegate.ForTest_setMutexes(_mutex, 1, 1);
+    delegate.ForTest_setMutexes(_mutex, 1, 1, 1);
 
     // The amount the beneficiary should receive
     uint256 _nonReservedToken = PRBMath.mulDiv(
@@ -429,7 +429,7 @@ contract TestJBXBuybackDelegate_Units is Test {
     _reservedRate = bound(_reservedRate, 0, 10000);
 
     // Set the three mutex
-    delegate.ForTest_setMutexes(_tokenCount, _twapQuote, _reservedRate);
+    delegate.ForTest_setMutexes(_tokenCount, _twapQuote, _reservedRate, 2);
 
     // The amount the beneficiary should receive
     uint256 _nonReservedToken = PRBMath.mulDiv(
@@ -532,14 +532,15 @@ contract ForTest_JBXBuybackDelegate is JBXBuybackDelegate {
     return mutexReservedRate;
   }
 
-  function ForTest_mutexTwapQuote() external view returns (uint256) {
-    return mutexTwapQuote;
+  function ForTest_mutexSwapQuote() external view returns (uint256) {
+    return mutexSwapQuote;
   }
 
-  function ForTest_setMutexes(uint256 _mutexCommon, uint256 _mutexSwap, uint256 _mutexReservedRate) external {
+  function ForTest_setMutexes(uint256 _mutexCommon, uint256 _mutexSwap, uint256 _mutexReservedRate, uint256 _fakeBoolUse3) external {
     mutexCommon = _mutexCommon;
+    mutexSwapQuote = _mutexSwap;
     mutexReservedRate = _mutexReservedRate;
-    mutexTwapQuote = _mutexSwap;
+    useThreeMutexes = _fakeBoolUse3;
   }
 
   function ForTest_getQuote(uint256 _amountIn) external view returns (uint256 _amountOut) {

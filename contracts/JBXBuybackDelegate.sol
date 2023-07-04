@@ -413,7 +413,7 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
         // Return the lowest twap accepted
         _amountOut -= _amountOut * twapDelta / SLIPPAGE_DENOMINATOR;
     }
-event Test(uint);
+    
     /**
      * @notice Swap the terminal token to receive the project toke_beforeTransferTon
      *
