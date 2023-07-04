@@ -145,6 +145,13 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
     uint256 internal mutexTwapQuote = 1;
 
     /**
+     * @notice Are we using 1 or 3 mutexes?
+     *
+     * @dev    This is a mutex 1-x-1
+     */
+    uint256 internal useThreeMutexes = 1;
+
+    /**
      * @dev No other logic besides initializing the immutables
      */
     constructor(
@@ -212,8 +219,13 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
                 mutexCommon = _tokenCount;
                 mutexReservedRate = _data.reservedRate;
                 mutexTwapQuote = _swapAmountOut;
+
+                // Signal the 3 mutexes use
+                unchecked {
+                    ++useThreeMutexes;
+                }
             } else {
-                // Otherwise, use the common mutex
+                // Otherwise, only use the common mutex
                 mutexCommon = _tokenCount | (_swapAmountOut << 120) | (_data.reservedRate << 240);
             }
 
@@ -247,19 +259,25 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
         uint256 _commonMutex = mutexCommon;
         mutexCommon = 1;
 
-        // Max 120 bits for token count, 120 bits for min swap amount out, 16 bits for reserved rate
-        uint256 _tokenCount = _commonMutex & type(uint120).max;
-        uint256 _swapMinAmountOut = _commonMutex >> 120 & type(uint120).max;
-        uint256 _reservedRate = _commonMutex >> 240;
+        uint256 _tokenCount;
+        uint256 _swapMinAmountOut;
+        uint256 _reservedRate;
 
         // Check if it was really the 3 packed or if the 3 mutexes need to be used (didPay called iff _tokenCount < _swapAmountOut)
-        if (_tokenCount >= _swapMinAmountOut) {
+        if (useThreeMutexes != 1) {
+            _tokenCount = _commonMutex;
             _reservedRate = mutexReservedRate;
             _swapMinAmountOut = mutexTwapQuote;
 
             // reset mutexes
             mutexReservedRate = 1;
             mutexTwapQuote = 1;
+            useThreeMutexes = 1;
+        } else {
+            // Max 120 bits for token count, 120 bits for min swap amount out, 16 bits for reserved rate
+            uint256 _tokenCount = _commonMutex & type(uint120).max;
+            uint256 _swapMinAmountOut = _commonMutex >> 120 & type(uint120).max;
+            uint256 _reservedRate = _commonMutex >> 240;
         }
 
         // Try swapping
@@ -395,7 +413,7 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
         // Return the lowest twap accepted
         _amountOut -= _amountOut * twapDelta / SLIPPAGE_DENOMINATOR;
     }
-
+event Test(uint);
     /**
      * @notice Swap the terminal token to receive the project toke_beforeTransferTon
      *
@@ -438,7 +456,6 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
 
         // Send the non-reserved token to the beneficiary (if any / reserved rate is not max)
         if (_nonReservedToken != 0) PROJECT_TOKEN.transfer(_data.beneficiary, _nonReservedToken);
-
         // If there are reserved token, add them to the reserve
         if (_reservedToken != 0) {
             IJBController controller = IJBController(JBX_TERMINAL.directory().controllerOf(_data.projectId));
