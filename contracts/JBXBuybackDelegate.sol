@@ -142,7 +142,7 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
      *
      * @dev    This is a mutex 1-x-1
      */
-    uint256 internal mutexTwapQuote = 1;
+    uint256 internal mutexSwapQuote = 1;
 
     /**
      * @notice Are we using 1 or 3 mutexes?
@@ -218,7 +218,7 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
                 // If the amount is too big, use the 3 mutexes (use common mutex for minted token, see unpacking logic)
                 mutexCommon = _tokenCount;
                 mutexReservedRate = _data.reservedRate;
-                mutexTwapQuote = _swapAmountOut;
+                mutexSwapQuote = _swapAmountOut;
 
                 // Signal the 3 mutexes use
                 unchecked {
@@ -267,17 +267,17 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
         if (useThreeMutexes != 1) {
             _tokenCount = _commonMutex;
             _reservedRate = mutexReservedRate;
-            _swapMinAmountOut = mutexTwapQuote;
+            _swapMinAmountOut = mutexSwapQuote;
 
             // reset mutexes
             mutexReservedRate = 1;
-            mutexTwapQuote = 1;
+            mutexSwapQuote = 1;
             useThreeMutexes = 1;
         } else {
             // Max 120 bits for token count, 120 bits for min swap amount out, 16 bits for reserved rate
-            uint256 _tokenCount = _commonMutex & type(uint120).max;
-            uint256 _swapMinAmountOut = _commonMutex >> 120 & type(uint120).max;
-            uint256 _reservedRate = _commonMutex >> 240;
+            _tokenCount = _commonMutex & type(uint120).max;
+            _swapMinAmountOut = _commonMutex >> 120 & type(uint120).max;
+            _reservedRate = _commonMutex >> 240;
         }
 
         // Try swapping
@@ -431,6 +431,7 @@ event Test(uint);
         internal
         returns (uint256 _amountReceived)
     {
+
         // Pass the token and min amount to receive as extra data
         try POOL.swap({
             recipient: address(this),
