@@ -39,6 +39,7 @@ contract TestJBXBuybackDelegate_Units is Test {
   ForTest_JBXBuybackDelegate delegate;
 
   event JBXBuybackDelegate_Swap(uint256 _projectId, uint256 amountEth, uint256 amountOut);
+  event JBXBuybackDelegate_Mint(uint256 _projectId);
 
   IERC20 projectToken = IERC20(makeAddr('projectToken'));
   IWETH9 weth = IWETH9(makeAddr('IWETH9'));
@@ -475,16 +476,121 @@ contract TestJBXBuybackDelegate_Units is Test {
   }
 
   /**
-   * @notice Test didPay with swap reverting
+   * @notice Test didPay with swap reverting, should then mint
    */
+  function test_didPay_swapRevert(uint256 _tokenCount, uint256 _twapQuote, uint256 _reservedRate) public {
+    _tokenCount = bound(_tokenCount, 2, type(uint120).max - 1);
+    _twapQuote = bound(_twapQuote, _tokenCount + 1, type(uint120).max);
+    _reservedRate = bound(_reservedRate, 0, 10000);
+
+    uint256 _mutex = _tokenCount | _twapQuote << 120 | _reservedRate << 240;
+
+    // Set as one mutex, the other are uninit, at 1
+    delegate.ForTest_setMutexes(_mutex, 1, 1, 1);
+
+    // mock the swap call reverting
+    vm.mockCallRevert(
+      address(pool),
+      abi.encodeCall(pool.swap,
+        (
+          address(delegate),
+          address(weth) < address(projectToken),
+          int256(1 ether),
+          address(projectToken) < address(weth) ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
+          abi.encode(_twapQuote)
+        )),
+      abi.encode("no swap")
+    );
+
+    // mock the call to the directory, to get the controller
+    vm.mockCall(address(jbxTerminal), abi.encodeCall(jbxTerminal.directory, ()), abi.encode(address(directory)));
+    vm.mockCall(address(directory), abi.encodeCall(directory.controllerOf, (didPayData.projectId)), abi.encode(address(controller)));
+
+    // mock the minting call - this uses the weight and not the (potentially faulty) quote or twap
+    vm.mockCall(address(controller), abi.encodeCall(controller.mintTokensOf, (didPayData.projectId, _tokenCount, dude, didPayData.memo, didPayData.preferClaimedTokens, true)), abi.encode(true));
+
+    // mock the add to balance addint eth back to the terminal (need to deal eth as this transfer really occurs in test)
+    vm.deal(address(delegate), 1 ether);
+    vm.mockCall(address(jbxTerminal), abi.encodeCall(IJBPaymentTerminal(address(jbxTerminal)).addToBalanceOf, (didPayData.projectId, 1 ether, JBTokens.ETH, "", "")), '');
+
+    // expect event
+    vm.expectEmit(true, true, true, true);
+    emit JBXBuybackDelegate_Mint(didPayData.projectId);
+
+    vm.prank(address(jbxTerminal));
+    delegate.didPay(didPayData);
+  }
 
   /**
    * @notice Test didPay revert if wrong caller
    */
+  function test_didPay_revertIfWrongCaller(address _notTerminal) public {
+    vm.assume(_notTerminal != address(jbxTerminal));
+
+    vm.expectRevert(abi.encodeWithSelector(JBXBuybackDelegate.JuiceBuyback_Unauthorized.selector));
+
+    vm.prank(_notTerminal);
+    delegate.didPay(didPayData);
+  }
 
   /**
-   * @notice Test uniswapCallback 
+   * @notice Test uniswapCallback
+   *
+   * @dev    2 branches: project token is 0 or 1 in the pool slot0
    */
+  function test_uniswapCallback() public {
+    int256 _delta0 = - 1 ether;
+    int256 _delta1 = 1 ether;
+    uint256 _minReceived = 25;
+
+    /** First branch */
+    delegate = new ForTest_JBXBuybackDelegate({
+      _projectToken: projectToken,
+      _weth: weth,
+      _pool: pool,
+      _secondsAgo: secondsAgo,
+      _twapDelta: twapDelta,
+      _jbxTerminal: jbxTerminal,
+      _projects: projects,
+      _operatorStore: operatorStore
+    });
+
+    // If project is token0, then received is delta0 (the negative value)    
+    (_delta0, _delta1) = address(projectToken) < address(weth) ? (_delta0, _delta1) : (_delta1, _delta0);
+
+    // mock and expect weth calls
+    vm.mockCall(address(weth), abi.encodeCall(weth.deposit, ()), '');
+
+    vm.mockCall(address(weth), abi.encodeCall(weth.transfer, (address(pool), uint256(_delta1))), '');
+
+    vm.prank(address(pool));
+    delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(_minReceived));
+
+    /** Second branch */
+
+    projectToken = JBToken(address(weth));
+    weth = IWETH9(address(projectToken));
+
+    delegate = new ForTest_JBXBuybackDelegate({
+      _projectToken: projectToken,
+      _weth: weth,
+      _pool: pool,
+      _secondsAgo: secondsAgo,
+      _twapDelta: twapDelta,
+      _jbxTerminal: jbxTerminal,
+      _projects: projects,
+      _operatorStore: operatorStore
+    });
+
+    // If project is token0, then received is delta0 (the negative value)    
+    (_delta0, _delta1) = address(projectToken) < address(weth) ? (_delta0, _delta1) : (_delta1, _delta0);
+
+    // mock and expect weth calls
+    vm.mockCall(address(weth), abi.encodeCall(weth.deposit, ()), '');
+
+    vm.mockCall(address(weth), abi.encodeCall(weth.transfer, (address(pool), uint256(_delta1))), abi.encode(true));
+
+  }
 
   /**
    * @notice Test uniswapCallback revert if wrong caller
