@@ -605,7 +605,7 @@ contract TestJBXBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
    * @notice If the amount of token returned by swapping is greater than by minting but slippage is too high, mint
    */
   function test_mintIfSlippageTooHigh() public {
-    uint256 _weight = price - (price * 500 / 10000) - 10;
+    uint256 _weight = 50;
     // Reconfigure with a weight smaller than the quote, slippage included
     _reconfigure(1, address(delegate), _weight, 5000);
 
@@ -615,8 +615,8 @@ contract TestJBXBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
     bytes memory _metadata = abi.encode(
       bytes32(0),
       bytes32(0),
-      price, //quote
-      0 //slippage 500/10000 = 5%
+      69412820131620254304865 + 10, // 10 more than quote at that block
+      0 //slippage
     );
     
     // Fall back on delegate minting
