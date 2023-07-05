@@ -116,6 +116,8 @@ contract TestJBXBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
 
         jbTokenStore = jbController.tokenStore();
         jbFundingCycleStore = jbController.fundingCycleStore();
+        jbProjects = jbController.projects();
+        jbOperatorStore = IJBOperatable(address(jbTokenStore)).operatorStore();
         jbSplitsStore = jbController.splitsStore();
 
         pool = IUniswapV3Pool(
