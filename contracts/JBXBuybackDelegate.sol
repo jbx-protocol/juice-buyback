@@ -58,6 +58,7 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
     event JBXBuybackDelegate_Mint(uint256 projectId);
     event JBXBuybackDelegate_SecondsAgoIncrease(uint256 oldSecondsAgo, uint256 newSecondsAgo);
     event JBXBuybackDelegate_TwapDeltaChanged(uint256 oldTwapDelta, uint256 newTwapDelta);
+    event JBXBuybackDelegate_PendingSweep(address indexed beneficiary, uint256 amount);
 
     //*********************************************************************//
     // --------------------- private constant properties ----------------- //
@@ -289,6 +290,9 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
         // Track any new eth left-over
         if (address(this).balance > 0 && address(this).balance != sweepBalance) {
             sweepBalanceOf[_data.beneficiary] += address(this).balance - sweepBalance;
+            
+            emit JBXBuybackDelegate_PendingSweep(_data.beneficiary, address(this).balance - sweepBalance);
+
             sweepBalance = address(this).balance;
         }
     }
@@ -380,6 +384,8 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
         // Send the eth to the beneficiary
         (bool _success,) = payable(_beneficiary).call{value: _balance}("");
         if (!_success) revert JuiceBuyback_TransferFailed();
+
+        emit JBXBuybackDelegate_PendingSweep(_beneficiary, 0);
     }
 
     //*********************************************************************//
