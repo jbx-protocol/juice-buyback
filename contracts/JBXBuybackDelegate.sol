@@ -5,13 +5,12 @@ import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController3_1.s
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleDataSource.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayDelegate.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayoutRedemptionPaymentTerminal3_1.sol";
+
 import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBConstants.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBFundingCycleMetadataResolver.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBTokens.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/structs/JBDidPayData.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/structs/JBPayParamsData.sol";
-
-import "@jbx-protocol/juice-ownable/src/JBOwnable.sol";
 
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "@openzeppelin/contracts/utils/introspection/ERC165.sol";
@@ -162,9 +161,7 @@ contract JBXBuybackDelegate is Ownable, ERC165, IJBFundingCycleDataSource, IJBPa
         IUniswapV3Pool _pool,
         uint32 _secondsAgo,
         uint256 _twapDelta,
-        IJBPayoutRedemptionPaymentTerminal3_1 _jbxTerminal,
-        IJBProjects _projects,
-        IJBOperatorStore _operatorStore
+        IJBPayoutRedemptionPaymentTerminal3_1 _jbxTerminal
     ) {
         PROJECT_TOKEN = _projectToken;
         POOL = _pool;

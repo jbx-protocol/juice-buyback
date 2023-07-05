@@ -79,7 +79,7 @@ contract TestJBXBuybackDelegate_Integration is TestBaseWorkflowV3 {
 
         // Deploy the delegate
         _delegate =
-        new JBXBuybackDelegate(IERC20(address(jbx)), weth, pool, cardinality, twapDelta, IJBPayoutRedemptionPaymentTerminal3_1(address(jbETHPaymentTerminal())), jbProjects(), jbOperatorStore());
+        new JBXBuybackDelegate(IERC20(address(jbx)), weth, pool, cardinality, twapDelta, IJBPayoutRedemptionPaymentTerminal3_1(address(jbETHPaymentTerminal())));
 
         // Configure a new project using it
         controller = jbController();

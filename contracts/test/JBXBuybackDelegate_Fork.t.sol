@@ -116,8 +116,6 @@ contract TestJBXBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
 
         jbTokenStore = jbController.tokenStore();
         jbFundingCycleStore = jbController.fundingCycleStore();
-        jbProjects = jbController.projects();
-        jbOperatorStore = IJBOperatable(address(jbTokenStore)).operatorStore();
         jbSplitsStore = jbController.splitsStore();
 
         pool = IUniswapV3Pool(
@@ -156,7 +154,7 @@ contract TestJBXBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         amountOutForOneEth = getAmountOut(pool, 1 ether, address(weth));
 
         delegate =
-        new JBXBuybackDelegate(IERC20(address(jbx)), weth, pool, cardinality, twapDelta, jbEthPaymentTerminal, jbProjects, jbOperatorStore);
+        new JBXBuybackDelegate(IERC20(address(jbx)), weth, pool, cardinality, twapDelta, jbEthPaymentTerminal);
 
         vm.label(address(pool), "uniswapPool");
         vm.label(address(weth), "$WETH");
