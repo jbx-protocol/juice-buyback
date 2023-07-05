@@ -36,10 +36,15 @@ import '../JBXBuybackDelegate.sol';
  *
  */
 contract TestJBXBuybackDelegate_Units is Test {
+  using stdStorage for StdStorage;
+
   ForTest_JBXBuybackDelegate delegate;
 
-  event JBXBuybackDelegate_Swap(uint256 _projectId, uint256 amountEth, uint256 amountOut);
-  event JBXBuybackDelegate_Mint(uint256 _projectId);
+  event JBXBuybackDelegate_Swap(uint256 projectId, uint256 amountEth, uint256 amountOut);
+  event JBXBuybackDelegate_Mint(uint256 projectId);
+  event JBXBuybackDelegate_SecondsAgoIncrease(uint256 oldSecondsAgo, uint256 newSecondsAgo);
+  event JBXBuybackDelegate_TwapDeltaChanged(uint256 oldTwapDelta, uint256 newTwapDelta);
+  event JBXBuybackDelegate_PendingSweep(address indexed beneficiary, uint256 amount);
 
   IERC20 projectToken = IERC20(makeAddr('projectToken'));
   IWETH9 weth = IWETH9(makeAddr('IWETH9'));
@@ -476,6 +481,66 @@ contract TestJBXBuybackDelegate_Units is Test {
   }
 
   /**
+   * @notice Test didPay with 1 mutex and token received from swapping
+   */
+  function test_didPay_keepTrackOfETHToSweep() public {
+    uint256 _tokenCount = 10;
+    uint256 _twapQuote = 11;
+    uint256 _reservedRate = 0;
+
+    uint256 _mutex = _tokenCount | _twapQuote << 120 | _reservedRate << 240; // no reserved
+
+    // Set as one mutex, the other are uninit, at 1
+    delegate.ForTest_setMutexes(_mutex, 1, 1, 1);
+
+    // mock the swap call
+    vm.mockCall(
+      address(pool),
+      abi.encodeCall(pool.swap,
+        (
+          address(delegate),
+          address(weth) < address(projectToken),
+          int256(1 ether),
+          address(projectToken) < address(weth) ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
+          abi.encode(_twapQuote)
+        )),
+      abi.encode(-int256(_twapQuote), -int256(_twapQuote))
+    );
+
+    // Mock the project token transfer
+    vm.mockCall(address(projectToken), abi.encodeCall(projectToken.transfer, (dude, _twapQuote)), abi.encode(true));
+
+    // Add some leftover (nothing will be wrapped/transfered as it happens in the callback)
+    vm.deal(address(delegate), 10 ether);
+
+    // Add a previous leftover, to test the incremental accounting (ie 5 out of 10 were there)
+    stdstore
+      .target(address(delegate))
+      .sig("sweepBalance()")
+      .checked_write(5 ether);
+    
+    // Out of these 5, 1 was for payer
+    stdstore
+      .target(address(delegate))
+      .sig("sweepBalanceOf(address)")
+      .with_key(didPayData.payer)
+      .checked_write(1 ether);
+
+    // check: correct event?
+    vm.expectEmit(true, true, true, true);
+    emit JBXBuybackDelegate_PendingSweep(dude, 5 ether);
+
+    vm.prank(address(jbxTerminal));
+    delegate.didPay(didPayData);
+
+    // Check: correct overall sweep balance?
+    assertEq(delegate.sweepBalance(), 10 ether);
+
+    // Check: correct dude sweep balance (1 previous plus 5 from now)?
+    assertEq(delegate.sweepBalanceOf(dude), 6 ether);
+
+  }
+  /**
    * @notice Test didPay with swap reverting, should then mint
    */
   function test_didPay_swapRevert(uint256 _tokenCount, uint256 _twapQuote, uint256 _reservedRate) public {
@@ -600,21 +665,6 @@ contract TestJBXBuybackDelegate_Units is Test {
     int256 _delta1 = 1 ether;
     uint256 _minReceived = 25;
 
-    /** First branch */
-    delegate = new ForTest_JBXBuybackDelegate({
-      _projectToken: projectToken,
-      _weth: weth,
-      _pool: pool,
-      _secondsAgo: secondsAgo,
-      _twapDelta: twapDelta,
-      _jbxTerminal: jbxTerminal,
-      _projects: projects,
-      _operatorStore: operatorStore
-    });
-
-    // If project is token0, then received is delta0 (the negative value)    
-    (_delta0, _delta1) = address(projectToken) < address(weth) ? (_delta0, _delta1) : (_delta1, _delta0);
-
     vm.expectRevert(abi.encodeWithSelector(JBXBuybackDelegate.JuiceBuyback_Unauthorized.selector));
     delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(_minReceived));
    }
@@ -628,18 +678,6 @@ contract TestJBXBuybackDelegate_Units is Test {
     int256 _delta1 = 1 ether;
     uint256 _minReceived = 25 ether;
 
-    /** First branch */
-    delegate = new ForTest_JBXBuybackDelegate({
-      _projectToken: projectToken,
-      _weth: weth,
-      _pool: pool,
-      _secondsAgo: secondsAgo,
-      _twapDelta: twapDelta,
-      _jbxTerminal: jbxTerminal,
-      _projects: projects,
-      _operatorStore: operatorStore
-    });
-
     // If project is token0, then received is delta0 (the negative value)    
     (_delta0, _delta1) = address(projectToken) < address(weth) ? (_delta0, _delta1) : (_delta1, _delta0);
 
@@ -651,6 +689,7 @@ contract TestJBXBuybackDelegate_Units is Test {
   /**
    * @notice Test sweep 
    */
+  
   
   /**
    * @notice Test sweep revert if transfer fails
