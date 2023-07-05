@@ -558,17 +558,17 @@ contract TestJBXBuybackDelegate_Units is Test {
     // If project is token0, then received is delta0 (the negative value)    
     (_delta0, _delta1) = address(projectToken) < address(weth) ? (_delta0, _delta1) : (_delta1, _delta0);
 
-    // mock and expect weth calls
+    // mock and expect weth calls, this should transfer from delegate to pool (positive delta in the callback)
     vm.mockCall(address(weth), abi.encodeCall(weth.deposit, ()), '');
 
-
-    vm.mockCall(address(weth), abi.encodeCall(weth.transfer, (address(pool), uint256(_delta1))), '');
+    vm.mockCall(address(weth), abi.encodeCall(weth.transfer, (address(pool), uint256(address(projectToken) < address(weth) ? _delta1: _delta0))), abi.encode(true));
 
     vm.prank(address(pool));
     delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(_minReceived));
 
     /** Second branch */
 
+    // Invert both contract addresses, to swap token0 and token1
     projectToken = JBToken(address(weth));
     weth = IWETH9(address(projectToken));
 
@@ -583,14 +583,13 @@ contract TestJBXBuybackDelegate_Units is Test {
       _operatorStore: operatorStore
     });
 
-    // If project is token0, then received is delta0 (the negative value)    
-    (_delta0, _delta1) = address(projectToken) < address(weth) ? (_delta0, _delta1) : (_delta1, _delta0);
-
-    // mock and expect weth calls
+    // mock and expect weth calls, this should transfer from delegate to pool (positive delta in the callback)
     vm.mockCall(address(weth), abi.encodeCall(weth.deposit, ()), '');
 
-    vm.mockCall(address(weth), abi.encodeCall(weth.transfer, (address(pool), uint256(_delta1))), abi.encode(true));
+    vm.mockCall(address(weth), abi.encodeCall(weth.transfer, (address(pool), uint256(address(projectToken) < address(weth) ? _delta1: _delta0))), abi.encode(true));
 
+    vm.prank(address(pool));
+    delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(_minReceived));
   }
 
   /**
