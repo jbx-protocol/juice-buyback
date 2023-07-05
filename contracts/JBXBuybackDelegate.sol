@@ -15,6 +15,7 @@ import "@jbx-protocol/juice-ownable/src/JBOwnable.sol";
 
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "@openzeppelin/contracts/utils/introspection/ERC165.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 import "@paulrberg/contracts/math/PRBMath.sol";
 
@@ -38,7 +39,7 @@ import "./interfaces/external/IWETH9.sol";
  *         liquidity, this delegate needs to be redeployed.
  */
 
-contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3SwapCallback {
+contract JBXBuybackDelegate is Ownable, ERC165, IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3SwapCallback {
     using JBFundingCycleMetadataResolver for JBFundingCycle;
 
     //*********************************************************************//
@@ -164,7 +165,7 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
         IJBPayoutRedemptionPaymentTerminal3_1 _jbxTerminal,
         IJBProjects _projects,
         IJBOperatorStore _operatorStore
-    ) JBOwnable(_projects, _operatorStore) {
+    ) {
         PROJECT_TOKEN = _projectToken;
         POOL = _pool;
         JBX_TERMINAL = _jbxTerminal;
@@ -380,7 +381,7 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
         sweepBalanceOf[_beneficiary] = 0;
 
         // Keep the contract balance up to date
-        sweepBalance = address(this).balance;
+        sweepBalance = address(this).balance - _balance;
 
         // Send the eth to the beneficiary
         (bool _success,) = payable(_beneficiary).call{value: _balance}("");
