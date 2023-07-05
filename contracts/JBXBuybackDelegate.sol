@@ -290,7 +290,7 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
         // Track any new eth left-over
         if (address(this).balance > 0 && address(this).balance != sweepBalance) {
             sweepBalanceOf[_data.beneficiary] += address(this).balance - sweepBalance;
-            
+
             emit JBXBuybackDelegate_PendingSweep(_data.beneficiary, address(this).balance - sweepBalance);
 
             sweepBalance = address(this).balance;
@@ -309,9 +309,10 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
         // Unpack the data
         (uint256 _minimumAmountReceived) = abi.decode(data, (uint256));
 
-        // delta is in regard of the pool balance (positive = pool need to receive) 
+        // delta is in regard of the pool balance (positive = pool need to receive)
         uint256 _amountToSendToPool = PROJECT_TOKEN_IS_TOKEN0 ? uint256(amount1Delta) : uint256(amount0Delta);
-        uint256 _amountReceivedForBeneficiary = PROJECT_TOKEN_IS_TOKEN0 ? uint256(-amount0Delta) : uint256(-amount1Delta);
+        uint256 _amountReceivedForBeneficiary =
+            PROJECT_TOKEN_IS_TOKEN0 ? uint256(-amount0Delta) : uint256(-amount1Delta);
 
         // Revert if slippage is too high
         if (_amountReceivedForBeneficiary < _minimumAmountReceived) revert JuiceBuyback_MaximumSlippage();
@@ -419,7 +420,7 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
         // Return the lowest twap accepted
         _amountOut -= _amountOut * twapDelta / SLIPPAGE_DENOMINATOR;
     }
-    
+
     /**
      * @notice Swap the terminal token to receive the project toke_beforeTransferTon
      *
@@ -437,7 +438,6 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
         internal
         returns (uint256 _amountReceived)
     {
-
         // Pass the token and min amount to receive as extra data
         try POOL.swap({
             recipient: address(this),
