@@ -689,6 +689,67 @@ contract TestJBXBuybackDelegate_Units is Test {
   /**
    * @notice Test sweep 
    */
+   function test_Sweep() public {
+      uint256 _tokenCount = 10;
+      uint256 _twapQuote = 11;
+      uint256 _reservedRate = 0;
+
+      uint256 _mutex = _tokenCount | _twapQuote << 120 | _reservedRate << 240; // no reserved
+
+      // Set as one mutex, the other are uninit, at 1
+      delegate.ForTest_setMutexes(_mutex, 1, 1, 1);
+
+      // mock the swap call
+      vm.mockCall(
+       address(pool),
+       abi.encodeCall(pool.swap,
+        (
+          address(delegate),
+          address(weth) < address(projectToken),
+          int256(1 ether),
+          address(projectToken) < address(weth) ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
+          abi.encode(_twapQuote)
+        )),
+        abi.encode(-int256(_twapQuote), -int256(_twapQuote))
+       );
+
+      // Mock the project token transfer
+      vm.mockCall(address(projectToken), abi.encodeCall(projectToken.transfer, (dude, _twapQuote)), abi.encode(true));
+
+      // Add some leftover (nothing will be wrapped/transfered as it happens in the callback)
+      vm.deal(address(delegate), 10 ether);
+
+      // check: correct event?
+      vm.expectEmit(true, true, true, true);
+      emit JBXBuybackDelegate_PendingSweep(dude, 10 ether);
+
+      vm.prank(address(jbxTerminal));
+      delegate.didPay(didPayData);
+
+      // Check: correct overall sweep balance?
+      assertEq(delegate.sweepBalance(), 10 ether);
+
+      // Check: correct dude sweep balance
+      assertEq(delegate.sweepBalanceOf(dude), 10 ether);
+
+      uint256 _balanceBeforeSweep = dude.balance;
+      
+      // sweep
+      vm.prank(dude);
+      delegate.sweep(dude);
+
+      uint256 _balanceAfterSweep = dude.balance;
+      uint256 _sweptAmount = _balanceAfterSweep - _balanceBeforeSweep;
+
+      // Check: correct overall sweep balance?
+      assertEq(delegate.sweepBalance(), 0);
+
+      // Check: correct dude sweep balance
+      assertEq(delegate.sweepBalanceOf(dude), 0);
+
+      // Check: correct swept balance
+      assertEq(_sweptAmount, 10 ether);
+     }
   
   
   /**
