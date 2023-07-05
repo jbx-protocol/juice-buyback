@@ -305,16 +305,16 @@ contract JBXBuybackDelegate is JBOwnable, ERC165, IJBFundingCycleDataSource, IJB
         // Unpack the data
         (uint256 _minimumAmountReceived) = abi.decode(data, (uint256));
 
-        // Assign 0 and 1 accordingly
-        uint256 _amountReceived = uint256(-(PROJECT_TOKEN_IS_TOKEN0 ? amount0Delta : amount1Delta));
-        uint256 _amountToSend = uint256(PROJECT_TOKEN_IS_TOKEN0 ? amount1Delta : amount0Delta);
+        // delta is in regard of the pool balance (positive = pool need to receive) 
+        uint256 _amountToSendToPool = PROJECT_TOKEN_IS_TOKEN0 ? uint256(amount1Delta) : uint256(amount0Delta);
+        uint256 _amountReceivedForBeneficiary = PROJECT_TOKEN_IS_TOKEN0 ? uint256(-amount0Delta) : uint256(-amount1Delta);
 
         // Revert if slippage is too high
-        if (_amountReceived < _minimumAmountReceived) revert JuiceBuyback_MaximumSlippage();
+        if (_amountReceivedForBeneficiary < _minimumAmountReceived) revert JuiceBuyback_MaximumSlippage();
 
         // Wrap and transfer the WETH to the pool
-        WETH.deposit{value: _amountToSend}();
-        WETH.transfer(address(POOL), _amountToSend);
+        WETH.deposit{value: _amountToSendToPool}();
+        WETH.transfer(address(POOL), _amountToSendToPool);
     }
 
     /**
