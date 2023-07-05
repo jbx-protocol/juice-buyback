@@ -58,6 +58,7 @@ contract TestJBXBuybackDelegate_Units is Test {
     address terminalStore = makeAddr("terminalStore");
 
     address dude = makeAddr("dude");
+    address owner = makeAddr("owner");
 
     uint32 secondsAgo = 100;
     uint256 twapDelta = 100;
@@ -100,16 +101,17 @@ contract TestJBXBuybackDelegate_Units is Test {
 
         vm.mockCall(address(jbxTerminal), abi.encodeCall(jbxTerminal.store, ()), abi.encode(terminalStore));
 
+        vm.prank(owner);
         delegate = new ForTest_JBXBuybackDelegate({
-      _projectToken: projectToken,
-      _weth: weth,
-      _pool: pool,
-      _secondsAgo: secondsAgo,
-      _twapDelta: twapDelta,
-      _jbxTerminal: jbxTerminal,
-      _projects: projects,
-      _operatorStore: operatorStore
-    });
+            _projectToken: projectToken,
+            _weth: weth,
+            _pool: pool,
+            _secondsAgo: secondsAgo,
+            _twapDelta: twapDelta,
+            _jbxTerminal: jbxTerminal,
+            _projects: projects,
+            _operatorStore: operatorStore
+        });
     }
 
     /**
@@ -559,6 +561,7 @@ contract TestJBXBuybackDelegate_Units is Test {
         // Check: correct dude sweep balance (1 previous plus 5 from now)?
         assertEq(delegate.sweepBalanceOf(dude), 6 ether);
     }
+
     /**
      * @notice Test didPay with swap reverting, should then mint
      */
@@ -652,15 +655,15 @@ contract TestJBXBuybackDelegate_Units is Test {
          * First branch
          */
         delegate = new ForTest_JBXBuybackDelegate({
-      _projectToken: projectToken,
-      _weth: weth,
-      _pool: pool,
-      _secondsAgo: secondsAgo,
-      _twapDelta: twapDelta,
-      _jbxTerminal: jbxTerminal,
-      _projects: projects,
-      _operatorStore: operatorStore
-    });
+            _projectToken: projectToken,
+            _weth: weth,
+            _pool: pool,
+            _secondsAgo: secondsAgo,
+            _twapDelta: twapDelta,
+            _jbxTerminal: jbxTerminal,
+            _projects: projects,
+            _operatorStore: operatorStore
+        });
 
         // If project is token0, then received is delta0 (the negative value)
         (_delta0, _delta1) = address(projectToken) < address(weth) ? (_delta0, _delta1) : (_delta1, _delta0);
@@ -688,15 +691,15 @@ contract TestJBXBuybackDelegate_Units is Test {
         weth = IWETH9(address(projectToken));
 
         delegate = new ForTest_JBXBuybackDelegate({
-      _projectToken: projectToken,
-      _weth: weth,
-      _pool: pool,
-      _secondsAgo: secondsAgo,
-      _twapDelta: twapDelta,
-      _jbxTerminal: jbxTerminal,
-      _projects: projects,
-      _operatorStore: operatorStore
-    });
+            _projectToken: projectToken,
+            _weth: weth,
+            _pool: pool,
+            _secondsAgo: secondsAgo,
+            _twapDelta: twapDelta,
+            _jbxTerminal: jbxTerminal,
+            _projects: projects,
+            _operatorStore: operatorStore
+        });
 
         // mock and expect weth calls, this should transfer from delegate to pool (positive delta in the callback)
         vm.mockCall(address(weth), abi.encodeCall(weth.deposit, ()), "");
@@ -744,54 +747,21 @@ contract TestJBXBuybackDelegate_Units is Test {
     /**
      * @notice Test sweep
      */
-    function test_Sweep() public {
-        uint256 _tokenCount = 10;
-        uint256 _twapQuote = 11;
-        uint256 _reservedRate = 0;
+    function test_sweep(uint256 _delegateLeftover, uint256 _dudeLeftover) public {
+        _dudeLeftover = bound(_dudeLeftover, 0, _delegateLeftover);
 
-        uint256 _mutex = _tokenCount | _twapQuote << 120 | _reservedRate << 240; // no reserved
+        // Add the ETH
+        vm.deal(address(delegate), _delegateLeftover);
 
-        // Set as one mutex, the other are uninit, at 1
-        delegate.ForTest_setMutexes(_mutex, 1, 1, 1);
+        // Store the delegate leftover
+        stdstore.target(address(delegate)).sig("sweepBalance()").checked_write(_delegateLeftover);
 
-        // mock the swap call
-        vm.mockCall(
-            address(pool),
-            abi.encodeCall(
-                pool.swap,
-                (
-                    address(delegate),
-                    address(weth) < address(projectToken),
-                    int256(1 ether),
-                    address(projectToken) < address(weth) ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
-                    abi.encode(_twapQuote)
-                )
-            ),
-            abi.encode(-int256(_twapQuote), -int256(_twapQuote))
-        );
-
-        // Mock the project token transfer
-        vm.mockCall(address(projectToken), abi.encodeCall(projectToken.transfer, (dude, _twapQuote)), abi.encode(true));
-
-        // Add some leftover (nothing will be wrapped/transfered as it happens in the callback)
-        vm.deal(address(delegate), 10 ether);
-
-        // check: correct event?
-        vm.expectEmit(true, true, true, true);
-        emit JBXBuybackDelegate_PendingSweep(dude, 10 ether);
-
-        vm.prank(address(jbxTerminal));
-        delegate.didPay(didPayData);
-
-        // Check: correct overall sweep balance?
-        assertEq(delegate.sweepBalance(), 10 ether);
-
-        // Check: correct dude sweep balance
-        assertEq(delegate.sweepBalanceOf(dude), 10 ether);
+        // Store the dude leftover
+        stdstore.target(address(delegate)).sig("sweepBalanceOf(address)").with_key(didPayData.payer).checked_write(_dudeLeftover);
 
         uint256 _balanceBeforeSweep = dude.balance;
 
-        // sweep
+        // Test: sweep
         vm.prank(dude);
         delegate.sweep(dude);
 
@@ -799,64 +769,27 @@ contract TestJBXBuybackDelegate_Units is Test {
         uint256 _sweptAmount = _balanceAfterSweep - _balanceBeforeSweep;
 
         // Check: correct overall sweep balance?
-        assertEq(delegate.sweepBalance(), 0);
+        assertEq(delegate.sweepBalance(), _delegateLeftover - _dudeLeftover);
 
         // Check: correct dude sweep balance
         assertEq(delegate.sweepBalanceOf(dude), 0);
 
         // Check: correct swept balance
-        assertEq(_sweptAmount, 10 ether);
+        assertEq(_sweptAmount, _dudeLeftover);
     }
 
     /**
      * @notice Test sweep revert if transfer fails
      */
     function test_Sweep_revertIfTransferFails() public {
-        uint256 _tokenCount = 10;
-        uint256 _twapQuote = 11;
-        uint256 _reservedRate = 0;
+        // Store the delegate leftover
+        stdstore.target(address(delegate)).sig("sweepBalance()").checked_write(1 ether);
 
-        uint256 _mutex = _tokenCount | _twapQuote << 120 | _reservedRate << 240; // no reserved
+        // Store the dude leftover
+        stdstore.target(address(delegate)).sig("sweepBalanceOf(address)").with_key(didPayData.payer).checked_write(1 ether);
 
-        // Set as one mutex, the other are uninit, at 1
-        delegate.ForTest_setMutexes(_mutex, 1, 1, 1);
-
-        // mock the swap call
-        vm.mockCall(
-            address(pool),
-            abi.encodeCall(
-                pool.swap,
-                (
-                    address(delegate),
-                    address(weth) < address(projectToken),
-                    int256(1 ether),
-                    address(projectToken) < address(weth) ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
-                    abi.encode(_twapQuote)
-                )
-            ),
-            abi.encode(-int256(_twapQuote), -int256(_twapQuote))
-        );
-
-        // Mock the project token transfer
-        vm.mockCall(address(projectToken), abi.encodeCall(projectToken.transfer, (dude, _twapQuote)), abi.encode(true));
-
-        // Add some leftover (nothing will be wrapped/transfered as it happens in the callback)
-        vm.deal(address(delegate), 10 ether);
-
-        // check: correct event?
-        vm.expectEmit(true, true, true, true);
-        emit JBXBuybackDelegate_PendingSweep(dude, 10 ether);
-
-        vm.prank(address(jbxTerminal));
-        delegate.didPay(didPayData);
-
-        // Check: correct overall sweep balance?
-        assertEq(delegate.sweepBalance(), 10 ether);
-
-        // Check: correct dude sweep balance
-        assertEq(delegate.sweepBalanceOf(dude), 10 ether);
-
-        uint256 _balanceBeforeSweep = dude.balance;
+        // Deal enough ETH
+        vm.deal(address(delegate), 1 ether);
 
         // no fallback -> will revert
         vm.etch(dude, '6969');
@@ -865,6 +798,103 @@ contract TestJBXBuybackDelegate_Units is Test {
         vm.prank(dude);
         vm.expectRevert(abi.encodeWithSelector(JBXBuybackDelegate.JuiceBuyback_TransferFailed.selector));
         delegate.sweep(dude);
+    }
+
+    /**
+     * @notice Test increase seconds ago
+     */
+    function test_increaseSecondsAgo(uint256 _oldValue, uint256 _newValue) public {
+        // Avoid overflow in second bound
+        _oldValue = bound(_oldValue, 0, type(uint32).max - 1);
+
+        // Store a preexisting secondsAgo (packed slot, need a setter instead of stdstore)
+        delegate.ForTest_setSecondsAgo(uint32(_oldValue));
+
+        // Only increase accepted
+        _newValue = bound(_newValue, delegate.secondsAgo() + 1, type(uint32).max);
+
+        // check: correct event?
+        vm.expectEmit(true, true, true, true);
+        emit JBXBuybackDelegate_SecondsAgoIncrease(delegate.secondsAgo(), _newValue);
+
+        // Test: change seconds ago
+        vm.prank(owner);
+        delegate.increaseSecondsAgo(uint32(_newValue));
+
+        // Check: correct seconds ago?
+        assertEq(delegate.secondsAgo(), _newValue);
+    }
+
+    /**
+     * @notice Test increase seconds ago revert if no increase
+     */
+    function test_increaseSecondsAgo_revertIfNoIncrease(uint256 _oldValue, uint256 _newValue) public {
+        // Avoid overflow in second bound
+        _oldValue = bound(_oldValue, 0, type(uint32).max - 1);
+
+        // Store a preexisting secondsAgo
+        delegate.ForTest_setSecondsAgo(uint32(_oldValue));
+
+        // Not an increase
+        _newValue = bound(_newValue, 0, delegate.secondsAgo());
+
+        // check: revert?
+        vm.expectRevert(abi.encodeWithSelector(JBXBuybackDelegate.JuiceBuyback_NewSecondsAgoTooLow.selector));
+
+        // Test: change seconds ago
+        vm.prank(owner);
+        delegate.increaseSecondsAgo(uint32(_newValue));
+    }
+
+    /**
+     * @notice Test increase seconds ago revert if wrong caller
+     */
+    function test_increaseSecondsAgo_revertIfWrongCaller(address _notOwner) public {
+        vm.assume(owner != _notOwner);
+
+        emit log_address(owner);
+        emit log_address(_notOwner);
+        emit log_address(delegate.owner());
+
+        // check: revert?
+        vm.expectRevert("Ownable: caller is not the owner");
+
+        // Test: change seconds ago (left uninit/at 0)
+        vm.startPrank(_notOwner);
+        delegate.increaseSecondsAgo(999);
+    }
+
+    /**
+     * @notice Test set twap delta
+     */
+    function test_setTwapDelta(uint256 _oldDelta, uint256 _newDelta) public {
+        // Store a preexisting twap delta
+        stdstore.target(address(delegate)).sig("twapDelta()").checked_write(_oldDelta);
+
+        // Check: correct event?
+        vm.expectEmit(true, true, true, true);
+        emit JBXBuybackDelegate_TwapDeltaChanged(_oldDelta, _newDelta);
+
+        // Test: set the twap
+        vm.prank(owner);
+        delegate.setTwapDelta(_newDelta);
+
+        // Check: correct twap?
+        assertEq(delegate.twapDelta(), _newDelta);
+    }
+
+    /**
+     * @notice Test set twap delta reverts if wrong caller
+     */
+    function test_setTwapDelta_revertWrongCaller(address _notOwner) public {
+        vm.assume(owner != _notOwner);
+
+        // check: revert?
+        vm.expectRevert("Ownable: caller is not the owner");
+
+        // Test: set the twap
+        vm.prank(_notOwner);
+        delegate.setTwapDelta(1);
     }
 }
 
@@ -909,5 +939,9 @@ contract ForTest_JBXBuybackDelegate is JBXBuybackDelegate {
 
     function ForTest_getQuote(uint256 _amountIn) external view returns (uint256 _amountOut) {
         return _getQuote(_amountIn);
+    }
+
+    function ForTest_setSecondsAgo(uint32 _secondsAgo) external {
+        secondsAgo = _secondsAgo;
     }
 }
