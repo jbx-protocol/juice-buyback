@@ -14,7 +14,7 @@ import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 
 import "forge-std/Test.sol";
 
-import "../JBXBuybackDelegate_1_1.sol";
+import "../JBXBuybackDelegate3_1_1.sol";
 
 /**
  * @notice Unit tests for the JBXBuybackDelegate3_1_1 contract.
@@ -254,18 +254,6 @@ contract TestJBXBuybackDelegate3_1_1_Units is Test {
 
         // Same memo
         assertEq(_memoReturned, payParams.memo);
-    }
-
-    /**
-     * @notice Test payParams revert if wrong caller
-     */
-    function test_payParams_revertIfWrongCaller(address _notTerminalStore) public {
-        vm.assume(_notTerminalStore != address(terminalStore));
-
-        vm.expectRevert(abi.encodeWithSelector(JBXBuybackDelegate3_1_1.JuiceBuyback_Unauthorized.selector));
-
-        vm.prank(_notTerminalStore);
-        delegate.payParams(payParams);
     }
 
     /**

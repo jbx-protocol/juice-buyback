@@ -164,9 +164,6 @@ contract JBXBuybackDelegate3_1_1 is Ownable, ERC165, IJBFundingCycleDataSource3_
         override
         returns (uint256 weight, string memory memo, JBPayDelegateAllocation3_1_1[] memory delegateAllocations)
     {
-        // Access control as minting is authorized to this delegate
-        if (msg.sender != address(JBX_TERMINAL.store())) revert JuiceBuyback_Unauthorized();
-
         // Find the total number of tokens to mint, as a fixed point number with 18 decimals
         uint256 _tokenCount = PRBMath.mulDivFixedPoint(_data.amount.value, _data.weight);
 
