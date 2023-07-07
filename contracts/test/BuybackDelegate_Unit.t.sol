@@ -14,10 +14,10 @@ import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 
 import "forge-std/Test.sol";
 
-import "../BuybackDelegate.sol";
+import "../JBBuybackDelegate.sol";
 
 /**
- * @notice Unit tests for the BuybackDelegate contract.
+ * @notice Unit tests for the JBBuybackDelegate contract.
  *
  */
 contract TestBuybackDelegate_Units is Test {
@@ -338,7 +338,7 @@ contract TestBuybackDelegate_Units is Test {
     function test_payParams_revertIfWrongCaller(address _notTerminalStore) public {
         vm.assume(_notTerminalStore != address(terminalStore));
 
-        vm.expectRevert(abi.encodeWithSelector(BuybackDelegate.JuiceBuyback_Unauthorized.selector));
+        vm.expectRevert(abi.encodeWithSelector(JBBuybackDelegate.JuiceBuyback_Unauthorized.selector));
 
         vm.prank(_notTerminalStore);
         delegate.payParams(payParams);
@@ -620,7 +620,7 @@ contract TestBuybackDelegate_Units is Test {
     function test_didPay_revertIfWrongCaller(address _notTerminal) public {
         vm.assume(_notTerminal != address(jbxTerminal));
 
-        vm.expectRevert(abi.encodeWithSelector(BuybackDelegate.JuiceBuyback_Unauthorized.selector));
+        vm.expectRevert(abi.encodeWithSelector(JBBuybackDelegate.JuiceBuyback_Unauthorized.selector));
 
         vm.prank(_notTerminal);
         delegate.didPay(didPayData);
@@ -707,7 +707,7 @@ contract TestBuybackDelegate_Units is Test {
         int256 _delta1 = 1 ether;
         uint256 _minReceived = 25;
 
-        vm.expectRevert(abi.encodeWithSelector(BuybackDelegate.JuiceBuyback_Unauthorized.selector));
+        vm.expectRevert(abi.encodeWithSelector(JBBuybackDelegate.JuiceBuyback_Unauthorized.selector));
         delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(_minReceived));
     }
 
@@ -723,7 +723,7 @@ contract TestBuybackDelegate_Units is Test {
         (_delta0, _delta1) = address(projectToken) < address(weth) ? (_delta0, _delta1) : (_delta1, _delta0);
 
         vm.prank(address(pool));
-        vm.expectRevert(abi.encodeWithSelector(BuybackDelegate.JuiceBuyback_MaximumSlippage.selector));
+        vm.expectRevert(abi.encodeWithSelector(JBBuybackDelegate.JuiceBuyback_MaximumSlippage.selector));
         delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(_minReceived));
     }
 
@@ -779,7 +779,7 @@ contract TestBuybackDelegate_Units is Test {
 
         // Check: revert?
         vm.prank(dude);
-        vm.expectRevert(abi.encodeWithSelector(BuybackDelegate.JuiceBuyback_TransferFailed.selector));
+        vm.expectRevert(abi.encodeWithSelector(JBBuybackDelegate.JuiceBuyback_TransferFailed.selector));
         delegate.sweep(dude);
     }
 
@@ -822,7 +822,7 @@ contract TestBuybackDelegate_Units is Test {
         _newValue = bound(_newValue, 0, delegate.secondsAgo());
 
         // check: revert?
-        vm.expectRevert(abi.encodeWithSelector(BuybackDelegate.JuiceBuyback_NewSecondsAgoTooLow.selector));
+        vm.expectRevert(abi.encodeWithSelector(JBBuybackDelegate.JuiceBuyback_NewSecondsAgoTooLow.selector));
 
         // Test: change seconds ago
         vm.prank(owner);
@@ -882,7 +882,7 @@ contract TestBuybackDelegate_Units is Test {
 }
 
 
-contract ForTest_BuybackDelegate is BuybackDelegate {
+contract ForTest_BuybackDelegate is JBBuybackDelegate {
     constructor(
         IERC20 _projectToken,
         IWETH9 _weth,
@@ -892,7 +892,7 @@ contract ForTest_BuybackDelegate is BuybackDelegate {
         IJBPayoutRedemptionPaymentTerminal3_1 _jbxTerminal,
         IJBController3_1 _controller
     )
-        BuybackDelegate(_projectToken, _weth, _pool, _secondsAgo, _twapDelta, _jbxTerminal, _controller)
+        JBBuybackDelegate(_projectToken, _weth, _pool, _secondsAgo, _twapDelta, _jbxTerminal, _controller)
     {}
 
     function ForTest_mutexCommon() external view returns (uint256) {

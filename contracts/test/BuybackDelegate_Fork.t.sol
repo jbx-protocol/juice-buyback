@@ -31,7 +31,7 @@ import "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 
 import "@exhausted-pigeon/uniswap-v3-forge-quoter/src/UniswapV3ForgeQuoter.sol";
 
-import "../BuybackDelegate.sol";
+import "../JBBuybackDelegate.sol";
 import "../mock/MockAllocator.sol";
 
 import "forge-std/Test.sol";
@@ -72,7 +72,7 @@ contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
     IJBPaymentTerminal[] terminals;
     JBGroupedSplits[] groupedSplits;
 
-    BuybackDelegate delegate;
+    JBBuybackDelegate delegate;
 
     IUniswapV3Pool pool;
 
@@ -156,7 +156,7 @@ contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         amountOutForOneEth = getAmountOut(pool, 1 ether, address(weth));
 
         delegate =
-        new BuybackDelegate(IERC20(address(jbx)), weth, pool, cardinality, twapDelta, jbEthPaymentTerminal, jbController);
+        new JBBuybackDelegate(IERC20(address(jbx)), weth, pool, cardinality, twapDelta, jbEthPaymentTerminal, jbController);
 
         vm.label(address(pool), "uniswapPool");
         vm.label(address(weth), "$WETH");

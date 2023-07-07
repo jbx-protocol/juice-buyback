@@ -25,11 +25,11 @@ import "@paulrberg/contracts/math/PRBMath.sol";
 import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import "@uniswap/v3-core/contracts/interfaces/callback/IUniswapV3SwapCallback.sol";
 
-import "../BuybackDelegate.sol";
+import "../JBBuybackDelegate.sol";
 import "../mock/MockAllocator.sol";
 
 /**
- * @notice Integration tests for the BuybackDelegate contract.
+ * @notice Integration tests for the JBBuybackDelegate contract.
  *
  */
 contract TestBuybackDelegate_Integration is TestBaseWorkflowV3 {
@@ -51,7 +51,7 @@ contract TestBuybackDelegate_Integration is TestBaseWorkflowV3 {
 
     uint256 twapDelta = 500;
 
-    BuybackDelegate _delegate;
+    JBBuybackDelegate _delegate;
 
     // Using fixed addresses to insure token0/token1 consistency
     IWETH9 private constant weth = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
@@ -77,7 +77,7 @@ contract TestBuybackDelegate_Integration is TestBaseWorkflowV3 {
 
         // Deploy the delegate
         _delegate =
-        new BuybackDelegate(IERC20(address(jbx)), weth, pool, cardinality, twapDelta, IJBPayoutRedemptionPaymentTerminal3_1(address(_jbETHPaymentTerminal)), _jbController);
+        new JBBuybackDelegate(IERC20(address(jbx)), weth, pool, cardinality, twapDelta, IJBPayoutRedemptionPaymentTerminal3_1(address(_jbETHPaymentTerminal)), _jbController);
 
         _projectMetadata = JBProjectMetadata({content: "myIPFSHash", domain: 1});
 

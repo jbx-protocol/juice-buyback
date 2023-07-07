@@ -21,13 +21,12 @@
     "deploy-mainnet": "source .env && forge script DeployMainnet --rpc-url $MAINNET_RPC_PROVIDER_URL --broadcast --mnemonic-paths mnemonic.txt --verify --etherscan-api-key $ETHERSCAN_API_KEY --sender $SENDER_ADDRESS"
   },
   "dependencies": {
-    "@jbx-protocol/juice-contracts-v3": "^4.0.0",
-    "@openzeppelin/contracts": "^4.7.3",
-    "@paulrberg/contracts": "^3.7.0",
+    "@jbx-protocol/juice-contracts-v3": "^4.0.1",
+    "@openzeppelin/contracts": "^4.9.2",
+    "@prb/math": "^4.0.1",
     "@uniswap/v3-core": "1.0.2-solc-0.8-simulate",
     "@uniswap/v3-periphery": "https://github.com/uniswap/v3-periphery.git#b325bb0905d922ae61fcc7df85ee802e8df5e96c",
     "ds-test": "https://github.com/dapphub/ds-test.git#e282159d5170298eb2455a6c05280ab5a73a4ef0",
-    "forge-std": "https://github.com/foundry-rs/forge-std.git#06c5a8f760f7d2392697cb092eda80c864e4fc06",
-    "prb-math": "^2.4.3"
+    "forge-std": "https://github.com/foundry-rs/forge-std.git#06c5a8f760f7d2392697cb092eda80c864e4fc06"
   }
 }
