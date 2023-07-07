@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.16;
 
-import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController3_1_1.sol";
+import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController3_0_1.sol";
+import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBDirectory.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleDataSource3_1_1.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayDelegate3_1_1.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayoutRedemptionPaymentTerminal3_1_1.sol";
@@ -104,7 +105,7 @@ contract JBXBuybackDelegate3_1_1 is Ownable, ERC165, IJBFundingCycleDataSource3_
     /**
      * @notice The project controller
      */
-    IJBController3_1_1 public immutable CONTROLLER3_1_1;
+    IJBController3_0_1 public immutable CONTROLLER;
 
     /**
      * @notice The WETH contract
@@ -140,13 +141,14 @@ contract JBXBuybackDelegate3_1_1 is Ownable, ERC165, IJBFundingCycleDataSource3_
         IUniswapV3Pool _pool,
         uint32 _secondsAgo,
         uint256 _twapDelta,
-        IJBPayoutRedemptionPaymentTerminal3_1_1 _jbxTerminal
+        IJBPayoutRedemptionPaymentTerminal3_1_1 _jbxTerminal,
+        IJBController3_0_1 _controller
     ) {
         PROJECT_TOKEN = _projectToken;
         POOL = _pool;
         JBX_TERMINAL = _jbxTerminal;
         DIRECTORY = _jbxTerminal.directory();
-        CONTROLLER = IJBController(_jbxTerminal.directory().controllerOf(_jbxTerminal.projectId()));
+        CONTROLLER = _controller;
         PROJECT_TOKEN_IS_TOKEN0 = address(_projectToken) < address(_weth);
         WETH = _weth;
         secondsAgo = _secondsAgo;
