@@ -203,7 +203,7 @@ contract TestBaseWorkflowV3 is Test {
       _jbDirectory,
       _jbSplitsStore,
       _jbPrices,
-      _jbPaymentTerminalStore,
+      address(_jbPaymentTerminalStore),
       _multisig
     );
         evm.label(address(_jbETHPaymentTerminal), "JBETHPaymentTerminal");

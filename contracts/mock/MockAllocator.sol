@@ -2,6 +2,7 @@
 pragma solidity ^0.8.16;
 
 import "@jbx-protocol/juice-contracts-v3/contracts/structs/JBSplitAllocationData.sol";
+import "@jbx-protocol/juice-contracts-v3/contracts/structs/JBTokenAmount.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayDelegate.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBSplitAllocator.sol";
 
