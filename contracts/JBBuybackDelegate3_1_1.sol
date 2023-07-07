@@ -7,7 +7,7 @@ import {IJBPayDelegate3_1_1} from "@jbx-protocol/juice-contracts-v3/contracts/in
 import {IJBPayoutRedemptionPaymentTerminal3_1_1} from "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayoutRedemptionPaymentTerminal3_1_1.sol";
 
 import {JBConstants} from "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBConstants.sol";
-import {JBFundingCycleMetadataResolver, JBFundingCycle} from "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBFundingCycleMetadataResolver.sol";
+import {JBFundingCycle} from "@jbx-protocol/juice-contracts-v3/contracts/structs/JBFundingCycle.sol";
 import {JBTokens} from "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBTokens.sol";
 
 import {JBDidPayData3_1_1} from "@jbx-protocol/juice-contracts-v3/contracts/structs/JBDidPayData3_1_1.sol";
@@ -43,7 +43,6 @@ import {IWETH9} from "./interfaces/external/IWETH9.sol";
  */
 
 contract JBBuybackDelegate3_1_1 is Ownable, ERC165, IJBFundingCycleDataSource3_1_1, IJBPayDelegate3_1_1, IUniswapV3SwapCallback {
-    using JBFundingCycleMetadataResolver for JBFundingCycle;
 
     //*********************************************************************//
     // --------------------------- custom errors ------------------------- //
