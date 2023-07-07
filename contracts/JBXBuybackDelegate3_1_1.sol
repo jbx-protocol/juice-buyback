@@ -1,13 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.16;
 
-import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController.sol";
+import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController3_1_1.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleDataSource3_1_1.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayDelegate3_1_1.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayoutRedemptionPaymentTerminal3_1_1.sol";
-
-import {IJBFundingCycleBallot} from '@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleBallot.sol';
-
 
 import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBConstants.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBFundingCycleMetadataResolver.sol";
@@ -100,6 +97,16 @@ contract JBXBuybackDelegate3_1_1 is Ownable, ERC165, IJBFundingCycleDataSource3_
     IJBPayoutRedemptionPaymentTerminal3_1_1 public immutable JBX_TERMINAL;
 
     /**
+     * @notice The project directory
+     */
+    IJBDirectory public immutable DIRECTORY;
+
+    /**
+     * @notice The project controller
+     */
+    IJBController3_1_1 public immutable CONTROLLER3_1_1;
+
+    /**
      * @notice The WETH contract
      */
     IWETH9 public immutable WETH;
@@ -138,6 +145,8 @@ contract JBXBuybackDelegate3_1_1 is Ownable, ERC165, IJBFundingCycleDataSource3_
         PROJECT_TOKEN = _projectToken;
         POOL = _pool;
         JBX_TERMINAL = _jbxTerminal;
+        DIRECTORY = _jbxTerminal.directory();
+        CONTROLLER = IJBController(_jbxTerminal.directory().controllerOf(_jbxTerminal.projectId()));
         PROJECT_TOKEN_IS_TOKEN0 = address(_projectToken) < address(_weth);
         WETH = _weth;
         secondsAgo = _secondsAgo;
@@ -399,10 +408,8 @@ contract JBXBuybackDelegate3_1_1 is Ownable, ERC165, IJBFundingCycleDataSource3_
         if (_nonReservedToken != 0) PROJECT_TOKEN.transfer(_data.beneficiary, _nonReservedToken);
         // If there are reserved token, add them to the reserve
         if (_reservedToken != 0) {
-            IJBController controller = IJBController(JBX_TERMINAL.directory().controllerOf(_data.projectId));
-
             // Mint the reserved token with this address as beneficiary -> result: _amountReceived-reserved here, reservedToken in reserve
-            controller.mintTokensOf({
+            CONTROLLER.mintTokensOf({
                 projectId: _data.projectId,
                 tokenCount: _amountReceived,
                 beneficiary: address(this),
@@ -411,10 +418,9 @@ contract JBXBuybackDelegate3_1_1 is Ownable, ERC165, IJBFundingCycleDataSource3_
                 useReservedRate: true
             });
 
-
             // Burn all the token received here (kept as reserved from the swap + minted just above)
             // ie when _preferClaimed is true, burn starts with the claimed token, then continue with unclaimed ones
-            controller.burnTokensOf({
+            CONTROLLER.burnTokensOf({
                 holder: address(this),
                 projectId: _data.projectId,
                 tokenCount: _amountReceived,
@@ -433,10 +439,8 @@ contract JBXBuybackDelegate3_1_1 is Ownable, ERC165, IJBFundingCycleDataSource3_
      * @param  _amount the amount of token out to mint
      */
     function _mint(JBDidPayData3_1_1 calldata _data, uint256 _amount) internal {
-        IJBController controller = IJBController(JBX_TERMINAL.directory().controllerOf(_data.projectId));
-
         // Mint to the beneficiary with the fc reserve rate
-        controller.mintTokensOf({
+        CONTROLLER.mintTokensOf({
             projectId: _data.projectId,
             tokenCount: _amount,
             beneficiary: _data.beneficiary,
