@@ -2,19 +2,25 @@
 pragma solidity ^0.8.16;
 
 import {IJBController3_1} from "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController3_1.sol";
-import {IJBFundingCycleDataSource} from "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleDataSource.sol";
+import {IJBFundingCycleDataSource} from
+    "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleDataSource.sol";
 import {IJBPayDelegate} from "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayDelegate.sol";
-import {IJBPayoutRedemptionPaymentTerminal3_1} from "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayoutRedemptionPaymentTerminal3_1.sol";
+import {IJBPayoutRedemptionPaymentTerminal3_1} from
+    "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayoutRedemptionPaymentTerminal3_1.sol";
 
 import {JBConstants} from "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBConstants.sol";
-import {JBFundingCycleMetadataResolver, JBFundingCycle} from "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBFundingCycleMetadataResolver.sol";
+import {
+    JBFundingCycleMetadataResolver,
+    JBFundingCycle
+} from "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBFundingCycleMetadataResolver.sol";
 import {JBTokens} from "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBTokens.sol";
 
 import {JBDidPayData} from "@jbx-protocol/juice-contracts-v3/contracts/structs/JBDidPayData.sol";
 import {JBPayParamsData} from "@jbx-protocol/juice-contracts-v3/contracts/structs/JBPayParamsData.sol";
 import {JBRedeemParamsData} from "@jbx-protocol/juice-contracts-v3/contracts/structs/JBRedeemParamsData.sol";
 import {JBPayDelegateAllocation} from "@jbx-protocol/juice-contracts-v3/contracts/structs/JBPayDelegateAllocation.sol";
-import {JBRedemptionDelegateAllocation} from "@jbx-protocol/juice-contracts-v3/contracts/structs/JBRedemptionDelegateAllocation.sol";
+import {JBRedemptionDelegateAllocation} from
+    "@jbx-protocol/juice-contracts-v3/contracts/structs/JBRedemptionDelegateAllocation.sol";
 
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {ERC165, IERC165} from "@openzeppelin/contracts/utils/introspection/ERC165.sol";
@@ -522,9 +528,7 @@ contract JBBuybackDelegate is Ownable, ERC165, IJBFundingCycleDataSource, IJBPay
         });
 
         // Send the eth back to the terminal balance
-        TERMINAL.addToBalanceOf{value: _data.amount.value}(
-            _data.projectId, _data.amount.value, JBTokens.ETH, "", ""
-        );
+        TERMINAL.addToBalanceOf{value: _data.amount.value}(_data.projectId, _data.amount.value, JBTokens.ETH, "", "");
 
         emit BuybackDelegate_Mint(_data.projectId);
     }

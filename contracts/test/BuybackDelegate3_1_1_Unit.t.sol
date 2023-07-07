@@ -269,7 +269,7 @@ contract TestBuybackDelegate3_1_1_Units is Test {
 
         // The amount the beneficiary should receive
         uint256 _nonReservedToken =
-            PRBMath.mulDiv(_twapQuote, JBConstants.MAX_RESERVED_RATE - _reservedRate, JBConstants.MAX_RESERVED_RATE);
+            _twapQuote - PRBMath.mulDiv(_twapQuote, _reservedRate, JBConstants.MAX_RESERVED_RATE);
 
         // mock the swap call
         vm.mockCall(
@@ -574,7 +574,9 @@ contract TestBuybackDelegate3_1_1_Units is Test {
         stdstore.target(address(delegate)).sig("sweepBalance()").checked_write(_delegateLeftover);
 
         // Store the dude leftover
-        stdstore.target(address(delegate)).sig("sweepBalanceOf(address)").with_key(didPayData.payer).checked_write(_dudeLeftover);
+        stdstore.target(address(delegate)).sig("sweepBalanceOf(address)").with_key(didPayData.payer).checked_write(
+            _dudeLeftover
+        );
 
         uint256 _balanceBeforeSweep = dude.balance;
 
@@ -603,13 +605,15 @@ contract TestBuybackDelegate3_1_1_Units is Test {
         stdstore.target(address(delegate)).sig("sweepBalance()").checked_write(1 ether);
 
         // Store the dude leftover
-        stdstore.target(address(delegate)).sig("sweepBalanceOf(address)").with_key(didPayData.payer).checked_write(1 ether);
+        stdstore.target(address(delegate)).sig("sweepBalanceOf(address)").with_key(didPayData.payer).checked_write(
+            1 ether
+        );
 
         // Deal enough ETH
         vm.deal(address(delegate), 1 ether);
 
         // no fallback -> will revert
-        vm.etch(dude, '6969');
+        vm.etch(dude, "6969");
 
         // Check: revert?
         vm.prank(dude);
@@ -724,9 +728,7 @@ contract ForTest_BuybackDelegate is JBBuybackDelegate3_1_1 {
         uint256 _twapDelta,
         IJBPayoutRedemptionPaymentTerminal3_1_1 _jbxTerminal,
         IJBController3_1 _controller
-    )
-        JBBuybackDelegate3_1_1(_projectToken, _weth, _pool, _secondsAgo, _twapDelta, _jbxTerminal, _controller)
-    {}
+    ) JBBuybackDelegate3_1_1(_projectToken, _weth, _pool, _secondsAgo, _twapDelta, _jbxTerminal, _controller) {}
 
     function ForTest_getQuote(uint256 _amountIn) external view returns (uint256 _amountOut) {
         return _getQuote(_amountIn);

@@ -395,13 +395,11 @@ contract JBBuybackDelegate3_1_1 is Ownable, ERC165, IJBFundingCycleDataSource3_1
             return _amountReceived;
         }
 
-        // The amount to send to the beneficiary
-        uint256 _nonReservedToken = PRBMath.mulDiv(
-            _amountReceived, JBConstants.MAX_RESERVED_RATE - _reservedRate, JBConstants.MAX_RESERVED_RATE
-        );
-
         // The amount to add to the reserved token
-        uint256 _reservedToken = _amountReceived - _nonReservedToken;
+        uint256 _reservedToken = PRBMath.mulDiv(_amountReceived, _reservedRate, JBConstants.MAX_RESERVED_RATE);
+
+        // The amount to send to the beneficiary
+        uint256 _nonReservedToken = _amountReceived - _reservedToken;
 
         // Send the non-reserved token to the beneficiary (if any / reserved rate is not max)
         if (_nonReservedToken != 0) PROJECT_TOKEN.transfer(_data.beneficiary, _nonReservedToken);

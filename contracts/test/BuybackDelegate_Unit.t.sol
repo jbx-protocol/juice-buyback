@@ -740,7 +740,9 @@ contract TestBuybackDelegate_Units is Test {
         stdstore.target(address(delegate)).sig("sweepBalance()").checked_write(_delegateLeftover);
 
         // Store the dude leftover
-        stdstore.target(address(delegate)).sig("sweepBalanceOf(address)").with_key(didPayData.payer).checked_write(_dudeLeftover);
+        stdstore.target(address(delegate)).sig("sweepBalanceOf(address)").with_key(didPayData.payer).checked_write(
+            _dudeLeftover
+        );
 
         uint256 _balanceBeforeSweep = dude.balance;
 
@@ -769,13 +771,15 @@ contract TestBuybackDelegate_Units is Test {
         stdstore.target(address(delegate)).sig("sweepBalance()").checked_write(1 ether);
 
         // Store the dude leftover
-        stdstore.target(address(delegate)).sig("sweepBalanceOf(address)").with_key(didPayData.payer).checked_write(1 ether);
+        stdstore.target(address(delegate)).sig("sweepBalanceOf(address)").with_key(didPayData.payer).checked_write(
+            1 ether
+        );
 
         // Deal enough ETH
         vm.deal(address(delegate), 1 ether);
 
         // no fallback -> will revert
-        vm.etch(dude, '6969');
+        vm.etch(dude, "6969");
 
         // Check: revert?
         vm.prank(dude);
@@ -881,7 +885,6 @@ contract TestBuybackDelegate_Units is Test {
     }
 }
 
-
 contract ForTest_BuybackDelegate is JBBuybackDelegate {
     constructor(
         IERC20 _projectToken,
@@ -891,9 +894,7 @@ contract ForTest_BuybackDelegate is JBBuybackDelegate {
         uint256 _twapDelta,
         IJBPayoutRedemptionPaymentTerminal3_1 _jbxTerminal,
         IJBController3_1 _controller
-    )
-        JBBuybackDelegate(_projectToken, _weth, _pool, _secondsAgo, _twapDelta, _jbxTerminal, _controller)
-    {}
+    ) JBBuybackDelegate(_projectToken, _weth, _pool, _secondsAgo, _twapDelta, _jbxTerminal, _controller) {}
 
     function ForTest_mutexCommon() external view returns (uint256) {
         return mutexCommon;
