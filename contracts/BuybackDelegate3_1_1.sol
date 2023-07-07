@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.16;
 
-import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController.sol";
-import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleDataSource.sol";
-import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayDelegate.sol";
-import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayoutRedemptionPaymentTerminal3_1.sol";
+import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController3_1.sol";
+import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleDataSource3_1_1.sol";
+import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayDelegate3_1_1.sol";
+import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayoutRedemptionPaymentTerminal3_1_1.sol";
 
 import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBConstants.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBFundingCycleMetadataResolver.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBTokens.sol";
-import "@jbx-protocol/juice-contracts-v3/contracts/structs/JBDidPayData.sol";
+import "@jbx-protocol/juice-contracts-v3/contracts/structs/JBDidPayData3_1_1.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/structs/JBPayParamsData.sol";
 
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
@@ -28,7 +28,7 @@ import "./interfaces/external/IWETH9.sol";
 /**
  * @custom:benediction DEVS BENEDICAT ET PROTEGAT CONTRACTVS MEAM
  *
- * @title  Buyback Delegate
+ * @title  Buyback Delegate compatible with JB terminal version 3.1.1 (IJBPayoutRedemptionPaymentTerminal3_1_1)
  *
  * @notice Datasource and delegate allowing pay beneficiary to get the highest amount
  *         of project tokens between minting using the project weigh and swapping in a
@@ -38,7 +38,7 @@ import "./interfaces/external/IWETH9.sol";
  *         liquidity, this delegate needs to be redeployed.
  */
 
-contract JBXBuybackDelegate is Ownable, ERC165, IJBFundingCycleDataSource, IJBPayDelegate, IUniswapV3SwapCallback {
+contract BuybackDelegate3_1_1 is Ownable, ERC165, IJBFundingCycleDataSource3_1_1, IJBPayDelegate3_1_1, IUniswapV3SwapCallback {
     using JBFundingCycleMetadataResolver for JBFundingCycle;
 
     //*********************************************************************//
@@ -54,11 +54,11 @@ contract JBXBuybackDelegate is Ownable, ERC165, IJBFundingCycleDataSource, IJBPa
     // -----------------------------  events ----------------------------- //
     //*********************************************************************//
 
-    event JBXBuybackDelegate_Swap(uint256 projectId, uint256 amountEth, uint256 amountOut);
-    event JBXBuybackDelegate_Mint(uint256 projectId);
-    event JBXBuybackDelegate_SecondsAgoIncrease(uint256 oldSecondsAgo, uint256 newSecondsAgo);
-    event JBXBuybackDelegate_TwapDeltaChanged(uint256 oldTwapDelta, uint256 newTwapDelta);
-    event JBXBuybackDelegate_PendingSweep(address indexed beneficiary, uint256 amount);
+    event BuybackDelegate_Swap(uint256 projectId, uint256 amountEth, uint256 amountOut);
+    event BuybackDelegate_Mint(uint256 projectId);
+    event BuybackDelegate_SecondsAgoIncrease(uint256 oldSecondsAgo, uint256 newSecondsAgo);
+    event BuybackDelegate_TwapDeltaChanged(uint256 oldTwapDelta, uint256 newTwapDelta);
+    event BuybackDelegate_PendingSweep(address indexed beneficiary, uint256 amount);
 
     //*********************************************************************//
     // --------------------- private constant properties ----------------- //
@@ -94,7 +94,12 @@ contract JBXBuybackDelegate is Ownable, ERC165, IJBFundingCycleDataSource, IJBPa
     /**
      * @notice The project terminal using this extension
      */
-    IJBPayoutRedemptionPaymentTerminal3_1 public immutable JBX_TERMINAL;
+    IJBPayoutRedemptionPaymentTerminal3_1_1 public immutable TERMINAL;
+
+    /**
+     * @notice The project controller
+     */
+    IJBController3_1 public immutable CONTROLLER;
 
     /**
      * @notice The WETH contract
@@ -118,39 +123,8 @@ contract JBXBuybackDelegate is Ownable, ERC165, IJBFundingCycleDataSource, IJBPa
     uint256 public sweepBalance;
 
     //*********************************************************************//
-    // --------------------- internal stored properties ------------------ //
+    // ---------------------------- Constructor -------------------------- //
     //*********************************************************************//
-
-    /**
-     * @notice The minted amount, min twap quote and reserved rate
-     *
-     * @dev    This is a mutex 1-x-1. This serves as common mutex for both 3
-     *         variable below, unless one of the amounts > uint120 max (then the
-     *         3 mutexes are used instead). The reserved rate max
-     *         is 10_000 per protocol constraint.
-     */
-    uint256 internal mutexCommon = 1;
-
-    /**
-     * @notice The current reserved rate
-     *
-     * @dev    This is a mutex 1-x-1
-     */
-    uint256 internal mutexReservedRate = 1;
-
-    /**
-     * @notice The min swap quote (including slippage), from frontend or twap
-     *
-     * @dev    This is a mutex 1-x-1
-     */
-    uint256 internal mutexSwapQuote = 1;
-
-    /**
-     * @notice Are we using 1 or 3 mutexes?
-     *
-     * @dev    This is a mutex 1-x-1
-     */
-    uint256 internal useThreeMutexes = 1;
 
     /**
      * @dev No other logic besides initializing the immutables
@@ -161,11 +135,13 @@ contract JBXBuybackDelegate is Ownable, ERC165, IJBFundingCycleDataSource, IJBPa
         IUniswapV3Pool _pool,
         uint32 _secondsAgo,
         uint256 _twapDelta,
-        IJBPayoutRedemptionPaymentTerminal3_1 _jbxTerminal
+        IJBPayoutRedemptionPaymentTerminal3_1_1 _terminal,
+        IJBController3_1 _controller
     ) {
         PROJECT_TOKEN = _projectToken;
         POOL = _pool;
-        JBX_TERMINAL = _jbxTerminal;
+        TERMINAL = _terminal;
+        CONTROLLER = _controller;
         PROJECT_TOKEN_IS_TOKEN0 = address(_projectToken) < address(_weth);
         WETH = _weth;
         secondsAgo = _secondsAgo;
@@ -188,12 +164,10 @@ contract JBXBuybackDelegate is Ownable, ERC165, IJBFundingCycleDataSource, IJBPa
      */
     function payParams(JBPayParamsData calldata _data)
         external
+        view
         override
-        returns (uint256 weight, string memory memo, JBPayDelegateAllocation[] memory delegateAllocations)
+        returns (uint256 weight, string memory memo, JBPayDelegateAllocation3_1_1[] memory delegateAllocations)
     {
-        // Access control as minting is authorized to this delegate
-        if (msg.sender != address(JBX_TERMINAL.store())) revert JuiceBuyback_Unauthorized();
-
         // Find the total number of tokens to mint, as a fixed point number with 18 decimals
         uint256 _tokenCount = PRBMath.mulDivFixedPoint(_data.amount.value, _data.weight);
 
@@ -212,26 +186,14 @@ contract JBXBuybackDelegate is Ownable, ERC165, IJBFundingCycleDataSource, IJBPa
 
         // If the minimum amount received from swapping is greather than received when minting, use the swap pathway
         if (_tokenCount < _swapAmountOut) {
-            // Pass the quotes and reserve rate via a mutex
-            if (_tokenCount > type(uint120).max || _swapAmountOut > type(uint120).max) {
-                // If the amount is too big, use the 3 mutexes (use common mutex for minted token, see unpacking logic)
-                mutexCommon = _tokenCount;
-                mutexReservedRate = _data.reservedRate;
-                mutexSwapQuote = _swapAmountOut;
-
-                // Signal the 3 mutexes use
-                unchecked {
-                    ++useThreeMutexes;
-                }
-            } else {
-                // Otherwise, only use the common mutex
-                mutexCommon = _tokenCount | (_swapAmountOut << 120) | (_data.reservedRate << 240);
-            }
-
-            // Return this delegate as the one to use, and do not mint from the terminal
-            delegateAllocations = new JBPayDelegateAllocation[](1);
+            // Return this delegate as the one to use, along the quote and reserved rate, and do not mint from the terminal
+            delegateAllocations = new JBPayDelegateAllocation3_1_1[](1);
             delegateAllocations[0] =
-                JBPayDelegateAllocation({delegate: IJBPayDelegate(this), amount: _data.amount.value});
+                JBPayDelegateAllocation3_1_1({
+                    delegate: IJBPayDelegate3_1_1(this), 
+                    amount: _data.amount.value, 
+                    metadata: abi.encode(_tokenCount, _swapAmountOut, _data.reservedRate)
+                });
 
             return (0, _data.memo, delegateAllocations);
         }
@@ -250,34 +212,12 @@ contract JBXBuybackDelegate is Ownable, ERC165, IJBFundingCycleDataSource, IJBPa
      *
      * @param _data the delegate data passed by the terminal
      */
-    function didPay(JBDidPayData calldata _data) external payable override {
+    function didPay(JBDidPayData3_1_1 calldata _data) external payable override {
         // Access control as minting is authorized to this delegate
-        if (msg.sender != address(JBX_TERMINAL)) revert JuiceBuyback_Unauthorized();
+        if (msg.sender != address(TERMINAL)) revert JuiceBuyback_Unauthorized();
 
-        // Retrieve and reset the common mutex
-        uint256 _commonMutex = mutexCommon;
-        mutexCommon = 1;
-
-        uint256 _tokenCount;
-        uint256 _swapMinAmountOut;
-        uint256 _reservedRate;
-
-        // Check if it was really the 3 packed or if the 3 mutexes need to be used (didPay called iff _tokenCount < _swapAmountOut)
-        if (useThreeMutexes != 1) {
-            _tokenCount = _commonMutex;
-            _reservedRate = mutexReservedRate;
-            _swapMinAmountOut = mutexSwapQuote;
-
-            // reset mutexes
-            mutexReservedRate = 1;
-            mutexSwapQuote = 1;
-            useThreeMutexes = 1;
-        } else {
-            // Max 120 bits for token count, 120 bits for min swap amount out, 16 bits for reserved rate
-            _tokenCount = _commonMutex & type(uint120).max;
-            _swapMinAmountOut = _commonMutex >> 120 & type(uint120).max;
-            _reservedRate = _commonMutex >> 240;
-        }
+        (uint256 _tokenCount, uint256 _swapMinAmountOut, uint256 _reservedRate) = abi.decode(
+            _data.dataSourceMetadata, (uint256, uint256, uint256));
 
         // Try swapping
         uint256 _amountReceived = _swap(_data, _swapMinAmountOut, _reservedRate);
@@ -289,7 +229,7 @@ contract JBXBuybackDelegate is Ownable, ERC165, IJBFundingCycleDataSource, IJBPa
         if (address(this).balance > 0 && address(this).balance != sweepBalance) {
             sweepBalanceOf[_data.beneficiary] += address(this).balance - sweepBalance;
 
-            emit JBXBuybackDelegate_PendingSweep(_data.beneficiary, address(this).balance - sweepBalance);
+            emit BuybackDelegate_PendingSweep(_data.beneficiary, address(this).balance - sweepBalance);
 
             sweepBalance = address(this).balance;
         }
@@ -331,7 +271,7 @@ contract JBXBuybackDelegate is Ownable, ERC165, IJBFundingCycleDataSource, IJBPa
         external
         pure
         override
-        returns (uint256 reclaimAmount, string memory memo, JBRedemptionDelegateAllocation[] memory delegateAllocations)
+        returns (uint256 reclaimAmount, string memory memo, JBRedemptionDelegateAllocation3_1_1[] memory delegateAllocations)
     {
         return (_data.reclaimAmount.value, _data.memo, delegateAllocations);
     }
@@ -348,7 +288,7 @@ contract JBXBuybackDelegate is Ownable, ERC165, IJBFundingCycleDataSource, IJBPa
 
         secondsAgo = _newSecondsAgo;
 
-        emit JBXBuybackDelegate_SecondsAgoIncrease(_oldSecondsAgo, _newSecondsAgo);
+        emit BuybackDelegate_SecondsAgoIncrease(_oldSecondsAgo, _newSecondsAgo);
     }
 
     /**
@@ -361,7 +301,7 @@ contract JBXBuybackDelegate is Ownable, ERC165, IJBFundingCycleDataSource, IJBPa
 
         twapDelta = _newDelta;
 
-        emit JBXBuybackDelegate_TwapDeltaChanged(_oldDelta, _newDelta);
+        emit BuybackDelegate_TwapDeltaChanged(_oldDelta, _newDelta);
     }
 
     /**
@@ -384,7 +324,7 @@ contract JBXBuybackDelegate is Ownable, ERC165, IJBFundingCycleDataSource, IJBPa
         (bool _success,) = payable(_beneficiary).call{value: _balance}("");
         if (!_success) revert JuiceBuyback_TransferFailed();
 
-        emit JBXBuybackDelegate_PendingSweep(_beneficiary, 0);
+        emit BuybackDelegate_PendingSweep(_beneficiary, 0);
     }
 
     //*********************************************************************//
@@ -432,7 +372,7 @@ contract JBXBuybackDelegate is Ownable, ERC165, IJBFundingCycleDataSource, IJBPa
      * @param  _data the didPayData passed by the terminal
      * @param  _minimumReceivedFromSwap the minimum amount received, to prevent slippage
      */
-    function _swap(JBDidPayData calldata _data, uint256 _minimumReceivedFromSwap, uint256 _reservedRate)
+    function _swap(JBDidPayData3_1_1 calldata _data, uint256 _minimumReceivedFromSwap, uint256 _reservedRate)
         internal
         returns (uint256 _amountReceived)
     {
@@ -463,10 +403,8 @@ contract JBXBuybackDelegate is Ownable, ERC165, IJBFundingCycleDataSource, IJBPa
         if (_nonReservedToken != 0) PROJECT_TOKEN.transfer(_data.beneficiary, _nonReservedToken);
         // If there are reserved token, add them to the reserve
         if (_reservedToken != 0) {
-            IJBController controller = IJBController(JBX_TERMINAL.directory().controllerOf(_data.projectId));
-
             // Mint the reserved token with this address as beneficiary -> result: _amountReceived-reserved here, reservedToken in reserve
-            controller.mintTokensOf({
+            CONTROLLER.mintTokensOf({
                 projectId: _data.projectId,
                 tokenCount: _amountReceived,
                 beneficiary: address(this),
@@ -475,10 +413,9 @@ contract JBXBuybackDelegate is Ownable, ERC165, IJBFundingCycleDataSource, IJBPa
                 useReservedRate: true
             });
 
-
             // Burn all the token received here (kept as reserved from the swap + minted just above)
             // ie when _preferClaimed is true, burn starts with the claimed token, then continue with unclaimed ones
-            controller.burnTokensOf({
+            CONTROLLER.burnTokensOf({
                 holder: address(this),
                 projectId: _data.projectId,
                 tokenCount: _amountReceived,
@@ -487,7 +424,7 @@ contract JBXBuybackDelegate is Ownable, ERC165, IJBFundingCycleDataSource, IJBPa
             });
         }
 
-        emit JBXBuybackDelegate_Swap(_data.projectId, _data.amount.value, _amountReceived);
+        emit BuybackDelegate_Swap(_data.projectId, _data.amount.value, _amountReceived);
     }
 
     /**
@@ -496,11 +433,9 @@ contract JBXBuybackDelegate is Ownable, ERC165, IJBFundingCycleDataSource, IJBPa
      * @param  _data the didPayData passed by the terminal
      * @param  _amount the amount of token out to mint
      */
-    function _mint(JBDidPayData calldata _data, uint256 _amount) internal {
-        IJBController controller = IJBController(JBX_TERMINAL.directory().controllerOf(_data.projectId));
-
+    function _mint(JBDidPayData3_1_1 calldata _data, uint256 _amount) internal {
         // Mint to the beneficiary with the fc reserve rate
-        controller.mintTokensOf({
+        CONTROLLER.mintTokensOf({
             projectId: _data.projectId,
             tokenCount: _amount,
             beneficiary: _data.beneficiary,
@@ -510,11 +445,11 @@ contract JBXBuybackDelegate is Ownable, ERC165, IJBFundingCycleDataSource, IJBPa
         });
 
         // Send the eth back to the terminal balance
-        JBX_TERMINAL.addToBalanceOf{value: _data.amount.value}(
+        TERMINAL.addToBalanceOf{value: _data.amount.value}(
             _data.projectId, _data.amount.value, JBTokens.ETH, "", ""
         );
 
-        emit JBXBuybackDelegate_Mint(_data.projectId);
+        emit BuybackDelegate_Mint(_data.projectId);
     }
 
     //*********************************************************************//
@@ -522,7 +457,7 @@ contract JBXBuybackDelegate is Ownable, ERC165, IJBFundingCycleDataSource, IJBPa
     //*********************************************************************//
 
     function supportsInterface(bytes4 _interfaceId) public view override(ERC165, IERC165) returns (bool) {
-        return _interfaceId == type(IJBFundingCycleDataSource).interfaceId
-            || _interfaceId == type(IJBPayDelegate).interfaceId || super.supportsInterface(_interfaceId);
+        return _interfaceId == type(IJBFundingCycleDataSource3_1_1).interfaceId
+            || _interfaceId == type(IJBPayDelegate3_1_1).interfaceId || super.supportsInterface(_interfaceId);
     }
 }

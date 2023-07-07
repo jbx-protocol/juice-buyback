@@ -31,19 +31,19 @@ import "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 
 import "@exhausted-pigeon/uniswap-v3-forge-quoter/src/UniswapV3ForgeQuoter.sol";
 
-import "../JBXBuybackDelegate.sol";
+import "../BuybackDelegate.sol";
 import "../mock/MockAllocator.sol";
 
 import "forge-std/Test.sol";
 
 /**
- * @notice JBXBuyback fork integration tests, using $jbx v3
+ * @notice Buyback fork integration tests, using $jbx v3
  */
-contract TestJBXBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
+contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
     using JBFundingCycleMetadataResolver for JBFundingCycle;
 
-    event JBXBuybackDelegate_Swap(uint256 projectId, uint256 amountEth, uint256 amountOut);
-    event JBXBuybackDelegate_Mint(uint256 projectId);
+    event BuybackDelegate_Swap(uint256 projectId, uint256 amountEth, uint256 amountOut);
+    event BuybackDelegate_Mint(uint256 projectId);
     event Mint(
         address indexed holder,
         uint256 indexed projectId,
@@ -72,7 +72,7 @@ contract TestJBXBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
     IJBPaymentTerminal[] terminals;
     JBGroupedSplits[] groupedSplits;
 
-    JBXBuybackDelegate delegate;
+    BuybackDelegate delegate;
 
     IUniswapV3Pool pool;
 
@@ -156,7 +156,7 @@ contract TestJBXBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         amountOutForOneEth = getAmountOut(pool, 1 ether, address(weth));
 
         delegate =
-        new JBXBuybackDelegate(IERC20(address(jbx)), weth, pool, cardinality, twapDelta, jbEthPaymentTerminal);
+        new BuybackDelegate(IERC20(address(jbx)), weth, pool, cardinality, twapDelta, jbEthPaymentTerminal);
 
         vm.label(address(pool), "uniswapPool");
         vm.label(address(weth), "$WETH");
@@ -253,7 +253,7 @@ contract TestJBXBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         );
 
         vm.expectEmit(true, true, true, true);
-        emit JBXBuybackDelegate_Swap(1, 1 ether, amountOutForOneEth);
+        emit BuybackDelegate_Swap(1, 1 ether, amountOutForOneEth);
 
         // Pay the project
         jbEthPaymentTerminal.pay{value: 1 ether}(
@@ -376,7 +376,7 @@ contract TestJBXBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         );
 
         vm.expectEmit(true, true, true, true);
-        emit JBXBuybackDelegate_Swap(1, _amountIn, _quote);
+        emit BuybackDelegate_Swap(1, _amountIn, _quote);
 
         // Pay the project
         jbEthPaymentTerminal.pay{value: _amountIn}(
@@ -630,7 +630,7 @@ contract TestJBXBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
 
         // Fall back on delegate minting
         vm.expectEmit(true, true, true, true);
-        emit JBXBuybackDelegate_Mint(1);
+        emit BuybackDelegate_Mint(1);
 
         // Pay the project
         jbEthPaymentTerminal.pay{value: 1 ether}(

@@ -4,18 +4,19 @@
 
 Provides a datasource and delegate which maximise the project token received by the contributor when they call `pay` on the terminal. In order to do so, the delegate will either mint new tokens ("vanilla" path, bypassing the delegate) or swap existing token in an Uniswap V3 pool ("buyback" path), depending on the best quote available at the time of the call.
 
-This first iteration is optimised for ETH as terminal token.
+This first iteration is only compatible with ETH terminals.
 
 ## Design
 ### Flow
-- The frontend passes a quote (as an amount received for a given amount send) from the correct Uniswap V3 pool, as well as a maximum slippage allowed (in 1/10000th) while calling `pay(..)`. These should be encoded as uint256 and passed as third and fourth words of the `pay(..)` metadata parameter (the first 2 32bytes being reserved for the protocol).
+- The frontend passes a quote (as an amount received for a given amount send) from the correct Uniswap V3 pool, as well as a maximum slippage allowed (in 1/10000th) while calling `pay(..)`. These should be encoded as uint256 and passed as third and fourth words of the `pay(..)` metadata parameter (the first 2 32bytes being reserved for the protocol). If no quote is provided, a twap is then used.
 - `Pay(..)` will use the buyback delegate as datasource and, based on the quote (taking slippage into account) and the funding cycle weight, will either mint (bypassing the delegate and using the regular terminal logic) or swap (signaling this by returning the delegate address and a 0 weight to the terminal).
 - If swap is privilegied, the terminal will call the delegate's `didPay` method, which will wrap and swap the eth, and transfer the correct amount of project tokens to the contributor (ie the non-reserved ones).
 NB: The whole amount contributed will be swapped, including what should be considered as reserved. The delegate will then burn/mint/burn again the non-transfered to account for the reserved tokens (ie burn them all, then mint an amount which will return the correct amount of reserved token, then burn the non-reserved token just minted)
 - In case of failure of the swap (eg max slippage, low liquidity), the delegate will mint the tokens instead (using the original funding cycle weight and reserved rate).
 
 ### Contracts/Interfaces
-- JBXBuyBackDelegate: the datasource, pay delegate and uniswap pool callback contract
+- BuyBackDelegate: the datasource, pay delegate and uniswap pool callback contract
+- BuyBackDelegate3.1.1: the buyback delegate leveraging the new terminal v3.1.1
 
 ## Usage
 Anyone can deploy this delegate using the provided forge script.
