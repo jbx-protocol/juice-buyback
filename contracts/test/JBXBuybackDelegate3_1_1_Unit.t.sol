@@ -726,10 +726,9 @@ contract ForTest_JBXBuybackDelegate is JBXBuybackDelegate3_1_1 {
         uint32 _secondsAgo,
         uint256 _twapDelta,
         IJBPayoutRedemptionPaymentTerminal3_1_1 _jbxTerminal,
-        IJBProjects _projects,
-        IJBOperatorStore _operatorStore
+        IJBController3_1 _controller
     )
-        JBXBuybackDelegate3_1_1(_projectToken, _weth, _pool, _secondsAgo, _twapDelta, _jbxTerminal)
+        JBXBuybackDelegate3_1_1(_projectToken, _weth, _pool, _secondsAgo, _twapDelta, _jbxTerminal, _controller)
     {}
 
     function ForTest_getQuote(uint256 _amountIn) external view returns (uint256 _amountOut) {
