@@ -4,7 +4,7 @@ pragma solidity ^0.8.16;
 import "../interfaces/external/IWETH9.sol";
 import "./helpers/TestBaseWorkflowV3.sol";
 
-import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController.sol";
+import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController3_1.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBDirectory.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBConstants.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBTokens.sol";
@@ -38,7 +38,7 @@ contract TestBuybackDelegate_Units is Test {
         IJBPayoutRedemptionPaymentTerminal3_1(makeAddr("IJBPayoutRedemptionPaymentTerminal3_1"));
     IJBProjects projects = IJBProjects(makeAddr("IJBProjects"));
     IJBOperatorStore operatorStore = IJBOperatorStore(makeAddr("IJBOperatorStore"));
-    IJBController controller = IJBController(makeAddr("controller"));
+    IJBController3_1 controller = IJBController3_1(makeAddr("controller"));
     IJBDirectory directory = IJBDirectory(makeAddr("directory"));
 
     address terminalStore = makeAddr("terminalStore");
@@ -95,8 +95,7 @@ contract TestBuybackDelegate_Units is Test {
             _secondsAgo: secondsAgo,
             _twapDelta: twapDelta,
             _jbxTerminal: jbxTerminal,
-            _projects: projects,
-            _operatorStore: operatorStore
+            _controller: controller
         });
     }
 
@@ -647,8 +646,7 @@ contract TestBuybackDelegate_Units is Test {
             _secondsAgo: secondsAgo,
             _twapDelta: twapDelta,
             _jbxTerminal: jbxTerminal,
-            _projects: projects,
-            _operatorStore: operatorStore
+            _controller: controller
         });
 
         // If project is token0, then received is delta0 (the negative value)
@@ -683,8 +681,7 @@ contract TestBuybackDelegate_Units is Test {
             _secondsAgo: secondsAgo,
             _twapDelta: twapDelta,
             _jbxTerminal: jbxTerminal,
-            _projects: projects,
-            _operatorStore: operatorStore
+            _controller: controller
         });
 
         // mock and expect weth calls, this should transfer from delegate to pool (positive delta in the callback)
@@ -893,10 +890,9 @@ contract ForTest_BuybackDelegate is BuybackDelegate {
         uint32 _secondsAgo,
         uint256 _twapDelta,
         IJBPayoutRedemptionPaymentTerminal3_1 _jbxTerminal,
-        IJBProjects _projects,
-        IJBOperatorStore _operatorStore
+        IJBController3_1 _controller
     )
-        BuybackDelegate(_projectToken, _weth, _pool, _secondsAgo, _twapDelta, _jbxTerminal)
+        BuybackDelegate(_projectToken, _weth, _pool, _secondsAgo, _twapDelta, _jbxTerminal, _controller)
     {}
 
     function ForTest_mutexCommon() external view returns (uint256) {

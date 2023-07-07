@@ -156,7 +156,7 @@ contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         amountOutForOneEth = getAmountOut(pool, 1 ether, address(weth));
 
         delegate =
-        new BuybackDelegate(IERC20(address(jbx)), weth, pool, cardinality, twapDelta, jbEthPaymentTerminal);
+        new BuybackDelegate(IERC20(address(jbx)), weth, pool, cardinality, twapDelta, jbEthPaymentTerminal, jbController);
 
         vm.label(address(pool), "uniswapPool");
         vm.label(address(weth), "$WETH");

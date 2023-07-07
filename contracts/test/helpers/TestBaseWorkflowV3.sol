@@ -3,9 +3,10 @@ pragma solidity ^0.8.16;
 
 import "forge-std/Test.sol";
 
-import "@jbx-protocol/juice-contracts-v3/contracts/JBController.sol";
+import "@jbx-protocol/juice-contracts-v3/contracts/JBController3_1.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/JBDirectory.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/JBETHPaymentTerminal.sol";
+import "@jbx-protocol/juice-contracts-v3/contracts/JBFundAccessConstraintsStore.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/JBSingleTokenPaymentTerminalStore.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/JBFundingCycleStore.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/JBOperatorStore.sol";
@@ -40,91 +41,29 @@ import "@paulrberg/contracts/math/PRBMath.sol";
 // Provides common functionality, such as deploying contracts on test setup for v3.
 contract TestBaseWorkflowV3 is Test {
     //*********************************************************************//
-    // --------------------- private stored properties ------------------- //
+    // -------------------- internal stored properties ------------------- //
     //*********************************************************************//
 
     // Multisig address used for testing.
-    address private _multisig = address(123);
+    address internal _multisig = address(123);
+    address internal _beneficiary = address(69420);
 
-    address private _beneficiary = address(69420);
-
-    // EVM Cheat codes - test addresses via prank and startPrank in hevm
-    Vm public evm = Vm(HEVM_ADDRESS);
-
-    // JBOperatorStore
-    JBOperatorStore private _jbOperatorStore;
-    // JBProjects
-    JBProjects private _jbProjects;
-    // JBPrices
-    JBPrices private _jbPrices;
-    // JBDirectory
-    JBDirectory private _jbDirectory;
-    // JBFundingCycleStore
-    JBFundingCycleStore private _jbFundingCycleStore;
-    // JBTokenStore
-    JBTokenStore private _jbTokenStore;
-    // JBSplitsStore
-    JBSplitsStore private _jbSplitsStore;
-    // JBController
-    JBController private _jbController;
-    // JBETHPaymentTerminalStore
-    JBSingleTokenPaymentTerminalStore private _jbPaymentTerminalStore;
-    // JBETHPaymentTerminal
-    JBETHPaymentTerminal private _jbETHPaymentTerminal;
-    // AccessJBLib
-    AccessJBLib private _accessJBLib;
+    JBOperatorStore internal _jbOperatorStore;
+    JBProjects internal _jbProjects;
+    JBPrices internal _jbPrices;
+    JBDirectory internal _jbDirectory;
+    JBFundAccessConstraintsStore internal _fundAccessConstraintsStore;
+    JBFundingCycleStore internal _jbFundingCycleStore;
+    JBTokenStore internal _jbTokenStore;
+    JBSplitsStore internal _jbSplitsStore;
+    JBController3_1 internal _jbController;
+    JBSingleTokenPaymentTerminalStore internal _jbPaymentTerminalStore;
+    JBETHPaymentTerminal internal _jbETHPaymentTerminal;
+    AccessJBLib internal _accessJBLib;
 
     //*********************************************************************//
     // ------------------------- internal views -------------------------- //
     //*********************************************************************//
-
-    function multisig() internal view returns (address) {
-        return _multisig;
-    }
-
-    function beneficiary() internal view returns (address) {
-        return _beneficiary;
-    }
-
-    function jbOperatorStore() internal view returns (JBOperatorStore) {
-        return _jbOperatorStore;
-    }
-
-    function jbProjects() internal view returns (JBProjects) {
-        return _jbProjects;
-    }
-
-    function jbPrices() internal view returns (JBPrices) {
-        return _jbPrices;
-    }
-
-    function jbDirectory() internal view returns (JBDirectory) {
-        return _jbDirectory;
-    }
-
-    function jbFundingCycleStore() internal view returns (JBFundingCycleStore) {
-        return _jbFundingCycleStore;
-    }
-
-    function jbTokenStore() internal view returns (JBTokenStore) {
-        return _jbTokenStore;
-    }
-
-    function jbSplitsStore() internal view returns (JBSplitsStore) {
-        return _jbSplitsStore;
-    }
-
-    function jbController() internal view returns (JBController) {
-        return _jbController;
-    }
-
-    function jbPaymentTerminalStore() internal view returns (JBSingleTokenPaymentTerminalStore) {
-        return _jbPaymentTerminalStore;
-    }
-
-    function jbETHPaymentTerminal() internal view returns (JBETHPaymentTerminal) {
-        return _jbETHPaymentTerminal;
-    }
 
     function jbLibraries() internal view returns (AccessJBLib) {
         return _accessJBLib;
@@ -137,76 +76,80 @@ contract TestBaseWorkflowV3 is Test {
     // Deploys and initializes contracts for testing.
     function setUp() public virtual {
         // Labels
-        evm.label(_multisig, "projectOwner");
-        evm.label(_beneficiary, "beneficiary");
+        vm.label(_multisig, "projectOwner");
+        vm.label(_beneficiary, "beneficiary");
 
         // JBOperatorStore
         _jbOperatorStore = new JBOperatorStore();
-        evm.label(address(_jbOperatorStore), "JBOperatorStore");
+        vm.label(address(_jbOperatorStore), "JBOperatorStore");
 
         // JBProjects
         _jbProjects = new JBProjects(_jbOperatorStore);
-        evm.label(address(_jbProjects), "JBProjects");
+        vm.label(address(_jbProjects), "JBProjects");
 
         // JBPrices
         _jbPrices = new JBPrices(_multisig);
-        evm.label(address(_jbPrices), "JBPrices");
+        vm.label(address(_jbPrices), "JBPrices");
 
         address contractAtNoncePlusOne = addressFrom(address(this), 5);
 
         // JBFundingCycleStore
         _jbFundingCycleStore = new JBFundingCycleStore(IJBDirectory(contractAtNoncePlusOne));
-        evm.label(address(_jbFundingCycleStore), "JBFundingCycleStore");
+        vm.label(address(_jbFundingCycleStore), "JBFundingCycleStore");
 
         // JBDirectory
         _jbDirectory = new JBDirectory(_jbOperatorStore, _jbProjects, _jbFundingCycleStore, _multisig);
-        evm.label(address(_jbDirectory), "JBDirectory");
+        vm.label(address(_jbDirectory), "JBDirectory");
 
         // JBTokenStore
         _jbTokenStore = new JBTokenStore(_jbOperatorStore, _jbProjects, _jbDirectory, _jbFundingCycleStore);
-        evm.label(address(_jbTokenStore), "JBTokenStore");
+        vm.label(address(_jbTokenStore), "JBTokenStore");
 
         // JBSplitsStore
         _jbSplitsStore = new JBSplitsStore(_jbOperatorStore, _jbProjects, _jbDirectory);
-        evm.label(address(_jbSplitsStore), "JBSplitsStore");
+        vm.label(address(_jbSplitsStore), "JBSplitsStore");
+
+        _fundAccessConstraintsStore = new JBFundAccessConstraintsStore(_jbDirectory);
+        vm.label(address(_fundAccessConstraintsStore), "JBFundAccessConstraintsStore");
 
         // JBController
-        _jbController = new JBController(
-      _jbOperatorStore,
-      _jbProjects,
-      _jbDirectory,
-      _jbFundingCycleStore,
-      _jbTokenStore,
-      _jbSplitsStore
-    );
-        evm.label(address(_jbController), "JBController");
+        _jbController = new JBController3_1(
+            _jbOperatorStore,
+            _jbProjects,
+            _jbDirectory,
+            _jbFundingCycleStore,
+            _jbTokenStore,
+            _jbSplitsStore,
+            _fundAccessConstraintsStore
+        );
+        vm.label(address(_jbController), "JBController");
 
-        evm.prank(_multisig);
+        vm.prank(_multisig);
         _jbDirectory.setIsAllowedToSetFirstController(address(_jbController), true);
 
         // JBETHPaymentTerminalStore
         _jbPaymentTerminalStore = new JBSingleTokenPaymentTerminalStore(
-      _jbDirectory,
-      _jbFundingCycleStore,
-      _jbPrices
-    );
-        evm.label(address(_jbPaymentTerminalStore), "JBSingleTokenPaymentTerminalStore");
+            _jbDirectory,
+            _jbFundingCycleStore,
+            _jbPrices
+        );
+        vm.label(address(_jbPaymentTerminalStore), "JBSingleTokenPaymentTerminalStore");
 
         // AccessJBLib
         _accessJBLib = new AccessJBLib();
 
         // JBETHPaymentTerminal
         _jbETHPaymentTerminal = new JBETHPaymentTerminal(
-      _accessJBLib.ETH(),
-      _jbOperatorStore,
-      _jbProjects,
-      _jbDirectory,
-      _jbSplitsStore,
-      _jbPrices,
-      address(_jbPaymentTerminalStore),
-      _multisig
-    );
-        evm.label(address(_jbETHPaymentTerminal), "JBETHPaymentTerminal");
+            _accessJBLib.ETH(),
+            _jbOperatorStore,
+            _jbProjects,
+            _jbDirectory,
+            _jbSplitsStore,
+            _jbPrices,
+            address(_jbPaymentTerminalStore),
+            _multisig
+        );
+        vm.label(address(_jbETHPaymentTerminal), "JBETHPaymentTerminal");
     }
 
     //https://ethereum.stackexchange.com/questions/24248/how-to-calculate-an-ethereum-contracts-address-during-its-creation-using-the-so

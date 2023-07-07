@@ -35,8 +35,6 @@ import "../mock/MockAllocator.sol";
 contract TestBuybackDelegate_Integration is TestBaseWorkflowV3 {
     using JBFundingCycleMetadataResolver for JBFundingCycle;
 
-    JBController controller;
-
     JBProjectMetadata _projectMetadata;
     JBFundingCycleData _data;
     JBFundingCycleData _dataReconfiguration;
@@ -65,24 +63,21 @@ contract TestBuybackDelegate_Integration is TestBaseWorkflowV3 {
      */
     function setUp() public override {
         // label
-        evm.label(address(pool), "uniswapPool");
-        evm.label(address(weth), "$WETH");
-        evm.label(address(jbx), "$JBX");
+        vm.label(address(pool), "uniswapPool");
+        vm.label(address(weth), "$WETH");
+        vm.label(address(jbx), "$JBX");
 
         // mock
-        evm.etch(address(pool), "0x69");
-        evm.etch(address(weth), "0x69");
-        evm.etch(address(jbx), "0x69");
+        vm.etch(address(pool), "0x69");
+        vm.etch(address(weth), "0x69");
+        vm.etch(address(jbx), "0x69");
 
         // super is the Jbx V3 fixture
         super.setUp();
 
         // Deploy the delegate
         _delegate =
-        new BuybackDelegate(IERC20(address(jbx)), weth, pool, cardinality, twapDelta, IJBPayoutRedemptionPaymentTerminal3_1(address(jbETHPaymentTerminal())));
-
-        // Configure a new project using it
-        controller = jbController();
+        new BuybackDelegate(IERC20(address(jbx)), weth, pool, cardinality, twapDelta, IJBPayoutRedemptionPaymentTerminal3_1(address(_jbETHPaymentTerminal)), _jbController);
 
         _projectMetadata = JBProjectMetadata({content: "myIPFSHash", domain: 1});
 
@@ -120,7 +115,7 @@ contract TestBuybackDelegate_Integration is TestBaseWorkflowV3 {
 
         _fundAccessConstraints.push(
             JBFundAccessConstraints({
-                terminal: jbETHPaymentTerminal(),
+                terminal: _jbETHPaymentTerminal,
                 token: jbLibraries().ETHToken(),
                 distributionLimit: 2 ether,
                 overflowAllowance: type(uint232).max,
@@ -129,12 +124,12 @@ contract TestBuybackDelegate_Integration is TestBaseWorkflowV3 {
             })
         );
 
-        _terminals = [jbETHPaymentTerminal()];
+        _terminals = [_jbETHPaymentTerminal];
 
         JBGroupedSplits[] memory _groupedSplits = new JBGroupedSplits[](1); // Default empty
 
-        _projectId = controller.launchProjectFor(
-            multisig(),
+        _projectId = _jbController.launchProjectFor(
+            _multisig,
             _projectMetadata,
             _data,
             _metadata,
@@ -157,11 +152,11 @@ contract TestBuybackDelegate_Integration is TestBaseWorkflowV3 {
         // setting the quote in metadata, bigger than the weight
         bytes memory metadata = abi.encode(new bytes(0), new bytes(0), _quote, 500);
 
-        jbETHPaymentTerminal().pay{value: payAmountInWei}(
+        _jbETHPaymentTerminal.pay{value: payAmountInWei}(
             _projectId,
             payAmountInWei,
             address(0),
-            beneficiary(),
+            _beneficiary,
             /* _minReturnedTokens */
             0,
             /* _preferClaimedTokens */
@@ -179,10 +174,10 @@ contract TestBuybackDelegate_Integration is TestBaseWorkflowV3 {
         uint256 amountReserved = totalMinted - amountBeneficiary;
 
         // Check: correct beneficiary balance?
-        assertEq(jbTokenStore().balanceOf(beneficiary(), _projectId), amountBeneficiary);
+        assertEq(_jbTokenStore.balanceOf(_beneficiary, _projectId), amountBeneficiary);
 
         // Check: correct reserve?
-        assertEq(controller.reservedTokenBalanceOf(_projectId, reservedRate), amountReserved);
+        assertEq(_jbController.reservedTokenBalanceOf(_projectId), amountReserved);
     }
 
     /**
@@ -194,11 +189,11 @@ contract TestBuybackDelegate_Integration is TestBaseWorkflowV3 {
         // setting the quote in metadata
         bytes memory metadata = abi.encode(new bytes(0), new bytes(0), 1 ether, 10000);
 
-        jbETHPaymentTerminal().pay{value: payAmountInWei}(
+        _jbETHPaymentTerminal.pay{value: payAmountInWei}(
             _projectId,
             payAmountInWei,
             address(0),
-            beneficiary(),
+            _beneficiary,
             /* _minReturnedTokens */
             0, // Cannot be used in this setting
             /* _preferClaimedTokens */
@@ -215,9 +210,9 @@ contract TestBuybackDelegate_Integration is TestBaseWorkflowV3 {
 
         uint256 amountReserved = totalMinted - amountBeneficiary;
 
-        assertEq(jbTokenStore().balanceOf(beneficiary(), _projectId), amountBeneficiary);
-        assertEq(controller.reservedTokenBalanceOf(_projectId, reservedRate), amountReserved);
-        assertEq(jbPaymentTerminalStore().balanceOf(jbETHPaymentTerminal(), _projectId), payAmountInWei);
+        assertEq(_jbTokenStore.balanceOf(_beneficiary, _projectId), amountBeneficiary);
+        assertEq(_jbController.reservedTokenBalanceOf(_projectId), amountReserved);
+        assertEq(_jbPaymentTerminalStore.balanceOf(_jbETHPaymentTerminal, _projectId), payAmountInWei);
     }
 
     /**
@@ -228,8 +223,8 @@ contract TestBuybackDelegate_Integration is TestBaseWorkflowV3 {
         uint256 quoteOnUniswap = weight * 106 / 100; // Take slippage into account
 
         // Trick the delegate balance post-swap (avoid callback revert on slippage)
-        evm.prank(multisig());
-        jbController().mintTokensOf(_projectId, quoteOnUniswap, address(_delegate), "", false, false);
+        vm.prank(_multisig);
+        _jbController.mintTokensOf(_projectId, quoteOnUniswap, address(_delegate), "", false, false);
 
         // setting the quote in metadata
         bytes memory metadata = abi.encode(new bytes(0), new bytes(0), quoteOnUniswap, 500);
@@ -240,30 +235,30 @@ contract TestBuybackDelegate_Integration is TestBaseWorkflowV3 {
         uint256 nonReservedAmount = quoteOnUniswap - reservedAmount;
 
         // Mock the transfer to the beneficiary
-        evm.mockCall(
+        vm.mockCall(
             address(jbx),
-            abi.encodeWithSelector(IERC20.transfer.selector, beneficiary(), nonReservedAmount),
+            abi.encodeWithSelector(IERC20.transfer.selector, _beneficiary, nonReservedAmount),
             abi.encode(true)
         );
 
         // Check: token actually transfered?
-        evm.expectCall(address(jbx), abi.encodeWithSelector(IERC20.transfer.selector, beneficiary(), nonReservedAmount));
+        vm.expectCall(address(jbx), abi.encodeWithSelector(IERC20.transfer.selector, _beneficiary, nonReservedAmount));
 
         // Mock the swap returned value, which is the amount of token transfered (negative = exact amount)
-        evm.mockCall(
+        vm.mockCall(
             address(pool),
             abi.encodeWithSelector(IUniswapV3PoolActions.swap.selector),
             abi.encode(-int256(quoteOnUniswap), 0)
         );
 
         // Check: swap triggered?
-        evm.expectCall(address(pool), abi.encodeWithSelector(IUniswapV3PoolActions.swap.selector));
+        vm.expectCall(address(pool), abi.encodeWithSelector(IUniswapV3PoolActions.swap.selector));
 
-        jbETHPaymentTerminal().pay{value: payAmountInWei}(
+        _jbETHPaymentTerminal.pay{value: payAmountInWei}(
             _projectId,
             payAmountInWei,
             address(0),
-            beneficiary(),
+            _beneficiary,
             /* _minReturnedTokens */
             0,
             /* _preferClaimedTokens */
@@ -275,7 +270,7 @@ contract TestBuybackDelegate_Integration is TestBaseWorkflowV3 {
         );
 
         // Check: correct reserve balance?
-        assertEq(controller.reservedTokenBalanceOf(_projectId, reservedRate), reservedAmount);
+        assertEq(_jbController.reservedTokenBalanceOf(_projectId), reservedAmount);
     }
 
     /**
@@ -287,8 +282,8 @@ contract TestBuybackDelegate_Integration is TestBaseWorkflowV3 {
         // construct metadata, minimum amount received is 100
         bytes memory metadata = abi.encode(100 ether);
 
-        evm.prank(address(pool));
-        evm.expectRevert(abi.encodeWithSignature("JuiceBuyback_MaximumSlippage()"));
+        vm.prank(address(pool));
+        vm.expectRevert(abi.encodeWithSignature("JuiceBuyback_MaximumSlippage()"));
 
         // callback giving 1 instead
         _delegate.uniswapV3SwapCallback(-1 ether, 1 ether, metadata);
