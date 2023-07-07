@@ -4,7 +4,7 @@ pragma solidity ^0.8.16;
 import "../interfaces/external/IWETH9.sol";
 import "./helpers/TestBaseWorkflowV3.sol";
 
-import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController.sol";
+import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController3_1.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBDirectory.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBConstants.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBTokens.sol";
@@ -38,7 +38,7 @@ contract TestJBXBuybackDelegate3_1_1_Units is Test {
         IJBPayoutRedemptionPaymentTerminal3_1_1(makeAddr("IJBPayoutRedemptionPaymentTerminal3_1"));
     IJBProjects projects = IJBProjects(makeAddr("IJBProjects"));
     IJBOperatorStore operatorStore = IJBOperatorStore(makeAddr("IJBOperatorStore"));
-    IJBController controller = IJBController(makeAddr("controller"));
+    IJBController3_1 controller = IJBController3_1(makeAddr("controller"));
     IJBDirectory directory = IJBDirectory(makeAddr("directory"));
 
     address terminalStore = makeAddr("terminalStore");
@@ -96,8 +96,7 @@ contract TestJBXBuybackDelegate3_1_1_Units is Test {
             _secondsAgo: secondsAgo,
             _twapDelta: twapDelta,
             _jbxTerminal: jbxTerminal,
-            _projects: projects,
-            _operatorStore: operatorStore
+            _controller: controller
         });
     }
 
@@ -481,8 +480,7 @@ contract TestJBXBuybackDelegate3_1_1_Units is Test {
             _secondsAgo: secondsAgo,
             _twapDelta: twapDelta,
             _jbxTerminal: jbxTerminal,
-            _projects: projects,
-            _operatorStore: operatorStore
+            _controller: controller
         });
 
         // If project is token0, then received is delta0 (the negative value)
@@ -517,8 +515,7 @@ contract TestJBXBuybackDelegate3_1_1_Units is Test {
             _secondsAgo: secondsAgo,
             _twapDelta: twapDelta,
             _jbxTerminal: jbxTerminal,
-            _projects: projects,
-            _operatorStore: operatorStore
+            _controller: controller
         });
 
         // mock and expect weth calls, this should transfer from delegate to pool (positive delta in the callback)
