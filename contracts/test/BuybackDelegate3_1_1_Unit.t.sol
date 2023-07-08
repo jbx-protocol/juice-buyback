@@ -269,7 +269,7 @@ contract TestBuybackDelegate3_1_1_Units is Test {
 
         // The amount the beneficiary should receive
         uint256 _nonReservedToken =
-            _twapQuote - PRBMath.mulDiv(_twapQuote, _reservedRate, JBConstants.MAX_RESERVED_RATE);
+            PRBMath.mulDiv(_twapQuote, JBConstants.MAX_RESERVED_RATE - _reservedRate, JBConstants.MAX_RESERVED_RATE);
 
         // mock the swap call
         vm.mockCall(

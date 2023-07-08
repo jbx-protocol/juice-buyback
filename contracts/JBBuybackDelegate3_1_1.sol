@@ -394,16 +394,18 @@ contract JBBuybackDelegate3_1_1 is Ownable, ERC165, IJBFundingCycleDataSource3_1
             return _amountReceived;
         }
 
-        // The amount to add to the reserved token
-        uint256 _reservedToken = mulDiv(_amountReceived, _reservedRate, JBConstants.MAX_RESERVED_RATE);
-
         // The amount to send to the beneficiary
-        uint256 _nonReservedToken = _amountReceived - _reservedToken;
+        uint256 _nonReservedTokens = mulDiv(
+            _amountReceived, JBConstants.MAX_RESERVED_RATE - _reservedRate, JBConstants.MAX_RESERVED_RATE
+        );
+
+        // The amount to add to the reserved token
+        uint256 _reservedTokens = _amountReceived - _nonReservedTokens;
 
         // Send the non-reserved token to the beneficiary (if any / reserved rate is not max)
-        if (_nonReservedToken != 0) PROJECT_TOKEN.transfer(_data.beneficiary, _nonReservedToken);
+        if (_nonReservedTokens != 0) PROJECT_TOKEN.transfer(_data.beneficiary, _nonReservedTokens);
         // If there are reserved token, add them to the reserve
-        if (_reservedToken != 0) {
+        if (_reservedTokens != 0) {
             // Mint the reserved token with this address as beneficiary -> result: _amountReceived-reserved here, reservedToken in reserve
             CONTROLLER.mintTokensOf({
                 projectId: _data.projectId,
