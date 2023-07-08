@@ -23,7 +23,7 @@ import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {ERC165, IERC165} from "@openzeppelin/contracts/utils/introspection/ERC165.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-import {PRBMath} from "@paulrberg/contracts/math/PRBMath.sol";
+import {mulDiv, mulDiv18} from "@prb/math/src/common.sol";
 
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import {IUniswapV3SwapCallback} from "@uniswap/v3-core/contracts/interfaces/callback/IUniswapV3SwapCallback.sol";
@@ -213,7 +213,7 @@ contract JBBuybackDelegate is Ownable, ERC165, IJBFundingCycleDataSource, IJBPay
         if (msg.sender != TERMINAL_STORE) revert JuiceBuyback_Unauthorized();
 
         // Find the total number of tokens to mint, as a fixed point number with 18 decimals
-        uint256 _tokenCount = PRBMath.mulDivFixedPoint(_data.amount.value, _data.weight);
+        uint256 _tokenCount = mulDiv18(_data.amount.value, _data.weight);
 
         // Get a quote based on either the uni SDK quote or a twap from the pool
         uint256 _swapAmountOut;
@@ -470,7 +470,7 @@ contract JBBuybackDelegate is Ownable, ERC165, IJBFundingCycleDataSource, IJBPay
         }
 
         // The amount to send to the beneficiary
-        uint256 _nonReservedToken = PRBMath.mulDiv(
+        uint256 _nonReservedToken = mulDiv(
             _amountReceived, JBConstants.MAX_RESERVED_RATE - _reservedRate, JBConstants.MAX_RESERVED_RATE
         );
 
