@@ -29,6 +29,7 @@ import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import {OracleLibrary} from "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
 
 import {IWETH9} from "./interfaces/external/IWETH9.sol";
+
 /**
  * @custom:benediction DEVS BENEDICAT ET PROTEGAT CONTRACTVS MEAM
  *
@@ -40,8 +41,7 @@ import {IWETH9} from "./interfaces/external/IWETH9.sol";
  *
  * @dev    This only supports ETH terminal. The pool is fixed, if a new pool offers deeper
  *         liquidity, this delegate needs to be redeployed.
- */
-
+*/
 contract JBBuybackDelegate3_1_1 is Ownable, ERC165, IJBFundingCycleDataSource3_1_1, IJBPayDelegate3_1_1, IUniswapV3SwapCallback {
 
     //*********************************************************************//
