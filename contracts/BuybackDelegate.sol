@@ -22,6 +22,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 import {PRBMath} from "@paulrberg/contracts/math/PRBMath.sol";
 
+import {IUniswapV3Factory} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Factory.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import {IUniswapV3SwapCallback} from "@uniswap/v3-core/contracts/interfaces/callback/IUniswapV3SwapCallback.sol";
 import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
@@ -172,14 +173,15 @@ contract BuybackDelegate is Ownable, ERC165, IJBFundingCycleDataSource, IJBPayDe
     constructor(
         IERC20 _projectToken,
         IWETH9 _weth,
-        IUniswapV3Pool _pool,
+        IUniswapV3Factory _factory,
+        uint24 _fee,
         uint32 _secondsAgo,
         uint256 _twapDelta,
         IJBPayoutRedemptionPaymentTerminal3_1 _terminal,
         IJBController3_1 _controller
     ) {
         PROJECT_TOKEN = _projectToken;
-        POOL = _pool;
+        POOL = IUniswapV3Pool(_factory.getPool(address(_projectToken), address(_weth), _fee));
         TERMINAL = _terminal;
         TERMINAL_STORE = _terminal.store();
         CONTROLLER = _controller;

@@ -49,7 +49,7 @@ contract TestBuybackDelegate3_1_1_Units is Test {
 
     uint32 secondsAgo = 100;
     uint256 twapDelta = 100;
-    uint24 fee = 1000;
+    uint24 fee = 100;
 
     JBPayParamsData payParams = JBPayParamsData({
         terminal: jbxTerminal,

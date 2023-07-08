@@ -78,6 +78,7 @@ contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
 
     uint256 constant SLIPPAGE_DENOMINATOR = 10000;
 
+    IUniswapV3Factory factory = IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984);
     IERC20 jbx = IERC20(0x4554CC10898f92D45378b98D6D6c2dD54c687Fb2); // 0 - 69420*10**18
     IWETH9 weth = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2); // 1 - 1*10**18
 
@@ -86,6 +87,8 @@ contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
     uint32 cardinality = 100000;
 
     uint256 twapDelta = 500;
+
+    uint24 fee = 100;
 
     // sqrtPriceX96 = sqrt(1*10**18 << 192 / 69420*10**18) = 300702666377442711115399168 (?)
     uint160 sqrtPriceX96 = 300702666377442711115399168;
@@ -121,7 +124,7 @@ contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         jbSplitsStore = jbController.splitsStore();
 
         pool = IUniswapV3Pool(
-            IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984).createPool(address(weth), address(jbx), 100)
+            factory.createPool(address(weth), address(jbx), fee)
         );
         pool.initialize(sqrtPriceX96); // 1 eth <=> 69420 jbx
 
@@ -138,7 +141,7 @@ contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         INonfungiblePositionManager.MintParams memory params = INonfungiblePositionManager.MintParams({
             token0: address(jbx),
             token1: address(weth),
-            fee: 100,
+            fee: fee,
             tickLower: TickMath.getTickAtSqrtRatio(sqrtPriceX96) - 10 * pool.tickSpacing(),
             tickUpper: TickMath.getTickAtSqrtRatio(sqrtPriceX96) + 10 * pool.tickSpacing(),
             amount0Desired: 10000000 ether,
@@ -156,9 +159,10 @@ contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         amountOutForOneEth = getAmountOut(pool, 1 ether, address(weth));
 
         delegate =
-        new BuybackDelegate(IERC20(address(jbx)), weth, pool, cardinality, twapDelta, jbEthPaymentTerminal, jbController);
+        new BuybackDelegate(IERC20(address(jbx)), weth, factory, fee, cardinality, twapDelta, jbEthPaymentTerminal, jbController);
 
         vm.label(address(pool), "uniswapPool");
+        vm.label(address(factory), "uniswapFactory");
         vm.label(address(weth), "$WETH");
         vm.label(address(jbx), "$JBX");
     }

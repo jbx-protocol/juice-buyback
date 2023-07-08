@@ -33,6 +33,7 @@ contract TestBuybackDelegate_Units is Test {
 
     IERC20 projectToken = IERC20(makeAddr("projectToken"));
     IWETH9 weth = IWETH9(makeAddr("IWETH9"));
+    IUniswapV3Factory factory = IUniswapV3Factory(makeAddr("IUniswapV3Factory")); 
     IUniswapV3Pool pool = IUniswapV3Pool(makeAddr("IUniswapV3Pool"));
     IJBPayoutRedemptionPaymentTerminal3_1 jbxTerminal =
         IJBPayoutRedemptionPaymentTerminal3_1(makeAddr("IJBPayoutRedemptionPaymentTerminal3_1"));
@@ -48,6 +49,7 @@ contract TestBuybackDelegate_Units is Test {
 
     uint32 secondsAgo = 100;
     uint256 twapDelta = 100;
+    uint24 fee = 100;
 
     JBPayParamsData payParams = JBPayParamsData({
         terminal: jbxTerminal,
@@ -78,6 +80,7 @@ contract TestBuybackDelegate_Units is Test {
     function setUp() external {
         vm.etch(address(projectToken), "6969");
         vm.etch(address(weth), "6969");
+        vm.etch(address(factory), "6969");
         vm.etch(address(pool), "6969");
         vm.etch(address(jbxTerminal), "6969");
         vm.etch(address(projects), "6969");
@@ -86,12 +89,14 @@ contract TestBuybackDelegate_Units is Test {
         vm.etch(address(directory), "6969");
 
         vm.mockCall(address(jbxTerminal), abi.encodeCall(jbxTerminal.store, ()), abi.encode(terminalStore));
+        vm.mockCall(address(factory), abi.encodeCall(factory.getPool, (address(projectToken), address(weth), fee)), abi.encode(address(pool)));
 
         vm.prank(owner);
         delegate = new ForTest_BuybackDelegate({
             _projectToken: projectToken,
             _weth: weth,
-            _pool: pool,
+            _factory: factory,
+            _fee: fee, // 1 % fee
             _secondsAgo: secondsAgo,
             _twapDelta: twapDelta,
             _jbxTerminal: jbxTerminal,
@@ -636,13 +641,16 @@ contract TestBuybackDelegate_Units is Test {
         int256 _delta1 = 1 ether;
         uint256 _minReceived = 25;
 
+        vm.mockCall(address(factory), abi.encodeCall(factory.getPool, (address(projectToken), address(weth), fee)), abi.encode(address(pool)));
+
         /**
          * First branch
          */
         delegate = new ForTest_BuybackDelegate({
             _projectToken: projectToken,
             _weth: weth,
-            _pool: pool,
+            _factory: factory,
+            _fee: fee,
             _secondsAgo: secondsAgo,
             _twapDelta: twapDelta,
             _jbxTerminal: jbxTerminal,
@@ -674,10 +682,13 @@ contract TestBuybackDelegate_Units is Test {
         projectToken = JBToken(address(weth));
         weth = IWETH9(address(projectToken));
 
+        vm.mockCall(address(factory), abi.encodeCall(factory.getPool, (address(projectToken), address(weth), fee)), abi.encode(address(pool)));
+
         delegate = new ForTest_BuybackDelegate({
             _projectToken: projectToken,
             _weth: weth,
-            _pool: pool,
+            _factory: factory,
+            _fee: fee,
             _secondsAgo: secondsAgo,
             _twapDelta: twapDelta,
             _jbxTerminal: jbxTerminal,
@@ -886,13 +897,14 @@ contract ForTest_BuybackDelegate is BuybackDelegate {
     constructor(
         IERC20 _projectToken,
         IWETH9 _weth,
-        IUniswapV3Pool _pool,
+        IUniswapV3Factory _factory,
+        uint24 _fee,
         uint32 _secondsAgo,
         uint256 _twapDelta,
         IJBPayoutRedemptionPaymentTerminal3_1 _jbxTerminal,
         IJBController3_1 _controller
     )
-        BuybackDelegate(_projectToken, _weth, _pool, _secondsAgo, _twapDelta, _jbxTerminal, _controller)
+        BuybackDelegate(_projectToken, _weth, _factory, _fee, _secondsAgo, _twapDelta, _jbxTerminal, _controller)
     {}
 
     function ForTest_mutexCommon() external view returns (uint256) {
