@@ -88,7 +88,7 @@ contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
 
     uint256 twapDelta = 500;
 
-    uint24 fee = 100;
+    uint24 fee = 10000;
 
     // sqrtPriceX96 = sqrt(1*10**18 << 192 / 69420*10**18) = 300702666377442711115399168 (?)
     uint160 sqrtPriceX96 = 300702666377442711115399168;
@@ -159,7 +159,7 @@ contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         amountOutForOneEth = getAmountOut(pool, 1 ether, address(weth));
 
         delegate =
-        new BuybackDelegate(IERC20(address(jbx)), weth, factory, fee, cardinality, twapDelta, jbEthPaymentTerminal, jbController);
+        new BuybackDelegate(IERC20(address(jbx)), weth, address(factory), fee, cardinality, twapDelta, jbEthPaymentTerminal, jbController);
 
         vm.label(address(pool), "uniswapPool");
         vm.label(address(factory), "uniswapFactory");

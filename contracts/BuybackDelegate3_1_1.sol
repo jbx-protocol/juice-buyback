@@ -22,7 +22,6 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 import {PRBMath} from "@paulrberg/contracts/math/PRBMath.sol";
 
-import {IUniswapV3Factory} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Factory.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import {IUniswapV3SwapCallback} from "@uniswap/v3-core/contracts/interfaces/callback/IUniswapV3SwapCallback.sol";
 import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
@@ -137,7 +136,7 @@ contract BuybackDelegate3_1_1 is Ownable, ERC165, IJBFundingCycleDataSource3_1_1
     constructor(
         IERC20 _projectToken,
         IWETH9 _weth,
-        IUniswapV3Factory _factory,
+        address _factory,
         uint24 _fee,
         uint32 _secondsAgo,
         uint256 _twapDelta,
@@ -145,11 +144,24 @@ contract BuybackDelegate3_1_1 is Ownable, ERC165, IJBFundingCycleDataSource3_1_1
         IJBController3_1 _controller
     ) {
         PROJECT_TOKEN = _projectToken;
-        POOL = IUniswapV3Pool(_factory.getPool(address(_projectToken), address(_weth), _fee));
+        WETH = _weth;
         TERMINAL = _terminal;
         CONTROLLER = _controller;
         PROJECT_TOKEN_IS_TOKEN0 = address(_projectToken) < address(_weth);
-        WETH = _weth;
+        POOL = IUniswapV3Pool(address(uint160(uint256(
+                keccak256(
+                    abi.encodePacked(
+                        hex'ff',
+                        _factory,
+                        keccak256(abi.encode(
+                            PROJECT_TOKEN_IS_TOKEN0 ? _projectToken : _weth,
+                            PROJECT_TOKEN_IS_TOKEN0 ? _weth : _projectToken,
+                            _fee)),
+                        bytes32(0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54)
+                    )
+                )
+        ))));
+
         secondsAgo = _secondsAgo;
         twapDelta = _twapDelta;
     }

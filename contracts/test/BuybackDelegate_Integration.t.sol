@@ -50,15 +50,15 @@ contract TestBuybackDelegate_Integration is TestBaseWorkflowV3 {
     uint32 cardinality = 1000;
 
     uint256 twapDelta = 500;
-    uint24 fee = 100;
 
     BuybackDelegate _delegate;
 
-    // Using fixed addresses to insure token0/token1 consistency
-    IWETH9 private constant weth = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
-    IJBToken private constant jbx = IJBToken(0x3abF2A4f8452cCC2CF7b4C1e4663147600646f66);
-    IUniswapV3Factory private constant factory = IUniswapV3Factory(address(69420));
-    IUniswapV3Pool private constant pool = IUniswapV3Pool(address(69420));
+    // Use the L1 UniswapV3Pool jbx/eth 1% fee for create2 magic
+    IUniswapV3Pool pool = IUniswapV3Pool(0x48598Ff1Cee7b4d31f8f9050C2bbAE98e17E6b17);
+    IJBToken jbx = IJBToken(0x3abF2A4f8452cCC2CF7b4C1e4663147600646f66);
+    IWETH9 weth = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
+    address _uniswapFactory = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
+    uint24 fee = 10000;
 
     /**
      * @notice Set up a new JBX project and use the buyback delegate as the datasource
@@ -66,24 +66,21 @@ contract TestBuybackDelegate_Integration is TestBaseWorkflowV3 {
     function setUp() public override {
         // label
         vm.label(address(pool), "uniswapPool");
-        vm.label(address(factory), "uniswapFactory");
+        vm.label(address(_uniswapFactory), "uniswapFactory");
         vm.label(address(weth), "$WETH");
         vm.label(address(jbx), "$JBX");
 
         // mock
         vm.etch(address(pool), "0x69");
         vm.etch(address(weth), "0x69");
-        vm.etch(address(factory), "0x69");
         vm.etch(address(jbx), "0x69");
 
         // super is the Jbx V3 fixture
         super.setUp();
 
-        vm.mockCall(address(factory), abi.encodeCall(factory.getPool, (address(jbx), address(weth), fee)), abi.encode(address(pool)));
-
         // Deploy the delegate
         _delegate =
-        new BuybackDelegate(IERC20(address(jbx)), weth, factory, fee, cardinality, twapDelta, IJBPayoutRedemptionPaymentTerminal3_1(address(_jbETHPaymentTerminal)), _jbController);
+        new BuybackDelegate(IERC20(address(jbx)), weth, _uniswapFactory, fee, cardinality, twapDelta, IJBPayoutRedemptionPaymentTerminal3_1(address(_jbETHPaymentTerminal)), _jbController);
 
         _projectMetadata = JBProjectMetadata({content: "myIPFSHash", domain: 1});
 
