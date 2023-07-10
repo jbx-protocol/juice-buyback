@@ -637,7 +637,7 @@ contract TestBuybackDelegate_Units is Test {
      *
      * @dev    2 branches: project token is 0 or 1 in the pool slot0
      */
-    function test_uniswapCallback() public {
+    function test_uniswapCallback1() public {
         int256 _delta0 = -1 ether;
         int256 _delta1 = 1 ether;
         uint256 _minReceived = 25;
@@ -678,8 +678,7 @@ contract TestBuybackDelegate_Units is Test {
          */
 
         // Invert both contract addresses, to swap token0 and token1 (pool address will not change, as create2 salt is reordered)
-        projectToken = JBToken(address(weth));
-        weth = IWETH9(address(projectToken));
+        (projectToken, weth) = (JBToken(address(weth)), IWETH9(address(projectToken)));
 
         delegate = new ForTest_BuybackDelegate({
             _projectToken: projectToken,
@@ -702,7 +701,6 @@ contract TestBuybackDelegate_Units is Test {
             ),
             abi.encode(true)
         );
-emit log_address(address(delegate.POOL()));
 
         vm.prank(address(pool));
         delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(_minReceived));

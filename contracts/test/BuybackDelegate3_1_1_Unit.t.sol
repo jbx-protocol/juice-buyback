@@ -515,8 +515,7 @@ contract TestBuybackDelegate3_1_1_Units is Test {
          */
 
         // Invert both contract addresses, to swap token0 and token1 (this will NOT modify the pool address)
-        projectToken = JBToken(address(weth));
-        weth = IWETH9(address(projectToken));
+        (projectToken, weth) = (JBToken(address(weth)), IWETH9(address(projectToken)));
 
         delegate = new ForTest_BuybackDelegate({
             _projectToken: projectToken,
