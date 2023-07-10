@@ -137,13 +137,23 @@ contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         jbx.approve(POSITION_MANAGER, 10000000 ether);
         weth.approve(POSITION_MANAGER, 10000000 ether);
 
+        (
+            uint160 sqrtPrice,
+            ,
+            ,
+            ,
+            ,
+            ,
+            
+        ) = pool.slot0();
+
         // mint concentrated position
         INonfungiblePositionManager.MintParams memory params = INonfungiblePositionManager.MintParams({
             token0: address(jbx),
             token1: address(weth),
             fee: fee,
-            tickLower: TickMath.getTickAtSqrtRatio(sqrtPriceX96) - 10 * pool.tickSpacing(),
-            tickUpper: TickMath.getTickAtSqrtRatio(sqrtPriceX96) + 10 * pool.tickSpacing(),
+            tickLower: int24(int160(sqrtPrice) - 10 * pool.tickSpacing()),
+            tickUpper: int24(int160(sqrtPrice) + 10 * pool.tickSpacing()),
             amount0Desired: 10000000 ether,
             amount1Desired: 10000000 ether,
             amount0Min: 0,
