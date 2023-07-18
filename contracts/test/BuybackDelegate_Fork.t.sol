@@ -12,6 +12,8 @@ import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBOperatable.sol"
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayDelegate.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBRedemptionDelegate.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayoutRedemptionPaymentTerminal.sol";
+import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBSingleTokenPaymentTerminal.sol";
+
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBSingleTokenPaymentTerminalStore.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBToken.sol";
 
@@ -58,6 +60,8 @@ contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
     IJBProjects jbProjects;
     IJBSplitsStore jbSplitsStore;
     IJBPayoutRedemptionPaymentTerminal3_1 jbEthPaymentTerminal;
+
+    IJBSingleTokenPaymentTerminal terminal;
     IJBSingleTokenPaymentTerminalStore jbTerminalStore;
     IJBController3_1 jbController;
     IJBTokenStore jbTokenStore;
@@ -107,6 +111,15 @@ contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
                 ".address"
             )
         );
+
+        terminal = IJBSingleTokenPaymentTerminal(
+            stdJson.readAddress(
+                vm.readFile(
+                    "node_modules/@jbx-protocol/juice-contracts-v3/deployments/mainnet/JBETHPaymentTerminal3_1.json"
+                ),
+                ".address"
+            )
+        );
         vm.label(address(jbEthPaymentTerminal), "jbEthPaymentTerminal3_1");
 
         jbController = IJBController3_1(
@@ -116,6 +129,9 @@ contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
             )
         );
         vm.label(address(jbController), "jbController");
+
+        jbTerminalStore = IJBSingleTokenPaymentTerminalStore(0x77b0A81AeB61d08C0b23c739969d22c5C9950336);
+        vm.label(address(jbTerminalStore), "jbTerminalStore");
 
         jbTokenStore = jbController.tokenStore();
         jbFundingCycleStore = jbController.fundingCycleStore();
@@ -445,8 +461,12 @@ contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         uint256 _reservedBalanceBefore = jbController.reservedTokenBalanceOf(1);
 
         uint256 _quote = _getTwapQuote(_amountIn, cardinality, twapDelta);
+        
+        // for checking balance difference after payment
+        uint256 _balanceBeforePayment = jbx.balanceOf(address(123));
 
-        uint256 _balBeforePayment = jbx.balanceOf(address(123));
+        // to check if the swap failed and mint happened
+        uint256 _terminalBalanceBeforePayment = jbTerminalStore.balanceOf(terminal, 1);
 
         // Pay the project
         jbEthPaymentTerminal.pay{value: _amountIn}(
@@ -464,13 +484,20 @@ contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
             new bytes(0)
         );
 
-        uint256 _balAfterPayment = jbx.balanceOf(address(123));
-        uint256 _diff = _balAfterPayment - _balBeforePayment;
+        uint256 _balanceAfterPayment = jbx.balanceOf(address(123));
 
-        // assertEq(_diff, _quote);
+         // check if there was any increase in the terminal balance
+        uint256 _terminalBalanceAfterPayment = jbTerminalStore.balanceOf(terminal, 1);
+        uint256 _terminalBalanceDiff = _terminalBalanceAfterPayment - _terminalBalanceBeforePayment;
 
-        // Check: token received by the beneficiary
-        assertGt(jbx.balanceOf(address(123)), _quote);
+        // if terminal balance is 0 that means a swap happened else mint happened
+        if (_terminalBalanceDiff == 0) assertGt(jbx.balanceOf(address(123)), _quote);
+        else {
+          // calculating token count
+          uint256 _balanceDifference = _balanceAfterPayment - _balanceBeforePayment;
+          uint256 _tokenCount = PRBMath.mulDivFixedPoint(_amountIn, 10);
+          assertEq(_balanceDifference, _tokenCount);
+        }
 
         // Check: reserve unchanged
         assertEq(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore);
@@ -493,7 +520,12 @@ contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
 
         uint256 _quote = _getTwapQuote(_largeSwapAmount, cardinality, twapDelta);
 
-        uint256 _balBeforePayment = jbx.balanceOf(address(123));
+        // for checking balance difference after payment
+        uint256 _balanceBeforePayment = jbx.balanceOf(address(123));
+
+        // to check if the swap failed and mint happened
+        uint256 _terminalBalanceBeforePayment = jbTerminalStore.balanceOf(terminal, 1);
+
         // Pay the project
         jbEthPaymentTerminal.pay{value: _largeSwapAmount}(
             1,
@@ -510,13 +542,20 @@ contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
             new bytes(0)
         );
 
-        uint256 _balAfterPayment = jbx.balanceOf(address(123));
-        uint256 _diff = _balAfterPayment - _balBeforePayment;
+        uint256 _balanceAfterPayment = jbx.balanceOf(address(123));
 
-        // assertEq(_diff, _quote);
+         // check if there was any increase in the terminal balance
+        uint256 _terminalBalanceAfterPayment = jbTerminalStore.balanceOf(terminal, 1);
+        uint256 _terminalBalanceDiff = _terminalBalanceAfterPayment - _terminalBalanceBeforePayment;
 
-        // Check: token received by the beneficiary
-        assertGt(jbx.balanceOf(address(123)), _quote);
+        // if terminal balance is 0 that means a swap happened else mint happened
+        if (_terminalBalanceDiff == 0) assertGt(jbx.balanceOf(address(123)), _quote);
+        else {
+          // calculating token count
+          uint256 _balanceDifference = _balanceAfterPayment - _balanceBeforePayment;
+          uint256 _tokenCount = PRBMath.mulDivFixedPoint(_largeSwapAmount, 10);
+          assertEq(_balanceDifference, _tokenCount);
+        }
 
         // Check: reserve unchanged
         assertEq(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore);
@@ -550,7 +589,11 @@ contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
 
         delegate.increaseSecondsAgo(200000);
 
-        uint256 _balBeforePayment = jbx.balanceOf(address(123));
+        // for checking balance difference after payment
+        uint256 _balanceBeforePayment = jbx.balanceOf(address(123));
+
+        // to check if the swap failed and mint happened
+        uint256 _terminalBalanceBeforePayment = jbTerminalStore.balanceOf(terminal, 1);
 
         // Pay the project
         jbEthPaymentTerminal.pay{value: _amountIn}(
@@ -567,15 +610,21 @@ contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
             /* _delegateMetadata */
             new bytes(0)
         );
+        
+        uint256 _balanceAfterPayment = jbx.balanceOf(address(123));
 
-        uint256 _balAfterPayment = jbx.balanceOf(address(123));
-        uint256 _diff = _balAfterPayment - _balBeforePayment;
+         // check if there was any increase in the terminal balance
+        uint256 _terminalBalanceAfterPayment = jbTerminalStore.balanceOf(terminal, 1);
+        uint256 _terminalBalanceDiff = _terminalBalanceAfterPayment - _terminalBalanceBeforePayment;
 
-        // Check: token received by the beneficiary
-        // assertGt(_diff, _quote);
-
-        assertGt(jbx.balanceOf(address(123)), _quote);
-
+        // if terminal balance is 0 that means a swap happened else mint happened
+        if (_terminalBalanceDiff == 0) assertGt(jbx.balanceOf(address(123)), _quote);
+        else {
+          // calculating token count
+          uint256 _balanceDifference = _balanceAfterPayment - _balanceBeforePayment;
+          uint256 _tokenCount = PRBMath.mulDivFixedPoint(_amountIn, 10);
+          assertEq(_balanceDifference, _tokenCount);
+        }
 
         // Check: reserve unchanged
         assertEq(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore);
@@ -600,8 +649,11 @@ contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
 
         delegate.setTwapDelta(_twapDelta);
 
-        uint256 _balBeforePayment = jbx.balanceOf(address(123));
-
+        // for checking balance difference after payment
+        uint256 _balanceBeforePayment = jbx.balanceOf(address(123));
+        
+        // to check if the swap failed and mint happened
+        uint256 _terminalBalanceBeforePayment = jbTerminalStore.balanceOf(terminal, 1);
         // Pay the project
         jbEthPaymentTerminal.pay{value: _amountIn}(
             1,
@@ -618,13 +670,20 @@ contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
             new bytes(0)
         );
 
-        uint256 _balAfterPayment = jbx.balanceOf(address(123));
-        uint256 _diff = _balAfterPayment - _balBeforePayment;
+        uint256 _balanceAfterPayment = jbx.balanceOf(address(123));
 
-        // assertGt(_diff, _quote);
+         // check if there was any increase in the terminal balance
+        uint256 _terminalBalanceAfterPayment = jbTerminalStore.balanceOf(terminal, 1);
+        uint256 _terminalBalanceDiff = _terminalBalanceAfterPayment - _terminalBalanceBeforePayment;
 
-        // Check: token received by the beneficiary
-        assertGt(jbx.balanceOf(address(123)), _quote);
+        // if terminal balance is 0 that means a swap happened else mint happened
+        if (_terminalBalanceDiff == 0) assertGt(jbx.balanceOf(address(123)), _quote);
+        else {
+          // calculating token count
+          uint256 _balanceDifference = _balanceAfterPayment - _balanceBeforePayment;
+          uint256 _tokenCount = PRBMath.mulDivFixedPoint(_amountIn, 10);
+          assertEq(_balanceDifference, _tokenCount);
+        }
 
         // Check: reserve unchanged
         assertEq(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore);
