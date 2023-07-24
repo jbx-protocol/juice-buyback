@@ -641,7 +641,7 @@ contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         _twapDelta = bound(_twapDelta, 300, 8000);
 
         // Reconfigure with a weight of 1
-        _reconfigure(1, address(delegate), 10, 1);
+        _reconfigure(1, address(delegate), 10, 0);
 
         uint256 _reservedBalanceBefore = jbController.reservedTokenBalanceOf(1);
 
