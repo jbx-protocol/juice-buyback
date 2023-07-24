@@ -301,33 +301,30 @@ contract TestBuybackDelegate3_1_1_Units is Test {
             address(projectToken), abi.encodeCall(projectToken.transfer, (dude, _nonReservedToken)), abi.encode(true)
         );
 
-        // If there are reserved token, mock and expect accordingly
-        if (_reservedRate != 0) {
-            // mock the call to the directory, to get the controller
-            vm.mockCall(address(jbxTerminal), abi.encodeCall(jbxTerminal.directory, ()), abi.encode(address(directory)));
-            vm.mockCall(
-                address(directory),
-                abi.encodeCall(directory.controllerOf, (didPayData.projectId)),
-                abi.encode(address(controller))
-            );
+        // mock the call to the directory, to get the controller
+        vm.mockCall(address(jbxTerminal), abi.encodeCall(jbxTerminal.directory, ()), abi.encode(address(directory)));
+        vm.mockCall(
+            address(directory),
+            abi.encodeCall(directory.controllerOf, (didPayData.projectId)),
+            abi.encode(address(controller))
+        );
 
-            // mock the minting call
-            vm.mockCall(
-                address(controller),
-                abi.encodeCall(
-                    controller.mintTokensOf,
-                    (didPayData.projectId, _twapQuote, address(delegate), didPayData.memo, false, true)
-                ),
-                abi.encode(true)
-            );
+        // mock the burn call
+        vm.mockCall(
+            address(controller),
+            abi.encodeCall(controller.burnTokensOf, (address(delegate), didPayData.projectId, _twapQuote, "", true)),
+            abi.encode(true)
+        );
 
-            // mock the burn call
-            vm.mockCall(
-                address(controller),
-                abi.encodeCall(controller.burnTokensOf, (address(delegate), didPayData.projectId, _twapQuote, "", true)),
-                abi.encode(true)
-            );
-        }
+        // mock the minting call
+        vm.mockCall(
+            address(controller),
+            abi.encodeCall(
+                controller.mintTokensOf,
+                (didPayData.projectId, _twapQuote, address(dude), didPayData.memo, true, true)
+            ),
+            abi.encode(true)
+        );
 
         // expect event
         vm.expectEmit(true, true, true, true);
@@ -376,6 +373,31 @@ contract TestBuybackDelegate3_1_1_Units is Test {
         // Out of these 5, 1 was for payer
         stdstore.target(address(delegate)).sig("sweepBalanceOf(address)").with_key(didPayData.payer).checked_write(
             1 ether
+        );
+
+        // mock the call to the directory, to get the controller
+        vm.mockCall(address(jbxTerminal), abi.encodeCall(jbxTerminal.directory, ()), abi.encode(address(directory)));
+        vm.mockCall(
+            address(directory),
+            abi.encodeCall(directory.controllerOf, (didPayData.projectId)),
+            abi.encode(address(controller))
+        );
+
+        // mock the burn call
+        vm.mockCall(
+            address(controller),
+            abi.encodeCall(controller.burnTokensOf, (address(delegate), didPayData.projectId, _twapQuote, "", true)),
+            abi.encode(true)
+        );
+
+        // mock the minting call
+        vm.mockCall(
+            address(controller),
+            abi.encodeCall(
+                controller.mintTokensOf,
+                (didPayData.projectId, _twapQuote, address(dude), didPayData.memo, true, true)
+            ),
+            abi.encode(true)
         );
 
         // check: correct event?
