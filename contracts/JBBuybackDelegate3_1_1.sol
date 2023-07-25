@@ -233,11 +233,11 @@ contract JBBuybackDelegate3_1_1 is Ownable, ERC165, IJBFundingCycleDataSource3_1
         // Access control as minting is authorized to this delegate
         if (msg.sender != address(TERMINAL)) revert JuiceBuyback_Unauthorized();
 
-        (uint256 _tokenCount, uint256 _swapMinAmountOut, uint256 _reservedRate) = abi.decode(
-            _data.dataSourceMetadata, (uint256, uint256, uint256));
+        (uint256 _tokenCount, uint256 _swapMinAmountOut) = abi.decode(
+            _data.dataSourceMetadata, (uint256, uint256));
 
         // Try swapping
-        uint256 _amountReceived = _swap(_data, _swapMinAmountOut, _reservedRate);
+        uint256 _amountReceived = _swap(_data, _swapMinAmountOut);
 
         // If swap failed, mint instead, with the original weight + add to balance the token in
         if (_amountReceived == 0) _mint(_data, _tokenCount);
@@ -389,7 +389,7 @@ contract JBBuybackDelegate3_1_1 is Ownable, ERC165, IJBFundingCycleDataSource3_1
      * @param  _data the didPayData passed by the terminal
      * @param  _minimumReceivedFromSwap the minimum amount received, to prevent slippage
      */
-    function _swap(JBDidPayData3_1_1 calldata _data, uint256 _minimumReceivedFromSwap, uint256 _reservedRate)
+    function _swap(JBDidPayData3_1_1 calldata _data, uint256 _minimumReceivedFromSwap)
         internal
         returns (uint256 _amountReceived)
     {

@@ -274,7 +274,7 @@ contract TestJBBuybackDelegate3_1_1_Units is Test {
         _reservedRate = bound(_reservedRate, 0, 10000);
 
         // The metadata coming from payParams(..)
-        didPayData.dataSourceMetadata = abi.encode(_tokenCount, _twapQuote, _reservedRate);
+        didPayData.dataSourceMetadata = abi.encode(_tokenCount, _twapQuote);
 
         // The amount the beneficiary should receive
         uint256 _nonReservedToken =
@@ -340,10 +340,9 @@ contract TestJBBuybackDelegate3_1_1_Units is Test {
     function test_didPay_keepTrackOfETHToSweep() public {
         uint256 _tokenCount = 10;
         uint256 _twapQuote = 11;
-        uint256 _reservedRate = 0;
 
         // The metadata coming from payParams(..)
-        didPayData.dataSourceMetadata = abi.encode(_tokenCount, _twapQuote, _reservedRate);
+        didPayData.dataSourceMetadata = abi.encode(_tokenCount, _twapQuote);
 
         // mock the swap call
         vm.mockCall(
@@ -418,13 +417,12 @@ contract TestJBBuybackDelegate3_1_1_Units is Test {
      * @notice Test didPay with swap reverting, should then mint
      */
 
-    function test_didPay_swapRevert(uint256 _tokenCount, uint256 _twapQuote, uint256 _reservedRate) public {
+    function test_didPay_swapRevert(uint256 _tokenCount, uint256 _twapQuote) public {
         _tokenCount = bound(_tokenCount, 2, type(uint256).max - 1);
         _twapQuote = bound(_twapQuote, _tokenCount + 1, type(uint256).max);
-        _reservedRate = bound(_reservedRate, 0, 10000);
 
         // The metadata coming from payParams(..)
-        didPayData.dataSourceMetadata = abi.encode(_tokenCount, _twapQuote, _reservedRate);
+        didPayData.dataSourceMetadata = abi.encode(_tokenCount, _twapQuote);
 
         // mock the swap call reverting
         vm.mockCallRevert(
