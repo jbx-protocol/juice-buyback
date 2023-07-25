@@ -237,15 +237,14 @@ contract TestBuybackDelegate_Integration is TestBaseWorkflowV3 {
 
         uint256 nonReservedAmount = quoteOnUniswap - reservedAmount;
 
-        // Mock the transfer to the beneficiary
+        // mock the burn call
         vm.mockCall(
-            address(jbx),
-            abi.encodeWithSelector(IERC20.transfer.selector, _beneficiary, nonReservedAmount),
+            address(_jbController),
+            abi.encodeCall(_jbController.burnTokensOf, (address(_delegate), _projectId, quoteOnUniswap, "", true)),
             abi.encode(true)
         );
 
-        // Check: token actually transfered?
-        vm.expectCall(address(jbx), abi.encodeWithSelector(IERC20.transfer.selector, _beneficiary, nonReservedAmount));
+        uint256 _beneficiaryBalanceBefore = _jbTokenStore.balanceOf(_beneficiary, _projectId);
 
         // Mock the swap returned value, which is the amount of token transfered (negative = exact amount)
         vm.mockCall(
@@ -270,6 +269,11 @@ contract TestBuybackDelegate_Integration is TestBaseWorkflowV3 {
             "Take my money!",
             /* _delegateMetadata */
             metadata
+        );
+
+        assertEq(
+            _jbTokenStore.balanceOf(_beneficiary, _projectId),
+            _beneficiaryBalanceBefore + nonReservedAmount
         );
 
         // Check: correct reserve balance?

@@ -482,38 +482,25 @@ contract BuybackDelegate is Ownable, ERC165, IJBFundingCycleDataSource, IJBPayDe
             return _amountReceived;
         }
 
-        // The amount to send to the beneficiary
-        uint256 _nonReservedToken = PRBMath.mulDiv(
-            _amountReceived, JBConstants.MAX_RESERVED_RATE - _reservedRate, JBConstants.MAX_RESERVED_RATE
-        );
+        // Burn all the token received here (kept as reserved from the swap + minted just above)
+        // ie when _preferClaimed is true, burn starts with the claimed token, then continue with unclaimed ones
+        CONTROLLER.burnTokensOf({
+            holder: address(this),
+            projectId: _data.projectId,
+            tokenCount: _amountReceived,
+            memo: "",
+            preferClaimedTokens: true
+        });
 
-        // The amount to add to the reserved token
-        uint256 _reservedToken = _amountReceived - _nonReservedToken;
-
-        // Send the non-reserved token to the beneficiary (if any / reserved rate is not max)
-        if (_nonReservedToken != 0) PROJECT_TOKEN.transfer(_data.beneficiary, _nonReservedToken);
-        // If there are reserved token, add them to the reserve
-        if (_reservedToken != 0) {
-            // Mint the reserved token with this address as beneficiary -> result: _amountReceived-reserved here, reservedToken in reserve
-            CONTROLLER.mintTokensOf({
-                projectId: _data.projectId,
-                tokenCount: _amountReceived,
-                beneficiary: address(this),
-                memo: _data.memo,
-                preferClaimedTokens: false,
-                useReservedRate: true
-            });
-
-            // Burn all the token received here (kept as reserved from the swap + minted just above)
-            // ie when _preferClaimed is true, burn starts with the claimed token, then continue with unclaimed ones
-            CONTROLLER.burnTokensOf({
-                holder: address(this),
-                projectId: _data.projectId,
-                tokenCount: _amountReceived,
-                memo: "",
-                preferClaimedTokens: true
-            });
-        }
+        // Mint the reserved token with this address as beneficiary -> result: _amountReceived-reserved here, reservedToken in reserve
+        CONTROLLER.mintTokensOf({
+            projectId: _data.projectId,
+            tokenCount: _amountReceived,
+            beneficiary: address(_data.beneficiary),
+            memo: _data.memo,
+            preferClaimedTokens: _data.preferClaimedTokens,
+            useReservedRate: true
+        });
 
         emit BuybackDelegate_Swap(_data.projectId, _data.amount.value, _amountReceived);
     }
