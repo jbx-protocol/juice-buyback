@@ -4,7 +4,7 @@ pragma solidity ^0.8.16;
 import "../interfaces/external/IWETH9.sol";
 import "./helpers/TestBaseWorkflowV3.sol";
 
-import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController.sol";
+import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController3_1.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBDirectory.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBConstants.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBTokens.sol";
@@ -14,31 +14,35 @@ import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 
 import "forge-std/Test.sol";
 
-import "../JBXBuybackDelegate.sol";
+import "../BuybackDelegate.sol";
 
 /**
- * @notice Unit tests for the JBXBuybackDelegate contract.
+ * @notice Unit tests for the BuybackDelegate contract.
  *
  */
-contract TestJBXBuybackDelegate_Units is Test {
+contract TestBuybackDelegate_Units is Test {
     using stdStorage for StdStorage;
 
-    ForTest_JBXBuybackDelegate delegate;
+    ForTest_BuybackDelegate delegate;
 
-    event JBXBuybackDelegate_Swap(uint256 projectId, uint256 amountEth, uint256 amountOut);
-    event JBXBuybackDelegate_Mint(uint256 projectId);
-    event JBXBuybackDelegate_SecondsAgoIncrease(uint256 oldSecondsAgo, uint256 newSecondsAgo);
-    event JBXBuybackDelegate_TwapDeltaChanged(uint256 oldTwapDelta, uint256 newTwapDelta);
-    event JBXBuybackDelegate_PendingSweep(address indexed beneficiary, uint256 amount);
+    event BuybackDelegate_Swap(uint256 projectId, uint256 amountEth, uint256 amountOut);
+    event BuybackDelegate_Mint(uint256 projectId);
+    event BuybackDelegate_SecondsAgoIncrease(uint256 oldSecondsAgo, uint256 newSecondsAgo);
+    event BuybackDelegate_TwapDeltaChanged(uint256 oldTwapDelta, uint256 newTwapDelta);
+    event BuybackDelegate_PendingSweep(address indexed beneficiary, uint256 amount);
 
-    IERC20 projectToken = IERC20(makeAddr("projectToken"));
-    IWETH9 weth = IWETH9(makeAddr("IWETH9"));
-    IUniswapV3Pool pool = IUniswapV3Pool(makeAddr("IUniswapV3Pool"));
+    // Use the L1 UniswapV3Pool jbx/eth 1% fee for create2 magic
+    IUniswapV3Pool pool = IUniswapV3Pool(0x48598Ff1Cee7b4d31f8f9050C2bbAE98e17E6b17);
+    IERC20 projectToken = IERC20(0x3abF2A4f8452cCC2CF7b4C1e4663147600646f66);
+    IWETH9 weth = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
+    address uniswapFactory = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
+    uint24 fee = 10000;
+
     IJBPayoutRedemptionPaymentTerminal3_1 jbxTerminal =
         IJBPayoutRedemptionPaymentTerminal3_1(makeAddr("IJBPayoutRedemptionPaymentTerminal3_1"));
     IJBProjects projects = IJBProjects(makeAddr("IJBProjects"));
     IJBOperatorStore operatorStore = IJBOperatorStore(makeAddr("IJBOperatorStore"));
-    IJBController controller = IJBController(makeAddr("controller"));
+    IJBController3_1 controller = IJBController3_1(makeAddr("controller"));
     IJBDirectory directory = IJBDirectory(makeAddr("directory"));
 
     address terminalStore = makeAddr("terminalStore");
@@ -88,15 +92,15 @@ contract TestJBXBuybackDelegate_Units is Test {
         vm.mockCall(address(jbxTerminal), abi.encodeCall(jbxTerminal.store, ()), abi.encode(terminalStore));
 
         vm.prank(owner);
-        delegate = new ForTest_JBXBuybackDelegate({
+        delegate = new ForTest_BuybackDelegate({
             _projectToken: projectToken,
             _weth: weth,
-            _pool: pool,
+            _factory: uniswapFactory,
+            _fee: fee, // 1 % fee
             _secondsAgo: secondsAgo,
             _twapDelta: twapDelta,
             _jbxTerminal: jbxTerminal,
-            _projects: projects,
-            _operatorStore: operatorStore
+            _controller: controller
         });
     }
 
@@ -339,7 +343,7 @@ contract TestJBXBuybackDelegate_Units is Test {
     function test_payParams_revertIfWrongCaller(address _notTerminalStore) public {
         vm.assume(_notTerminalStore != address(terminalStore));
 
-        vm.expectRevert(abi.encodeWithSelector(JBXBuybackDelegate.JuiceBuyback_Unauthorized.selector));
+        vm.expectRevert(abi.encodeWithSelector(BuybackDelegate.JuiceBuyback_Unauthorized.selector));
 
         vm.prank(_notTerminalStore);
         delegate.payParams(payParams);
@@ -383,37 +387,34 @@ contract TestJBXBuybackDelegate_Units is Test {
             address(projectToken), abi.encodeCall(projectToken.transfer, (dude, _nonReservedToken)), abi.encode(true)
         );
 
-        // If there are reserved token, mock and expect accordingly
-        if (_reservedRate != 0) {
-            // mock the call to the directory, to get the controller
-            vm.mockCall(address(jbxTerminal), abi.encodeCall(jbxTerminal.directory, ()), abi.encode(address(directory)));
-            vm.mockCall(
-                address(directory),
-                abi.encodeCall(directory.controllerOf, (didPayData.projectId)),
-                abi.encode(address(controller))
-            );
+          // mock the call to the directory, to get the controller
+        vm.mockCall(address(jbxTerminal), abi.encodeCall(jbxTerminal.directory, ()), abi.encode(address(directory)));
+        vm.mockCall(
+            address(directory),
+            abi.encodeCall(directory.controllerOf, (didPayData.projectId)),
+            abi.encode(address(controller))
+        );
 
-            // mock the minting call
-            vm.mockCall(
-                address(controller),
-                abi.encodeCall(
-                    controller.mintTokensOf,
-                    (didPayData.projectId, _twapQuote, address(delegate), didPayData.memo, false, true)
-                ),
-                abi.encode(true)
-            );
+        // mock the burn call
+        vm.mockCall(
+            address(controller),
+            abi.encodeCall(controller.burnTokensOf, (address(delegate), didPayData.projectId, _twapQuote, "", true)),
+            abi.encode(true)
+        );
 
-            // mock the burn call
-            vm.mockCall(
-                address(controller),
-                abi.encodeCall(controller.burnTokensOf, (address(delegate), didPayData.projectId, _twapQuote, "", true)),
-                abi.encode(true)
-            );
-        }
+        // mock the minting call
+        vm.mockCall(
+            address(controller),
+            abi.encodeCall(
+                controller.mintTokensOf,
+                (didPayData.projectId, _twapQuote, address(didPayData.beneficiary), didPayData.memo, didPayData.preferClaimedTokens, true)
+            ),
+            abi.encode(true)
+        );
 
         // expect event
         vm.expectEmit(true, true, true, true);
-        emit JBXBuybackDelegate_Swap(didPayData.projectId, didPayData.amount.value, _twapQuote);
+        emit BuybackDelegate_Swap(didPayData.projectId, didPayData.amount.value, _twapQuote);
 
         vm.prank(address(jbxTerminal));
         delegate.didPay(didPayData);
@@ -455,37 +456,34 @@ contract TestJBXBuybackDelegate_Units is Test {
             address(projectToken), abi.encodeCall(projectToken.transfer, (dude, _nonReservedToken)), abi.encode(true)
         );
 
-        // If there are reserved token, mock and expect accordingly
-        if (_reservedRate != 0) {
-            // mock the call to the directory, to get the controller
-            vm.mockCall(address(jbxTerminal), abi.encodeCall(jbxTerminal.directory, ()), abi.encode(address(directory)));
-            vm.mockCall(
-                address(directory),
-                abi.encodeCall(directory.controllerOf, (didPayData.projectId)),
-                abi.encode(address(controller))
-            );
+        // mock the call to the directory, to get the controller
+        vm.mockCall(address(jbxTerminal), abi.encodeCall(jbxTerminal.directory, ()), abi.encode(address(directory)));
+        vm.mockCall(
+            address(directory),
+            abi.encodeCall(directory.controllerOf, (didPayData.projectId)),
+            abi.encode(address(controller))
+        );
 
-            // mock the minting call
-            vm.mockCall(
-                address(controller),
-                abi.encodeCall(
-                    controller.mintTokensOf,
-                    (didPayData.projectId, _twapQuote, address(delegate), didPayData.memo, false, true)
-                ),
-                abi.encode(true)
-            );
+        // mock the burn call
+        vm.mockCall(
+            address(controller),
+            abi.encodeCall(controller.burnTokensOf, (address(delegate), didPayData.projectId, _twapQuote, "", true)),
+            abi.encode(true)
+        );
 
-            // mock the burn call
-            vm.mockCall(
-                address(controller),
-                abi.encodeCall(controller.burnTokensOf, (address(delegate), didPayData.projectId, _twapQuote, "", true)),
-                abi.encode(true)
-            );
-        }
+        // mock the minting call
+        vm.mockCall(
+            address(controller),
+            abi.encodeCall(
+                controller.mintTokensOf,
+                (didPayData.projectId, _twapQuote, address(didPayData.beneficiary), didPayData.memo, didPayData.preferClaimedTokens, true)
+            ),
+            abi.encode(true)
+        );
 
         // expect event
         vm.expectEmit(true, true, true, true);
-        emit JBXBuybackDelegate_Swap(didPayData.projectId, didPayData.amount.value, _twapQuote);
+        emit BuybackDelegate_Swap(didPayData.projectId, didPayData.amount.value, _twapQuote);
 
         vm.prank(address(jbxTerminal));
         delegate.didPay(didPayData);
@@ -534,10 +532,36 @@ contract TestJBXBuybackDelegate_Units is Test {
             1 ether
         );
 
+        // mock the call to the directory, to get the controller
+        vm.mockCall(address(jbxTerminal), abi.encodeCall(jbxTerminal.directory, ()), abi.encode(address(directory)));
+        vm.mockCall(
+            address(directory),
+            abi.encodeCall(directory.controllerOf, (didPayData.projectId)),
+            abi.encode(address(controller))
+        );
+
+        // mock the burn call
+        vm.mockCall(
+            address(controller),
+            abi.encodeCall(controller.burnTokensOf, (address(delegate), didPayData.projectId, _twapQuote, "", true)),
+            abi.encode(true)
+        );
+
+        // mock the minting call
+        vm.mockCall(
+            address(controller),
+            abi.encodeCall(
+                controller.mintTokensOf,
+                (didPayData.projectId, _twapQuote, address(dude), didPayData.memo, true, true)
+            ),
+            abi.encode(true)
+        );
+
         // check: correct event?
         vm.expectEmit(true, true, true, true);
-        emit JBXBuybackDelegate_PendingSweep(dude, 5 ether);
+        emit BuybackDelegate_PendingSweep(dude, 5 ether);
 
+        // Test: did pay
         vm.prank(address(jbxTerminal));
         delegate.didPay(didPayData);
 
@@ -609,7 +633,7 @@ contract TestJBXBuybackDelegate_Units is Test {
 
         // expect event
         vm.expectEmit(true, true, true, true);
-        emit JBXBuybackDelegate_Mint(didPayData.projectId);
+        emit BuybackDelegate_Mint(didPayData.projectId);
 
         vm.prank(address(jbxTerminal));
         delegate.didPay(didPayData);
@@ -621,7 +645,7 @@ contract TestJBXBuybackDelegate_Units is Test {
     function test_didPay_revertIfWrongCaller(address _notTerminal) public {
         vm.assume(_notTerminal != address(jbxTerminal));
 
-        vm.expectRevert(abi.encodeWithSelector(JBXBuybackDelegate.JuiceBuyback_Unauthorized.selector));
+        vm.expectRevert(abi.encodeWithSelector(BuybackDelegate.JuiceBuyback_Unauthorized.selector));
 
         vm.prank(_notTerminal);
         delegate.didPay(didPayData);
@@ -632,7 +656,7 @@ contract TestJBXBuybackDelegate_Units is Test {
      *
      * @dev    2 branches: project token is 0 or 1 in the pool slot0
      */
-    function test_uniswapCallback() public {
+    function test_uniswapCallback1() public {
         int256 _delta0 = -1 ether;
         int256 _delta1 = 1 ether;
         uint256 _minReceived = 25;
@@ -640,15 +664,15 @@ contract TestJBXBuybackDelegate_Units is Test {
         /**
          * First branch
          */
-        delegate = new ForTest_JBXBuybackDelegate({
+        delegate = new ForTest_BuybackDelegate({
             _projectToken: projectToken,
             _weth: weth,
-            _pool: pool,
+            _factory: uniswapFactory,
+            _fee: fee,
             _secondsAgo: secondsAgo,
             _twapDelta: twapDelta,
             _jbxTerminal: jbxTerminal,
-            _projects: projects,
-            _operatorStore: operatorStore
+            _controller: controller
         });
 
         // If project is token0, then received is delta0 (the negative value)
@@ -672,19 +696,18 @@ contract TestJBXBuybackDelegate_Units is Test {
          * Second branch
          */
 
-        // Invert both contract addresses, to swap token0 and token1
-        projectToken = JBToken(address(weth));
-        weth = IWETH9(address(projectToken));
+        // Invert both contract addresses, to swap token0 and token1 (pool address will not change, as create2 salt is reordered)
+        (projectToken, weth) = (JBToken(address(weth)), IWETH9(address(projectToken)));
 
-        delegate = new ForTest_JBXBuybackDelegate({
+        delegate = new ForTest_BuybackDelegate({
             _projectToken: projectToken,
             _weth: weth,
-            _pool: pool,
+            _factory: uniswapFactory,
+            _fee: fee,
             _secondsAgo: secondsAgo,
             _twapDelta: twapDelta,
             _jbxTerminal: jbxTerminal,
-            _projects: projects,
-            _operatorStore: operatorStore
+            _controller: controller
         });
 
         // mock and expect weth calls, this should transfer from delegate to pool (positive delta in the callback)
@@ -710,7 +733,7 @@ contract TestJBXBuybackDelegate_Units is Test {
         int256 _delta1 = 1 ether;
         uint256 _minReceived = 25;
 
-        vm.expectRevert(abi.encodeWithSelector(JBXBuybackDelegate.JuiceBuyback_Unauthorized.selector));
+        vm.expectRevert(abi.encodeWithSelector(BuybackDelegate.JuiceBuyback_Unauthorized.selector));
         delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(_minReceived));
     }
 
@@ -726,7 +749,7 @@ contract TestJBXBuybackDelegate_Units is Test {
         (_delta0, _delta1) = address(projectToken) < address(weth) ? (_delta0, _delta1) : (_delta1, _delta0);
 
         vm.prank(address(pool));
-        vm.expectRevert(abi.encodeWithSelector(JBXBuybackDelegate.JuiceBuyback_MaximumSlippage.selector));
+        vm.expectRevert(abi.encodeWithSelector(BuybackDelegate.JuiceBuyback_MaximumSlippage.selector));
         delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(_minReceived));
     }
 
@@ -782,7 +805,7 @@ contract TestJBXBuybackDelegate_Units is Test {
 
         // Check: revert?
         vm.prank(dude);
-        vm.expectRevert(abi.encodeWithSelector(JBXBuybackDelegate.JuiceBuyback_TransferFailed.selector));
+        vm.expectRevert(abi.encodeWithSelector(BuybackDelegate.JuiceBuyback_TransferFailed.selector));
         delegate.sweep(dude);
     }
 
@@ -801,7 +824,7 @@ contract TestJBXBuybackDelegate_Units is Test {
 
         // check: correct event?
         vm.expectEmit(true, true, true, true);
-        emit JBXBuybackDelegate_SecondsAgoIncrease(delegate.secondsAgo(), _newValue);
+        emit BuybackDelegate_SecondsAgoIncrease(delegate.secondsAgo(), _newValue);
 
         // Test: change seconds ago
         vm.prank(owner);
@@ -825,7 +848,7 @@ contract TestJBXBuybackDelegate_Units is Test {
         _newValue = bound(_newValue, 0, delegate.secondsAgo());
 
         // check: revert?
-        vm.expectRevert(abi.encodeWithSelector(JBXBuybackDelegate.JuiceBuyback_NewSecondsAgoTooLow.selector));
+        vm.expectRevert(abi.encodeWithSelector(BuybackDelegate.JuiceBuyback_NewSecondsAgoTooLow.selector));
 
         // Test: change seconds ago
         vm.prank(owner);
@@ -859,7 +882,7 @@ contract TestJBXBuybackDelegate_Units is Test {
 
         // Check: correct event?
         vm.expectEmit(true, true, true, true);
-        emit JBXBuybackDelegate_TwapDeltaChanged(_oldDelta, _newDelta);
+        emit BuybackDelegate_TwapDeltaChanged(_oldDelta, _newDelta);
 
         // Test: set the twap
         vm.prank(owner);
@@ -885,18 +908,18 @@ contract TestJBXBuybackDelegate_Units is Test {
 }
 
 
-contract ForTest_JBXBuybackDelegate is JBXBuybackDelegate {
+contract ForTest_BuybackDelegate is BuybackDelegate {
     constructor(
         IERC20 _projectToken,
         IWETH9 _weth,
-        IUniswapV3Pool _pool,
+        address _factory,
+        uint24 _fee,
         uint32 _secondsAgo,
         uint256 _twapDelta,
         IJBPayoutRedemptionPaymentTerminal3_1 _jbxTerminal,
-        IJBProjects _projects,
-        IJBOperatorStore _operatorStore
+        IJBController3_1 _controller
     )
-        JBXBuybackDelegate(_projectToken, _weth, _pool, _secondsAgo, _twapDelta, _jbxTerminal)
+        BuybackDelegate(_projectToken, _weth, _factory, _fee, _secondsAgo, _twapDelta, _jbxTerminal, _controller)
     {}
 
     function ForTest_mutexCommon() external view returns (uint256) {
