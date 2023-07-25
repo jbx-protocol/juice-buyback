@@ -7,7 +7,7 @@ import {IJBPayDelegate3_1_1} from "@jbx-protocol/juice-contracts-v3/contracts/in
 import {IJBPayoutRedemptionPaymentTerminal3_1_1} from "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayoutRedemptionPaymentTerminal3_1_1.sol";
 
 import {JBConstants} from "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBConstants.sol";
-import {JBFundingCycleMetadataResolver, JBFundingCycle} from "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBFundingCycleMetadataResolver.sol";
+import {JBFundingCycle} from "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBFundingCycleMetadataResolver.sol";
 import {JBTokens} from "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBTokens.sol";
 
 import {JBDidPayData3_1_1} from "@jbx-protocol/juice-contracts-v3/contracts/structs/JBDidPayData3_1_1.sol";
@@ -20,7 +20,7 @@ import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {ERC165, IERC165} from "@openzeppelin/contracts/utils/introspection/ERC165.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-import {PRBMath} from "@paulrberg/contracts/math/PRBMath.sol";
+import {mulDiv, mulDiv18} from "@prb/math/src/common.sol";
 
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import {IUniswapV3SwapCallback} from "@uniswap/v3-core/contracts/interfaces/callback/IUniswapV3SwapCallback.sol";
@@ -42,8 +42,7 @@ import {IWETH9} from "./interfaces/external/IWETH9.sol";
  *         liquidity, this delegate needs to be redeployed.
  */
 
-contract BuybackDelegate3_1_1 is Ownable, ERC165, IJBFundingCycleDataSource3_1_1, IJBPayDelegate3_1_1, IUniswapV3SwapCallback {
-    using JBFundingCycleMetadataResolver for JBFundingCycle;
+contract JBBuybackDelegate3_1_1 is Ownable, ERC165, IJBFundingCycleDataSource3_1_1, IJBPayDelegate3_1_1, IUniswapV3SwapCallback {
 
     //*********************************************************************//
     // --------------------------- custom errors ------------------------- //
@@ -187,7 +186,7 @@ contract BuybackDelegate3_1_1 is Ownable, ERC165, IJBFundingCycleDataSource3_1_1
         returns (uint256 weight, string memory memo, JBPayDelegateAllocation3_1_1[] memory delegateAllocations)
     {
         // Find the total number of tokens to mint, as a fixed point number with 18 decimals
-        uint256 _tokenCount = PRBMath.mulDivFixedPoint(_data.amount.value, _data.weight);
+        uint256 _tokenCount = mulDiv18(_data.amount.value, _data.weight);
 
         // Get a quote based on either the uni SDK quote or a twap from the pool
         uint256 _swapAmountOut;
@@ -410,7 +409,7 @@ contract BuybackDelegate3_1_1 is Ownable, ERC165, IJBFundingCycleDataSource3_1_1
         }
 
         // The amount to send to the beneficiary
-        uint256 _nonReservedToken = PRBMath.mulDiv(
+        uint256 _nonReservedToken = mulDiv(
             _amountReceived, JBConstants.MAX_RESERVED_RATE - _reservedRate, JBConstants.MAX_RESERVED_RATE
         );
 
