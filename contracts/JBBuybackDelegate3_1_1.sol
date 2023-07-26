@@ -209,7 +209,7 @@ contract JBBuybackDelegate3_1_1 is Ownable, ERC165, IJBFundingCycleDataSource3_1
                 JBPayDelegateAllocation3_1_1({
                     delegate: IJBPayDelegate3_1_1(this), 
                     amount: _data.amount.value, 
-                    metadata: abi.encode(_tokenCount, _swapAmountOut, _data.reservedRate)
+                    metadata: abi.encode(_tokenCount, _swapAmountOut)
                 });
 
             return (0, _data.memo, delegateAllocations);

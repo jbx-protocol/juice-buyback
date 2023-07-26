@@ -61,7 +61,7 @@ contract TestJBBuybackDelegate3_1_1_Units is Test {
         currentFundingCycleConfiguration: 0,
         beneficiary: dude,
         weight: 69,
-        reservedRate: 69,
+        reservedRate: 0,
         memo: "myMemo",
         metadata: ""
     });
@@ -152,7 +152,7 @@ contract TestJBBuybackDelegate3_1_1_Units is Test {
             assertEq(_allocationsReturned.length, 1);
             assertEq(address(_allocationsReturned[0].delegate), address(delegate));
             assertEq(_allocationsReturned[0].amount, 1 ether);
-            assertEq(_allocationsReturned[0].metadata, abi.encode(_tokenCount, _swapQuote, payParams.reservedRate));
+            assertEq(_allocationsReturned[0].metadata, abi.encode(_tokenCount, _swapQuote));
 
             assertEq(_weightReturned, 0);
         }
@@ -222,7 +222,7 @@ contract TestJBBuybackDelegate3_1_1_Units is Test {
             assertEq(_allocationsReturned.length, 1);
             assertEq(address(_allocationsReturned[0].delegate), address(delegate));
             assertEq(_allocationsReturned[0].amount, 1 ether);
-            assertEq(_allocationsReturned[0].metadata, abi.encode(_tokenCount, _twapAmountOut, payParams.reservedRate));
+            assertEq(_allocationsReturned[0].metadata, abi.encode(_tokenCount, _twapAmountOut));
 
             assertEq(_weightReturned, 0);
         }
