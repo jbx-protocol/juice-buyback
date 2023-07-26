@@ -33,7 +33,7 @@ import "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 
 import "@exhausted-pigeon/uniswap-v3-forge-quoter/src/UniswapV3ForgeQuoter.sol";
 
-import "../BuybackDelegate.sol";
+import "../JBBuybackDelegate3_1_1.sol";
 import "../mock/MockAllocator.sol";
 
 import "forge-std/Test.sol";
@@ -41,7 +41,7 @@ import "forge-std/Test.sol";
 /**
  * @notice Buyback fork integration tests, using $jbx v3
  */
-contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
+contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
     using JBFundingCycleMetadataResolver for JBFundingCycle;
 
     event BuybackDelegate_Swap(uint256 projectId, uint256 amountEth, uint256 amountOut);
@@ -59,7 +59,7 @@ contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
     IJBFundingCycleStore jbFundingCycleStore;
     IJBProjects jbProjects;
     IJBSplitsStore jbSplitsStore;
-    IJBPayoutRedemptionPaymentTerminal3_1 jbEthPaymentTerminal;
+    IJBPayoutRedemptionPaymentTerminal3_1_1 jbEthPaymentTerminal;
 
     IJBSingleTokenPaymentTerminal terminal;
     IJBSingleTokenPaymentTerminalStore jbTerminalStore;
@@ -76,7 +76,7 @@ contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
     IJBPaymentTerminal[] terminals;
     JBGroupedSplits[] groupedSplits;
 
-    BuybackDelegate delegate;
+    JBBuybackDelegate3_1_1 delegate;
 
     IUniswapV3Pool pool;
 
@@ -100,13 +100,13 @@ contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
     uint256 amountOutForOneEth;
 
     function setUp() public {
-        vm.createSelectFork("https://rpc.ankr.com/eth", 17239357);
+        vm.createSelectFork("https://rpc.ankr.com/eth");
 
         // Collect the mainnet deployment addresses
-        jbEthPaymentTerminal = IJBPayoutRedemptionPaymentTerminal3_1(
+        jbEthPaymentTerminal = IJBPayoutRedemptionPaymentTerminal3_1_1(
             stdJson.readAddress(
                 vm.readFile(
-                    "node_modules/@jbx-protocol/juice-contracts-v3/deployments/mainnet/JBETHPaymentTerminal3_1.json"
+                    "node_modules/@jbx-protocol/juice-contracts-v3/deployments/mainnet/JBETHPaymentTerminal3_1_1.json"
                 ),
                 ".address"
             )
@@ -115,12 +115,12 @@ contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         terminal = IJBSingleTokenPaymentTerminal(
             stdJson.readAddress(
                 vm.readFile(
-                    "node_modules/@jbx-protocol/juice-contracts-v3/deployments/mainnet/JBETHPaymentTerminal3_1.json"
+                    "node_modules/@jbx-protocol/juice-contracts-v3/deployments/mainnet/JBETHPaymentTerminal3_1_1.json"
                 ),
                 ".address"
             )
         );
-        vm.label(address(jbEthPaymentTerminal), "jbEthPaymentTerminal3_1");
+        vm.label(address(jbEthPaymentTerminal), "jbEthPaymentTerminal3_1_1");
 
         jbController = IJBController3_1(
             stdJson.readAddress(
@@ -130,7 +130,7 @@ contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         );
         vm.label(address(jbController), "jbController");
 
-        jbTerminalStore = IJBSingleTokenPaymentTerminalStore(0x77b0A81AeB61d08C0b23c739969d22c5C9950336);
+        jbTerminalStore = IJBSingleTokenPaymentTerminalStore(0x82129d4109625F94582bDdF6101a8Cd1a27919f5);
         vm.label(address(jbTerminalStore), "jbTerminalStore");
 
         jbTokenStore = jbController.tokenStore();
@@ -186,7 +186,7 @@ contract TestBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         amountOutForOneEth = getAmountOut(pool, 1 ether, address(weth));
 
         delegate =
-        new BuybackDelegate(IERC20(address(jbx)), weth, address(factory), fee, cardinality, twapDelta, jbEthPaymentTerminal, jbController);
+        new JBBuybackDelegate3_1_1(IERC20(address(jbx)), weth, address(factory), fee, cardinality, twapDelta, jbEthPaymentTerminal, jbController);
 
         vm.label(address(pool), "uniswapPool");
         vm.label(address(factory), "uniswapFactory");
