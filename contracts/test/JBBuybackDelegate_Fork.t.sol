@@ -495,7 +495,7 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         else {
           // calculating token count
           uint256 _balanceDifference = _balanceAfterPayment - _balanceBeforePayment;
-          uint256 _tokenCount = PRBMath.mulDivFixedPoint(_amountIn, 10);
+          uint256 _tokenCount = mulDiv18(_amountIn, 10);
           assertEq(_balanceDifference, _tokenCount);
         }
 
@@ -553,7 +553,8 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         else {
           // calculating token count
           uint256 _balanceDifference = _balanceAfterPayment - _balanceBeforePayment;
-          uint256 _tokenCount = PRBMath.mulDivFixedPoint(_largeSwapAmount, 10);
+          uint256 _tokenCount = mulDiv18(_largeSwapAmount, 10);
+
           assertEq(_balanceDifference, _tokenCount);
         }
 
@@ -622,7 +623,7 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         else {
           // calculating token count
           uint256 _balanceDifference = _balanceAfterPayment - _balanceBeforePayment;
-          uint256 _tokenCount = PRBMath.mulDivFixedPoint(_amountIn, 10);
+          uint256 _tokenCount = mulDiv18(_amountIn, 10);
           assertEq(_balanceDifference, _tokenCount);
         }
 
@@ -681,7 +682,7 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         else {
           // calculating token count
           uint256 _balanceDifference = _balanceAfterPayment - _balanceBeforePayment;
-          uint256 _tokenCount = PRBMath.mulDivFixedPoint(_amountIn, 10);
+          uint256 _tokenCount = mulDiv18(_amountIn, 10);
           assertEq(_balanceDifference, _tokenCount);
         }
 
