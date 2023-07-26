@@ -32,7 +32,7 @@ import "../mock/MockAllocator.sol";
  * @notice Integration tests for the JBBuybackDelegate3_1_1 contract.
  *
  */
-contract TestBuybackDelegate_Integration is TestBaseWorkflowV3 {
+contract TestJBBuybackDelegate_Integration is TestBaseWorkflowV3 {
     using JBFundingCycleMetadataResolver for JBFundingCycle;
 
     JBProjectMetadata _projectMetadata;
@@ -80,7 +80,7 @@ contract TestBuybackDelegate_Integration is TestBaseWorkflowV3 {
 
         // Deploy the delegate
         _delegate =
-        new JBBuybackDelegate3_1_1(IERC20(address(jbx)), weth, _uniswapFactory, fee, cardinality, twapDelta, IJBPayoutRedemptionPaymentTerminal3_1_1(address(_jbETHPaymentTerminal)), _jbController);
+        new JBBuybackDelegate3_1_1(IERC20(address(jbx)), weth, _uniswapFactory, fee, cardinality, twapDelta, IJBDirectory(address(_jbDirectory)), _jbController);
 
         _projectMetadata = JBProjectMetadata({content: "myIPFSHash", domain: 1});
 

@@ -2,9 +2,11 @@
 pragma solidity ^0.8.16;
 
 import {IJBController3_1} from "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController3_1.sol";
+import {IJBPayoutRedemptionPaymentTerminal3_1_1} from "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayoutRedemptionPaymentTerminal3_1_1.sol";
+import {IJBDirectory} from "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBDirectory.sol";
 import {IJBFundingCycleDataSource3_1_1} from "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleDataSource3_1_1.sol";
 import {IJBPayDelegate3_1_1} from "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayDelegate3_1_1.sol";
-import {IJBPayoutRedemptionPaymentTerminal3_1_1} from "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayoutRedemptionPaymentTerminal3_1_1.sol";
+import {IJBPaymentTerminal} from "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPaymentTerminal.sol";
 
 import {JBTokens} from "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBTokens.sol";
 
@@ -30,7 +32,7 @@ import {IWETH9} from "./interfaces/external/IWETH9.sol";
 /**
  * @custom:benediction DEVS BENEDICAT ET PROTEGAT CONTRACTVS MEAM
  *
- * @title  Buyback Delegate compatible with JB terminal version 3.1.1 (IJBPayoutRedemptionPaymentTerminal3_1_1)
+ * @title  Buyback Delegate compatible with any jb terminal that supports ETH payments
  *
  * @notice Datasource and delegate allowing pay beneficiary to get the highest amount
  *         of project tokens between minting using the project weigh and swapping in a
@@ -93,9 +95,9 @@ contract JBBuybackDelegate3_1_1 is Ownable, ERC165, IJBFundingCycleDataSource3_1
     IUniswapV3Pool public immutable POOL;
 
     /**
-     * @notice The project terminal using this extension
+     * @notice The JB Directory
      */
-    IJBPayoutRedemptionPaymentTerminal3_1_1 public immutable TERMINAL;
+    IJBDirectory public immutable DIRECTORY;
 
     /**
      * @notice The project controller
@@ -137,12 +139,12 @@ contract JBBuybackDelegate3_1_1 is Ownable, ERC165, IJBFundingCycleDataSource3_1
         uint24 _fee,
         uint32 _secondsAgo,
         uint256 _twapDelta,
-        IJBPayoutRedemptionPaymentTerminal3_1_1 _terminal,
+        IJBDirectory _directory,
         IJBController3_1 _controller
     ) {
         PROJECT_TOKEN = _projectToken;
         WETH = _weth;
-        TERMINAL = _terminal;
+        DIRECTORY = _directory;
         CONTROLLER = _controller;
         PROJECT_TOKEN_IS_TOKEN0 = address(_projectToken) < address(_weth);
         POOL = IUniswapV3Pool(address(uint160(uint256(
@@ -229,7 +231,7 @@ contract JBBuybackDelegate3_1_1 is Ownable, ERC165, IJBFundingCycleDataSource3_1
      */
     function didPay(JBDidPayData3_1_1 calldata _data) external payable override {
         // Access control as minting is authorized to this delegate
-        if (msg.sender != address(TERMINAL)) revert JuiceBuyback_Unauthorized();
+        if (!DIRECTORY.isTerminalOf(_data.projectId, IJBPaymentTerminal(msg.sender))) revert JuiceBuyback_Unauthorized();
 
         (uint256 _tokenCount, uint256 _swapMinAmountOut) = abi.decode(
             _data.dataSourceMetadata, (uint256, uint256));
@@ -444,7 +446,7 @@ contract JBBuybackDelegate3_1_1 is Ownable, ERC165, IJBFundingCycleDataSource3_1
         });
 
         // Send the eth back to the terminal balance
-        TERMINAL.addToBalanceOf{value: _data.amount.value}(
+        IJBPayoutRedemptionPaymentTerminal3_1_1(msg.sender).addToBalanceOf{value: _data.amount.value}(
             _data.projectId, _data.amount.value, JBTokens.ETH, "", ""
         );
 

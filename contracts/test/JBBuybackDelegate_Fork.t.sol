@@ -57,6 +57,7 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
 
     // Contracts needed
     IJBFundingCycleStore jbFundingCycleStore;
+    IJBDirectory jbDirectory;
     IJBProjects jbProjects;
     IJBSplitsStore jbSplitsStore;
     IJBPayoutRedemptionPaymentTerminal3_1_1 jbEthPaymentTerminal;
@@ -103,6 +104,15 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         vm.createSelectFork("https://rpc.ankr.com/eth");
 
         // Collect the mainnet deployment addresses
+        jbDirectory = IJBDirectory(
+            stdJson.readAddress(
+                vm.readFile(
+                    "node_modules/@jbx-protocol/juice-contracts-v3/deployments/mainnet/JBDirectory.json"
+                ),
+                ".address"
+            )
+        );
+
         jbEthPaymentTerminal = IJBPayoutRedemptionPaymentTerminal3_1_1(
             stdJson.readAddress(
                 vm.readFile(
@@ -153,16 +163,6 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         jbx.approve(POSITION_MANAGER, 10000000 ether);
         weth.approve(POSITION_MANAGER, 10000000 ether);
 
-        (
-            uint160 sqrtPrice,
-            ,
-            ,
-            ,
-            ,
-            ,
-            
-        ) = pool.slot0();
-
         // mint concentrated position
         INonfungiblePositionManager.MintParams memory params = INonfungiblePositionManager.MintParams({
             token0: address(jbx),
@@ -186,7 +186,7 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         amountOutForOneEth = getAmountOut(pool, 1 ether, address(weth));
 
         delegate =
-        new JBBuybackDelegate3_1_1(IERC20(address(jbx)), weth, address(factory), fee, cardinality, twapDelta, jbEthPaymentTerminal, jbController);
+        new JBBuybackDelegate3_1_1(IERC20(address(jbx)), weth, address(factory), fee, cardinality, twapDelta, jbDirectory, jbController);
 
         vm.label(address(pool), "uniswapPool");
         vm.label(address(factory), "uniswapFactory");

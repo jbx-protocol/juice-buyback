@@ -104,7 +104,7 @@ contract TestJBBuybackDelegate3_1_1_Units is Test {
             _fee: fee, // 1 % fee
             _secondsAgo: secondsAgo,
             _twapDelta: twapDelta,
-            _jbxTerminal: jbxTerminal,
+            _directory: directory,
             _controller: controller
         });
     }
@@ -309,6 +309,13 @@ contract TestJBBuybackDelegate3_1_1_Units is Test {
             abi.encode(address(controller))
         );
 
+        // mock call to pass the authorization check
+        vm.mockCall(
+            address(directory),
+            abi.encodeCall(directory.isTerminalOf, (didPayData.projectId, IJBPaymentTerminal(address(jbxTerminal)))),
+            abi.encode(true)
+        );
+
         // mock the burn call
         vm.mockCall(
             address(controller),
@@ -382,6 +389,13 @@ contract TestJBBuybackDelegate3_1_1_Units is Test {
             abi.encode(address(controller))
         );
 
+        // mock call to pass the authorization check
+        vm.mockCall(
+            address(directory),
+            abi.encodeCall(directory.isTerminalOf, (didPayData.projectId, IJBPaymentTerminal(address(jbxTerminal)))),
+            abi.encode(true)
+        );
+
         // mock the burn call
         vm.mockCall(
             address(controller),
@@ -448,6 +462,13 @@ contract TestJBBuybackDelegate3_1_1_Units is Test {
             abi.encode(address(controller))
         );
 
+        // mock call to pass the authorization check
+        vm.mockCall(
+            address(directory),
+            abi.encodeCall(directory.isTerminalOf, (didPayData.projectId, IJBPaymentTerminal(address(jbxTerminal)))),
+            abi.encode(true)
+        );
+
         // mock the minting call - this uses the weight and not the (potentially faulty) quote or twap
         vm.mockCall(
             address(controller),
@@ -483,6 +504,13 @@ contract TestJBBuybackDelegate3_1_1_Units is Test {
     function test_didPay_revertIfWrongCaller(address _notTerminal) public {
         vm.assume(_notTerminal != address(jbxTerminal));
 
+        // mock call to fail at the authorization check since directory has no bytecode
+        vm.mockCall(
+            address(directory),
+            abi.encodeCall(directory.isTerminalOf, (didPayData.projectId, IJBPaymentTerminal(address(_notTerminal)))),
+            abi.encode(false)
+        );
+
         vm.expectRevert(abi.encodeWithSelector(JBBuybackDelegate3_1_1.JuiceBuyback_Unauthorized.selector));
 
         vm.prank(_notTerminal);
@@ -509,7 +537,7 @@ contract TestJBBuybackDelegate3_1_1_Units is Test {
             _fee: fee,
             _secondsAgo: secondsAgo,
             _twapDelta: twapDelta,
-            _jbxTerminal: jbxTerminal,
+            _directory: directory,
             _controller: controller
         });
 
@@ -544,7 +572,7 @@ contract TestJBBuybackDelegate3_1_1_Units is Test {
             _fee: fee,
             _secondsAgo: secondsAgo,
             _twapDelta: twapDelta,
-            _jbxTerminal: jbxTerminal,
+            _directory: directory,
             _controller: controller
         });
 
@@ -753,10 +781,10 @@ contract ForTest_BuybackDelegate is JBBuybackDelegate3_1_1 {
         uint24 _fee,
         uint32 _secondsAgo,
         uint256 _twapDelta,
-        IJBPayoutRedemptionPaymentTerminal3_1_1 _jbxTerminal,
+        IJBDirectory _directory,
         IJBController3_1 _controller
     )
-        JBBuybackDelegate3_1_1(_projectToken, _weth, _factory, _fee, _secondsAgo, _twapDelta, _jbxTerminal, _controller)
+        JBBuybackDelegate3_1_1(_projectToken, _weth, _factory, _fee, _secondsAgo, _twapDelta, _directory, _controller)
     {}
 
     function ForTest_getQuote(uint256 _amountIn) external view returns (uint256 _amountOut) {
