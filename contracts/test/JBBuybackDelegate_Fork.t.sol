@@ -812,6 +812,6 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         );
 
         // Move to next fc
-        vm.warp(block.timestamp + 14 days + 1);
+        vm.warp(block.timestamp + _fundingCycle.duration * 2 + 1);
     }
 }
