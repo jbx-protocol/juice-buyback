@@ -5,9 +5,9 @@ import "forge-std/Test.sol";
 
 import "@jbx-protocol/juice-contracts-v3/contracts/JBController3_1.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/JBDirectory.sol";
-import "@jbx-protocol/juice-contracts-v3/contracts/JBETHPaymentTerminal.sol";
+import "@jbx-protocol/juice-contracts-v3/contracts/JBETHPaymentTerminal3_1_1.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/JBFundAccessConstraintsStore.sol";
-import "@jbx-protocol/juice-contracts-v3/contracts/JBSingleTokenPaymentTerminalStore.sol";
+import "@jbx-protocol/juice-contracts-v3/contracts/JBSingleTokenPaymentTerminalStore3_1_1.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/JBFundingCycleStore.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/JBOperatorStore.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/JBPrices.sol";
@@ -57,8 +57,8 @@ contract TestBaseWorkflowV3 is Test {
     JBTokenStore internal _jbTokenStore;
     JBSplitsStore internal _jbSplitsStore;
     JBController3_1 internal _jbController;
-    JBSingleTokenPaymentTerminalStore internal _jbPaymentTerminalStore;
-    JBETHPaymentTerminal internal _jbETHPaymentTerminal;
+    JBSingleTokenPaymentTerminalStore3_1_1 internal _jbPaymentTerminalStore;
+    JBETHPaymentTerminal3_1_1 internal _jbETHPaymentTerminal;
     AccessJBLib internal _accessJBLib;
 
     //*********************************************************************//
@@ -128,7 +128,7 @@ contract TestBaseWorkflowV3 is Test {
         _jbDirectory.setIsAllowedToSetFirstController(address(_jbController), true);
 
         // JBETHPaymentTerminalStore
-        _jbPaymentTerminalStore = new JBSingleTokenPaymentTerminalStore(
+        _jbPaymentTerminalStore = new JBSingleTokenPaymentTerminalStore3_1_1(
             _jbDirectory,
             _jbFundingCycleStore,
             _jbPrices
@@ -139,7 +139,7 @@ contract TestBaseWorkflowV3 is Test {
         _accessJBLib = new AccessJBLib();
 
         // JBETHPaymentTerminal
-        _jbETHPaymentTerminal = new JBETHPaymentTerminal(
+        _jbETHPaymentTerminal = new JBETHPaymentTerminal3_1_1(
             _accessJBLib.ETH(),
             _jbOperatorStore,
             _jbProjects,
