@@ -35,6 +35,15 @@ import '../mock/MockAllocator.sol';
 contract TestJBBuybackDelegate_Integration is TestBaseWorkflowV3 {
   using JBFundingCycleMetadataResolver for JBFundingCycle;
 
+  event Mint(
+    address indexed holder,
+    uint256 indexed projectId,
+    uint256 amount,
+    bool tokensWereClaimed,
+    bool preferClaimedTokens,
+    address caller
+  );
+
   JBProjectMetadata _projectMetadata;
   JBFundingCycleData _data;
   JBFundingCycleData _dataReconfiguration;
@@ -163,6 +172,23 @@ contract TestJBBuybackDelegate_Integration is TestBaseWorkflowV3 {
     // setting the quote in metadata, bigger than the weight
     bytes memory metadata = abi.encode(new bytes(0), new bytes(0), _quote, 500);
 
+    // Compute the project token which should have been minted (for the beneficiary or the reserve)
+    uint256 totalMinted = PRBMath.mulDiv(payAmountInWei, weight, 10 ** 18);
+    uint256 amountBeneficiary = (totalMinted * (JBConstants.MAX_RESERVED_RATE - reservedRate)) /
+      JBConstants.MAX_RESERVED_RATE;
+    uint256 amountReserved = totalMinted - amountBeneficiary;
+
+    // This shouldn't mint via the delegate
+    vm.expectEmit(true, true, true, true);
+    emit Mint({
+      holder: _beneficiary,
+      projectId: _projectId,
+      amount: amountBeneficiary,
+      tokensWereClaimed: false,
+      preferClaimedTokens: true,
+      caller: address(_jbController)
+    });
+
     _jbETHPaymentTerminal.pay{value: payAmountInWei}(
       _projectId,
       payAmountInWei,
@@ -177,12 +203,6 @@ contract TestJBBuybackDelegate_Integration is TestBaseWorkflowV3 {
       /* _delegateMetadata */
       metadata
     );
-
-    // Compute the project token which should have been minted (for the beneficiary or the reserve)
-    uint256 totalMinted = PRBMath.mulDiv(payAmountInWei, weight, 10 ** 18);
-    uint256 amountBeneficiary = (totalMinted * (JBConstants.MAX_RESERVED_RATE - reservedRate)) /
-      JBConstants.MAX_RESERVED_RATE;
-    uint256 amountReserved = totalMinted - amountBeneficiary;
 
     // Check: correct beneficiary balance?
     assertEq(_jbTokenStore.balanceOf(_beneficiary, _projectId), amountBeneficiary);
@@ -200,6 +220,26 @@ contract TestJBBuybackDelegate_Integration is TestBaseWorkflowV3 {
     // setting the quote in metadata
     bytes memory metadata = abi.encode(new bytes(0), new bytes(0), 1 ether, 10000);
 
+    uint256 totalMinted = PRBMath.mulDiv(payAmountInWei, weight, 10 ** 18);
+    uint256 amountBeneficiary = PRBMath.mulDiv(
+      totalMinted,
+      JBConstants.MAX_RESERVED_RATE - reservedRate,
+      JBConstants.MAX_RESERVED_RATE
+    );
+
+    uint256 amountReserved = totalMinted - amountBeneficiary;
+
+    // This shouldn't mint via the delegate
+    vm.expectEmit(true, true, true, true);
+    emit Mint({
+      holder: _beneficiary,
+      projectId: _projectId,
+      amount: amountBeneficiary,
+      tokensWereClaimed: false,
+      preferClaimedTokens: false,
+      caller: address(_jbController)
+    });
+
     _jbETHPaymentTerminal.pay{value: payAmountInWei}(
       _projectId,
       payAmountInWei,
@@ -214,15 +254,6 @@ contract TestJBBuybackDelegate_Integration is TestBaseWorkflowV3 {
       /* _delegateMetadata */
       metadata
     );
-
-    uint256 totalMinted = PRBMath.mulDiv(payAmountInWei, weight, 10 ** 18);
-    uint256 amountBeneficiary = PRBMath.mulDiv(
-      totalMinted,
-      JBConstants.MAX_RESERVED_RATE - reservedRate,
-      JBConstants.MAX_RESERVED_RATE
-    );
-
-    uint256 amountReserved = totalMinted - amountBeneficiary;
 
     assertEq(_jbTokenStore.balanceOf(_beneficiary, _projectId), amountBeneficiary);
     assertEq(_jbController.reservedTokenBalanceOf(_projectId), amountReserved);
