@@ -9,6 +9,8 @@ import '@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBDirectory.sol';
 import '@jbx-protocol/juice-contracts-v3/contracts/libraries/JBConstants.sol';
 import '@jbx-protocol/juice-contracts-v3/contracts/libraries/JBTokens.sol';
 
+import {JBDelegateMetadataHelper} from '@jbx-protocol/juice-delegate-metadata-lib/src/JBDelegateMetadataHelper.sol';
+
 import '@paulrberg/contracts/math/PRBMath.sol';
 import '@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol';
 
@@ -44,6 +46,8 @@ contract TestJBBuybackDelegate_Units is Test {
   IJBOperatorStore operatorStore = IJBOperatorStore(makeAddr('IJBOperatorStore'));
   IJBController3_1 controller = IJBController3_1(makeAddr('controller'));
   IJBDirectory directory = IJBDirectory(makeAddr('directory'));
+
+  JBDelegateMetadataHelper metadataHelper = new JBDelegateMetadataHelper();
 
   address terminalStore = makeAddr('terminalStore');
 
@@ -116,7 +120,8 @@ contract TestJBBuybackDelegate_Units is Test {
       _secondsAgo: secondsAgo,
       _twapDelta: twapDelta,
       _directory: directory,
-      _controller: controller
+      _controller: controller,
+      _id: bytes4(hex'69')
     });
   }
 
@@ -139,7 +144,14 @@ contract TestJBBuybackDelegate_Units is Test {
     uint256 _swapQuote = _swapOutCount - ((_swapOutCount * _slippage) / 10000);
 
     // Pass the quote as metadata
-    bytes memory _metadata = abi.encode('', '', _swapOutCount, _slippage);
+    bytes[] memory _data = new bytes[](1);
+    _data[0] = abi.encode(_swapOutCount, _slippage);
+
+    // Pass the delegate id
+    bytes4[] memory _ids = new bytes4[](1);
+    _ids[0] = bytes4(hex'69');
+
+    bytes memory _metadata = metadataHelper.createMetadata(_ids, _data);
 
     // Set the relevant payParams data
     payParams.weight = _tokenCount;
@@ -607,7 +619,8 @@ contract TestJBBuybackDelegate_Units is Test {
       _secondsAgo: secondsAgo,
       _twapDelta: twapDelta,
       _directory: directory,
-      _controller: controller
+      _controller: controller,
+      _id: bytes4(hex'69')
     });
 
     // If project is token0, then received is delta0 (the negative value)
@@ -645,7 +658,8 @@ contract TestJBBuybackDelegate_Units is Test {
       _secondsAgo: secondsAgo,
       _twapDelta: twapDelta,
       _directory: directory,
-      _controller: controller
+      _controller: controller,
+      _id: bytes4(hex'69')
     });
 
     // mock and expect weth calls, this should transfer from delegate to pool (positive delta in the callback)
@@ -869,7 +883,8 @@ contract ForTest_BuybackDelegate is JBBuybackDelegate {
     uint32 _secondsAgo,
     uint256 _twapDelta,
     IJBDirectory _directory,
-    IJBController3_1 _controller
+    IJBController3_1 _controller,
+    bytes4 _id
   )
     JBBuybackDelegate(
       _projectToken,
@@ -879,7 +894,8 @@ contract ForTest_BuybackDelegate is JBBuybackDelegate {
       _secondsAgo,
       _twapDelta,
       _directory,
-      _controller
+      _controller,
+      _id
     )
   {}
 

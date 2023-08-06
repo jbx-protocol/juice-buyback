@@ -195,7 +195,8 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
       cardinality,
       twapDelta,
       jbDirectory,
-      jbController
+      jbController,
+      bytes4(hex'69')
     );
 
     vm.label(address(pool), 'uniswapPool');

@@ -96,7 +96,8 @@ contract TestJBBuybackDelegate_Integration is TestBaseWorkflowV3 {
       cardinality,
       twapDelta,
       IJBDirectory(address(_jbDirectory)),
-      _jbController
+      _jbController,
+      bytes4(hex'69')
     );
 
     _projectMetadata = JBProjectMetadata({content: 'myIPFSHash', domain: 1});
