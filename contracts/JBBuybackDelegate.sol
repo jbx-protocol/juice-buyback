@@ -16,6 +16,8 @@ import {JBRedeemParamsData} from '@jbx-protocol/juice-contracts-v3/contracts/str
 import {JBPayDelegateAllocation3_1_1} from '@jbx-protocol/juice-contracts-v3/contracts/structs/JBPayDelegateAllocation3_1_1.sol';
 import {JBRedemptionDelegateAllocation3_1_1} from '@jbx-protocol/juice-contracts-v3/contracts/structs/JBRedemptionDelegateAllocation3_1_1.sol';
 
+import {JBDelegateMetadataHelper} from '@jbx-protocol/juice-delegate-metadata-lib/src/JBDelegateMetadataHelper.sol';
+
 import {IERC20} from '@openzeppelin/contracts/interfaces/IERC20.sol';
 import {ERC165, IERC165} from '@openzeppelin/contracts/utils/introspection/ERC165.sol';
 import {Ownable} from '@openzeppelin/contracts/access/Ownable.sol';
@@ -46,6 +48,7 @@ import {IWETH9} from './interfaces/external/IWETH9.sol';
 contract JBBuybackDelegate is
   Ownable,
   ERC165,
+  JBDelegateMetadataHelper,
   IJBFundingCycleDataSource3_1_1,
   IJBPayDelegate3_1_1,
   IUniswapV3SwapCallback
@@ -115,6 +118,12 @@ contract JBBuybackDelegate is
    */
   IWETH9 public immutable WETH;
 
+  /**
+   * @notice The 4bytes ID of this delegate, used for metadata parsing
+   */
+  
+  bytes4 public immutable delegateId;
+
   //*********************************************************************//
   // --------------------- public stored properties -------------------- //
   //*********************************************************************//
@@ -146,7 +155,8 @@ contract JBBuybackDelegate is
     uint32 _secondsAgo,
     uint256 _twapDelta,
     IJBDirectory _directory,
-    IJBController3_1 _controller
+    IJBController3_1 _controller,
+    bytes4 _delegateId
   ) {
     PROJECT_TOKEN = _projectToken;
     WETH = _weth;
@@ -178,6 +188,7 @@ contract JBBuybackDelegate is
 
     secondsAgo = _secondsAgo;
     twapDelta = _twapDelta;
+    delegateId = _delegateId;
   }
 
   //*********************************************************************//
@@ -212,14 +223,15 @@ contract JBBuybackDelegate is
     // Get a quote based on either the uni SDK quote or a twap from the pool
     uint256 _swapAmountOut;
 
-    // todo: fix with metadata parsing lib
-    if (_data.metadata.length >= 128) {
+    (bool _validQuote, bytes memory _metadata) = getMetadata(delegateId, _data.metadata);
+
+    uint256 _quote;
+    uint256 _slippage;
+    if(_validQuote) (_quote, _slippage) = abi.decode(_metadata, (uint256, uint256));
+    
+    if (_quote != 0) {
       // Unpack the quote from the pool, given by the frontend - this one takes precedence on the twap
       // as it should be closer to the current pool state, if not, use the twap
-      (, , uint256 _quote, uint256 _slippage) = abi.decode(
-        _data.metadata,
-        (bytes32, bytes32, uint256, uint256)
-      );
       _swapAmountOut = _quote - ((_quote * _slippage) / SLIPPAGE_DENOMINATOR);
     } else {
       _swapAmountOut = _getQuote(_data.amount.value);

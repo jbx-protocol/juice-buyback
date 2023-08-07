@@ -195,7 +195,8 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
       cardinality,
       twapDelta,
       jbDirectory,
-      jbController
+      jbController,
+      bytes4(hex'69')
     );
 
     vm.label(address(pool), 'uniswapPool');
@@ -237,12 +238,15 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
     uint256 _reservedBalanceBefore = jbController.reservedTokenBalanceOf(1);
 
     // Build the metadata using the quote at that block
-    bytes memory _metadata = abi.encode(
-      bytes32(0),
-      bytes32(0),
-      amountOutForOneEth, //quote
-      500 //slippage
-    );
+    bytes[] memory _data = new bytes[](1);
+    _data[0] = abi.encode(amountOutForOneEth, 500);
+
+    // Pass the delegate id
+    bytes4[] memory _ids = new bytes4[](1);
+    _ids[0] = bytes4(hex'69');
+
+    // Generate the metadata
+    bytes memory _delegateMetadata = delegate.createMetadata(_ids, _data);
 
     // This shouldn't mint via the delegate
     vm.expectEmit(true, true, true, true);
@@ -270,7 +274,7 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
       /* _memo */
       'Take my money!',
       /* _delegateMetadata */
-      _metadata
+      _delegateMetadata
     );
 
     uint256 _balAfterPayment = jbx.balanceOf(address(123));
@@ -300,12 +304,15 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
     uint256 _reservedBalanceBefore = jbController.reservedTokenBalanceOf(1);
 
     // Build the metadata using the quote at that block
-    bytes memory _metadata = abi.encode(
-      bytes32(0),
-      bytes32(0),
-      amountOutForOneEth, //quote
-      500 //slippage 500/10000 = 5%
-    );
+    bytes[] memory _data = new bytes[](1);
+    _data[0] = abi.encode(amountOutForOneEth, 500);
+
+    // Pass the delegate id
+    bytes4[] memory _ids = new bytes4[](1);
+    _ids[0] = bytes4(hex'69');
+
+    // Generate the metadata
+    bytes memory _delegateMetadata = delegate.createMetadata(_ids, _data);
 
     vm.expectEmit(true, true, true, true);
     emit BuybackDelegate_Swap(1, 1 ether, amountOutForOneEth);
@@ -325,7 +332,7 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
       /* _memo */
       'Take my money!',
       /* _delegateMetadata */
-      _metadata
+      _delegateMetadata
     );
 
     uint256 _balAfterPayment = jbx.balanceOf(address(123));
@@ -351,12 +358,16 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
     _reconfigure(1, address(delegate), _weight, 5000);
 
     // Build the metadata using the quote at that block
-    bytes memory _metadata = abi.encode(
-      bytes32(0),
-      bytes32(0),
-      amountOutForOneEth, //quote
-      500 //slippage 500/10000 = 5%
-    );
+    // Build the metadata using the quote at that block
+    bytes[] memory _data = new bytes[](1);
+    _data[0] = abi.encode(amountOutForOneEth, 500);
+
+    // Pass the delegate id
+    bytes4[] memory _ids = new bytes4[](1);
+    _ids[0] = bytes4(hex'69');
+
+    // Generate the metadata
+    bytes memory _delegateMetadata = delegate.createMetadata(_ids, _data);
 
     // Pay the project
     jbEthPaymentTerminal.pay{value: 1 ether}(
@@ -371,7 +382,7 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
       /* _memo */
       'Take my money!',
       /* _delegateMetadata */
-      _metadata
+      _delegateMetadata
     );
 
     uint256 _balanceBeneficiary = jbx.balanceOf(address(123));
@@ -386,12 +397,10 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
     assert(_previousQuote != amountOutForOneEth);
 
     // Update the metadata
-    _metadata = abi.encode(
-      bytes32(0),
-      bytes32(0),
-      amountOutForOneEth, //quote
-      500 //slippage 500/10000 = 5%
-    );
+    _data[0] = abi.encode(amountOutForOneEth, 500);
+
+    // Generate the metadata
+    _delegateMetadata = delegate.createMetadata(_ids, _data);
 
     // Pay the project
     jbEthPaymentTerminal.pay{value: 1 ether}(
@@ -406,7 +415,7 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
       /* _memo */
       'Take my money!',
       /* _delegateMetadata */
-      _metadata
+      _delegateMetadata
     );
 
     // Check: token received by the beneficiary
@@ -436,12 +445,15 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
     uint256 _reservedBalanceBefore = jbController.reservedTokenBalanceOf(1);
 
     // Build the metadata using the quote
-    bytes memory _metadata = abi.encode(
-      bytes32(0),
-      bytes32(0),
-      _quote, //quote
-      500 //slippage 500/10000 = 5%
-    );
+    bytes[] memory _data = new bytes[](1);
+    _data[0] = abi.encode(_quote, 500);
+
+    // Pass the delegate id
+    bytes4[] memory _ids = new bytes4[](1);
+    _ids[0] = bytes4(hex'69');
+
+    // Generate the metadata
+    bytes memory _delegateMetadata = delegate.createMetadata(_ids, _data);
 
     vm.expectEmit(true, true, true, true);
     emit BuybackDelegate_Swap(1, _amountIn, _quote);
@@ -461,7 +473,7 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
       /* _memo */
       'Take my money!',
       /* _delegateMetadata */
-      _metadata
+      _delegateMetadata
     );
 
     uint256 _balAfterPayment = jbx.balanceOf(address(123));
@@ -774,12 +786,18 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
     uint256 _reservedBalanceBefore = jbController.reservedTokenBalanceOf(1);
 
     // Build the metadata using the quote at that block
-    bytes memory _metadata = abi.encode(
-      bytes32(0),
-      bytes32(0),
+    bytes[] memory _data = new bytes[](1);
+    _data[0] = abi.encode(
       69412820131620254304865 + 10, // 10 more than quote at that block
-      0 //slippage
+      0
     );
+
+    // Pass the delegate id
+    bytes4[] memory _ids = new bytes4[](1);
+    _ids[0] = bytes4(hex'69');
+
+    // Generate the metadata
+    bytes memory _delegateMetadata = delegate.createMetadata(_ids, _data);
 
     // Fall back on delegate minting
     vm.expectEmit(true, true, true, true);
@@ -800,7 +818,7 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
       /* _memo */
       'Take my money!',
       /* _delegateMetadata */
-      _metadata
+      _delegateMetadata
     );
 
     uint256 _balAfterPayment = jbx.balanceOf(address(123));

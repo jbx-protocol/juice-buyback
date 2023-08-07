@@ -96,7 +96,8 @@ contract TestJBBuybackDelegate_Integration is TestBaseWorkflowV3 {
       cardinality,
       twapDelta,
       IJBDirectory(address(_jbDirectory)),
-      _jbController
+      _jbController,
+      bytes4(hex'69')
     );
 
     _projectMetadata = JBProjectMetadata({content: 'myIPFSHash', domain: 1});
@@ -165,12 +166,21 @@ contract TestJBBuybackDelegate_Integration is TestBaseWorkflowV3 {
    * @notice  If the quote amount is lower than the token that would be received after minting, the buyback delegate isn't used at all
    */
   function testDatasourceDelegateWhenQuoteIsLowerThanTokenCount(uint256 _quote) public {
-    _quote = bound(_quote, 0, weight);
+    // Do not use a quote of 0, as it would then fetch a twap
+    _quote = bound(_quote, 1, weight);
 
     uint256 payAmountInWei = 2 ether;
 
     // setting the quote in metadata, bigger than the weight
-    bytes memory metadata = abi.encode(new bytes(0), new bytes(0), _quote, 500);
+    bytes[] memory _data = new bytes[](1);
+    _data[0] = abi.encode(_quote, 500);
+
+    // Pass the delegate id
+    bytes4[] memory _ids = new bytes4[](1);
+    _ids[0] = bytes4(hex'69');
+
+    // Generate the metadata
+    bytes memory _delegateMetadata = _delegate.createMetadata(_ids, _data);
 
     // Compute the project token which should have been minted (for the beneficiary or the reserve)
     uint256 totalMinted = PRBMath.mulDiv(payAmountInWei, weight, 10 ** 18);
@@ -201,7 +211,7 @@ contract TestJBBuybackDelegate_Integration is TestBaseWorkflowV3 {
       /* _memo */
       'Take my money!',
       /* _delegateMetadata */
-      metadata
+      _delegateMetadata
     );
 
     // Check: correct beneficiary balance?
@@ -218,7 +228,15 @@ contract TestJBBuybackDelegate_Integration is TestBaseWorkflowV3 {
     uint256 payAmountInWei = 10 ether;
 
     // setting the quote in metadata
-    bytes memory metadata = abi.encode(new bytes(0), new bytes(0), 1 ether, 10000);
+    bytes[] memory _data = new bytes[](1);
+    _data[0] = abi.encode(1 ether, 10000);
+
+    // Pass the delegate id
+    bytes4[] memory _ids = new bytes4[](1);
+    _ids[0] = bytes4(hex'69');
+
+    // Generate the metadata
+    bytes memory _delegateMetadata = _delegate.createMetadata(_ids, _data);
 
     uint256 totalMinted = PRBMath.mulDiv(payAmountInWei, weight, 10 ** 18);
     uint256 amountBeneficiary = PRBMath.mulDiv(
@@ -252,7 +270,7 @@ contract TestJBBuybackDelegate_Integration is TestBaseWorkflowV3 {
       /* _memo */
       'Take my money!',
       /* _delegateMetadata */
-      metadata
+      _delegateMetadata
     );
 
     assertEq(_jbTokenStore.balanceOf(_beneficiary, _projectId), amountBeneficiary);
@@ -272,7 +290,15 @@ contract TestJBBuybackDelegate_Integration is TestBaseWorkflowV3 {
     _jbController.mintTokensOf(_projectId, quoteOnUniswap, address(_delegate), '', false, false);
 
     // setting the quote in metadata
-    bytes memory metadata = abi.encode(new bytes(0), new bytes(0), quoteOnUniswap, 500);
+    bytes[] memory _data = new bytes[](1);
+    _data[0] = abi.encode(quoteOnUniswap, 500);
+
+    // Pass the delegate id
+    bytes4[] memory _ids = new bytes4[](1);
+    _ids[0] = bytes4(hex'69');
+
+    // Generate the metadata
+    bytes memory _delegateMetadata = _delegate.createMetadata(_ids, _data);
 
     // Mock the jbx transfer to the beneficiary - same logic as in delegate to avoid rounding errors
     uint256 reservedAmount = PRBMath.mulDiv(
@@ -317,7 +343,7 @@ contract TestJBBuybackDelegate_Integration is TestBaseWorkflowV3 {
       /* _memo */
       'Take my money!',
       /* _delegateMetadata */
-      metadata
+      _delegateMetadata
     );
 
     assertEq(

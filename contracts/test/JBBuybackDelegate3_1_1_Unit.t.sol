@@ -9,6 +9,8 @@ import '@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBDirectory.sol';
 import '@jbx-protocol/juice-contracts-v3/contracts/libraries/JBConstants.sol';
 import '@jbx-protocol/juice-contracts-v3/contracts/libraries/JBTokens.sol';
 
+import {JBDelegateMetadataHelper} from '@jbx-protocol/juice-delegate-metadata-lib/src/JBDelegateMetadataHelper.sol';
+
 import '@paulrberg/contracts/math/PRBMath.sol';
 import '@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol';
 
@@ -44,6 +46,8 @@ contract TestJBBuybackDelegate_Units is Test {
   IJBOperatorStore operatorStore = IJBOperatorStore(makeAddr('IJBOperatorStore'));
   IJBController3_1 controller = IJBController3_1(makeAddr('controller'));
   IJBDirectory directory = IJBDirectory(makeAddr('directory'));
+
+  JBDelegateMetadataHelper metadataHelper = new JBDelegateMetadataHelper();
 
   address terminalStore = makeAddr('terminalStore');
 
@@ -116,7 +120,8 @@ contract TestJBBuybackDelegate_Units is Test {
       _secondsAgo: secondsAgo,
       _twapDelta: twapDelta,
       _directory: directory,
-      _controller: controller
+      _controller: controller,
+      _id: bytes4(hex'69')
     });
   }
 
@@ -139,7 +144,15 @@ contract TestJBBuybackDelegate_Units is Test {
     uint256 _swapQuote = _swapOutCount - ((_swapOutCount * _slippage) / 10000);
 
     // Pass the quote as metadata
-    bytes memory _metadata = abi.encode('', '', _swapOutCount, _slippage);
+    bytes[] memory _data = new bytes[](1);
+    _data[0] = abi.encode(_swapOutCount, _slippage);
+
+    // Pass the delegate id
+    bytes4[] memory _ids = new bytes4[](1);
+    _ids[0] = bytes4(hex'69');
+
+    // Generate the metadata
+    bytes memory _metadata = metadataHelper.createMetadata(_ids, _data);
 
     // Set the relevant payParams data
     payParams.weight = _tokenCount;
@@ -182,8 +195,6 @@ contract TestJBBuybackDelegate_Units is Test {
    * @dev    This bypass testing Uniswap Oracle lib by re-using the internal _getQuote
    */
   function test_payParams_useTwap(uint256 _tokenCount) public {
-    // _tokenCount = bound(_tokenCount, 1, type(uint120).max);
-
     // Set the relevant payParams data
     payParams.weight = _tokenCount;
     payParams.metadata = '';
@@ -280,7 +291,7 @@ contract TestJBBuybackDelegate_Units is Test {
   }
 
   /**
-   * @notice Test didPay with 1 mutex and token received from swapping
+   * @notice Test didPay with token received from swapping
    */
   function test_didPay_swap(uint256 _tokenCount, uint256 _twapQuote, uint256 _reservedRate) public {
     // Bound to avoid overflow and insure swap quote > mint quote
@@ -374,7 +385,7 @@ contract TestJBBuybackDelegate_Units is Test {
   }
 
   /**
-   * @notice Test didPay with 1 mutex and token received from swapping
+   * @notice Test didPay when eth leftover from swap
    */
   function test_didPay_keepTrackOfETHToSweep() public {
     uint256 _tokenCount = 10;
@@ -607,7 +618,8 @@ contract TestJBBuybackDelegate_Units is Test {
       _secondsAgo: secondsAgo,
       _twapDelta: twapDelta,
       _directory: directory,
-      _controller: controller
+      _controller: controller,
+      _id: bytes4(hex'69')
     });
 
     // If project is token0, then received is delta0 (the negative value)
@@ -645,7 +657,8 @@ contract TestJBBuybackDelegate_Units is Test {
       _secondsAgo: secondsAgo,
       _twapDelta: twapDelta,
       _directory: directory,
-      _controller: controller
+      _controller: controller,
+      _id: bytes4(hex'69')
     });
 
     // mock and expect weth calls, this should transfer from delegate to pool (positive delta in the callback)
@@ -869,7 +882,8 @@ contract ForTest_BuybackDelegate is JBBuybackDelegate {
     uint32 _secondsAgo,
     uint256 _twapDelta,
     IJBDirectory _directory,
-    IJBController3_1 _controller
+    IJBController3_1 _controller,
+    bytes4 _id
   )
     JBBuybackDelegate(
       _projectToken,
@@ -879,7 +893,8 @@ contract ForTest_BuybackDelegate is JBBuybackDelegate {
       _secondsAgo,
       _twapDelta,
       _directory,
-      _controller
+      _controller,
+      _id
     )
   {}
 
