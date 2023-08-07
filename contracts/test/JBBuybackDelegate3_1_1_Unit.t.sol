@@ -151,6 +151,7 @@ contract TestJBBuybackDelegate_Units is Test {
     bytes4[] memory _ids = new bytes4[](1);
     _ids[0] = bytes4(hex'69');
 
+    // Generate the metadata
     bytes memory _metadata = metadataHelper.createMetadata(_ids, _data);
 
     // Set the relevant payParams data
@@ -194,8 +195,6 @@ contract TestJBBuybackDelegate_Units is Test {
    * @dev    This bypass testing Uniswap Oracle lib by re-using the internal _getQuote
    */
   function test_payParams_useTwap(uint256 _tokenCount) public {
-    // _tokenCount = bound(_tokenCount, 1, type(uint120).max);
-
     // Set the relevant payParams data
     payParams.weight = _tokenCount;
     payParams.metadata = '';
@@ -292,7 +291,7 @@ contract TestJBBuybackDelegate_Units is Test {
   }
 
   /**
-   * @notice Test didPay with 1 mutex and token received from swapping
+   * @notice Test didPay with token received from swapping
    */
   function test_didPay_swap(uint256 _tokenCount, uint256 _twapQuote, uint256 _reservedRate) public {
     // Bound to avoid overflow and insure swap quote > mint quote
@@ -386,7 +385,7 @@ contract TestJBBuybackDelegate_Units is Test {
   }
 
   /**
-   * @notice Test didPay with 1 mutex and token received from swapping
+   * @notice Test didPay when eth leftover from swap
    */
   function test_didPay_keepTrackOfETHToSweep() public {
     uint256 _tokenCount = 10;
