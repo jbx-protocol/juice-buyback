@@ -180,7 +180,7 @@ contract TestJBBuybackDelegate_Integration is TestBaseWorkflowV3 {
     _ids[0] = bytes4(hex'69');
 
     // Generate the metadata
-    bytes memory _metadata = _delegate.createMetadata(_ids, _data);
+    bytes memory _delegateMetadata = _delegate.createMetadata(_ids, _data);
 
     // Compute the project token which should have been minted (for the beneficiary or the reserve)
     uint256 totalMinted = PRBMath.mulDiv(payAmountInWei, weight, 10 ** 18);
@@ -211,7 +211,7 @@ contract TestJBBuybackDelegate_Integration is TestBaseWorkflowV3 {
       /* _memo */
       'Take my money!',
       /* _delegateMetadata */
-      _metadata
+      _delegateMetadata
     );
 
     // Check: correct beneficiary balance?
@@ -236,7 +236,7 @@ contract TestJBBuybackDelegate_Integration is TestBaseWorkflowV3 {
     _ids[0] = bytes4(hex'69');
 
     // Generate the metadata
-    bytes memory _metadata = _delegate.createMetadata(_ids, _data);
+    bytes memory _delegateMetadata = _delegate.createMetadata(_ids, _data);
 
     uint256 totalMinted = PRBMath.mulDiv(payAmountInWei, weight, 10 ** 18);
     uint256 amountBeneficiary = PRBMath.mulDiv(
@@ -270,7 +270,7 @@ contract TestJBBuybackDelegate_Integration is TestBaseWorkflowV3 {
       /* _memo */
       'Take my money!',
       /* _delegateMetadata */
-      _metadata
+      _delegateMetadata
     );
 
     assertEq(_jbTokenStore.balanceOf(_beneficiary, _projectId), amountBeneficiary);
@@ -298,7 +298,7 @@ contract TestJBBuybackDelegate_Integration is TestBaseWorkflowV3 {
     _ids[0] = bytes4(hex'69');
 
     // Generate the metadata
-    bytes memory _metadata = _delegate.createMetadata(_ids, _data);
+    bytes memory _delegateMetadata = _delegate.createMetadata(_ids, _data);
 
     // Mock the jbx transfer to the beneficiary - same logic as in delegate to avoid rounding errors
     uint256 reservedAmount = PRBMath.mulDiv(
@@ -343,7 +343,7 @@ contract TestJBBuybackDelegate_Integration is TestBaseWorkflowV3 {
       /* _memo */
       'Take my money!',
       /* _delegateMetadata */
-      _metadata
+      _delegateMetadata
     );
 
     assertEq(
