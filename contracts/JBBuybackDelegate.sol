@@ -16,7 +16,7 @@ import {JBRedeemParamsData} from '@jbx-protocol/juice-contracts-v3/contracts/str
 import {JBPayDelegateAllocation3_1_1} from '@jbx-protocol/juice-contracts-v3/contracts/structs/JBPayDelegateAllocation3_1_1.sol';
 import {JBRedemptionDelegateAllocation3_1_1} from '@jbx-protocol/juice-contracts-v3/contracts/structs/JBRedemptionDelegateAllocation3_1_1.sol';
 
-import {JBDelegateMetadataLib} from '@jbx-protocol/juice-delegate-metadata-lib/src/JBDelegateMetadataLib.sol';
+import {JBDelegateMetadataHelper} from '@jbx-protocol/juice-delegate-metadata-lib/src/JBDelegateMetadataHelper.sol';
 
 import {IERC20} from '@openzeppelin/contracts/interfaces/IERC20.sol';
 import {ERC165, IERC165} from '@openzeppelin/contracts/utils/introspection/ERC165.sol';
@@ -48,6 +48,7 @@ import {IWETH9} from './interfaces/external/IWETH9.sol';
 contract JBBuybackDelegate is
   Ownable,
   ERC165,
+  JBDelegateMetadataHelper,
   IJBFundingCycleDataSource3_1_1,
   IJBPayDelegate3_1_1,
   IUniswapV3SwapCallback
@@ -222,7 +223,7 @@ contract JBBuybackDelegate is
     // Get a quote based on either the uni SDK quote or a twap from the pool
     uint256 _swapAmountOut;
 
-    (bool _validQuote, bytes memory _metadata) = JBDelegateMetadataLib.getMetadata(delegateId, _data.metadata);
+    (bool _validQuote, bytes memory _metadata) = getMetadata(delegateId, _data.metadata);
 
     uint256 _quote;
     uint256 _slippage;
