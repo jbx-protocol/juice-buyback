@@ -222,7 +222,11 @@ contract JBBuybackDelegate is
     // Get a quote based on either the uni SDK quote or a twap from the pool
     uint256 _swapAmountOut;
 
-    (uint256 _quote, uint256 _slippage) = abi.decode(JBDelegateMetadataLib.getMetadata(delegateId, _data.metadata), (uint256, uint256));
+    (bool _validQuote, bytes memory _metadata) = JBDelegateMetadataLib.getMetadata(delegateId, _data.metadata);
+
+    uint256 _quote;
+    uint256 _slippage;
+    if(_validQuote) (_quote, _slippage) = abi.decode(_metadata, (uint256, uint256));
     
     if (_quote != 0) {
       // Unpack the quote from the pool, given by the frontend - this one takes precedence on the twap
