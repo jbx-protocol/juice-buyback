@@ -390,7 +390,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         vm.deal(address(delegate), 10 ether);
 
         // Add a previous leftover, to test the incremental accounting (ie 5 out of 10 were there)
-        stdstore.target(address(delegate)).sig("unclaimedSweepBalanceOf()").checked_write(5 ether);
+        stdstore.target(address(delegate)).sig("totalUnclaimedBalance()").checked_write(5 ether);
 
         // Out of these 5, 1 was for payer
         stdstore.target(address(delegate)).sig("sweepBalanceOf(address)").with_key(didPayData.payer).checked_write(
@@ -436,7 +436,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         delegate.didPay(didPayData);
 
         // Check: correct overall sweep balance?
-        assertEq(delegate.unclaimedSweepBalanceOf(address(weth)), 10 ether);
+        assertEq(delegate.totalUnclaimedBalance(address(weth)), 10 ether);
 
         // Check: correct dude sweep balance (1 previous plus 5 from now)?
         assertEq(delegate.sweepBalanceOf(dude, address(weth)), 6 ether);
@@ -553,6 +553,8 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             _id: bytes4(hex'69')
         });
 
+        delegate.ForTest_initPool(pool, projectId, secondsAgo, twapDelta, address(projectToken), address(weth)); 
+
         // If project is token0, then received is delta0 (the negative value)
         (_delta0, _delta1) = address(projectToken) < address(weth) ? (_delta0, _delta1) : (_delta1, _delta0);
 
@@ -584,6 +586,8 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             _controller: controller,
             _id: bytes4(hex'69')
         });
+    
+        delegate.ForTest_initPool(pool, projectId, secondsAgo, twapDelta, address(projectToken), address(weth)); 
 
         // mock and expect weth calls, this should transfer from delegate to pool (positive delta in the callback)
         vm.mockCall(address(weth), abi.encodeCall(weth.deposit, ()), "");
@@ -597,7 +601,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         );
 
         vm.prank(address(pool));
-        delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(projectId, _minReceived, projectToken, weth));
+        delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(projectId, _minReceived, weth, projectToken));
     }
 
     /**
@@ -631,17 +635,47 @@ contract TestJBGenericBuybackDelegate_Units is Test {
     /**
      * @notice Test sweep
      */
-    function test_sweep(uint256 _delegateLeftover, uint256 _dudeLeftover) public {
+    function test_sweep_erc20(uint256 _delegateLeftover, uint256 _dudeLeftover) public {
+        _dudeLeftover = bound(_dudeLeftover, 0, _delegateLeftover);
+
+        // Store the delegate leftover
+        stdstore.target(address(delegate)).sig("totalUnclaimedBalance(address)").with_key(address(weth)).checked_write(_delegateLeftover);
+
+        // Store the dude leftover
+        stdstore.target(address(delegate)).sig("sweepBalanceOf(address,address)").with_key(dude).with_key(address(weth)).checked_write(
+            _dudeLeftover
+        );
+
+        if(_dudeLeftover > 0) {
+            vm.mockCall(address(weth), abi.encodeCall(weth.transfer, (dude, _dudeLeftover)), abi.encode(true));
+            vm.expectCall(address(weth), abi.encodeCall(weth.transfer, (dude, _dudeLeftover)));
+        }
+
+        // Test: sweep
+        vm.prank(dude);
+        delegate.sweep(dude, address(weth));
+
+        // Check: correct overall sweep balance?
+        assertEq(delegate.totalUnclaimedBalance(address(weth)), _delegateLeftover - _dudeLeftover);
+
+        // Check: correct dude sweep balance
+        assertEq(delegate.sweepBalanceOf(dude, address(weth)), 0);
+    }
+
+    /**
+     * @notice Test sweep
+     */
+    function test_sweep_eth(uint256 _delegateLeftover, uint256 _dudeLeftover) public {
         _dudeLeftover = bound(_dudeLeftover, 0, _delegateLeftover);
 
         // Add the ETH
         vm.deal(address(delegate), _delegateLeftover);
 
         // Store the delegate leftover
-        stdstore.target(address(delegate)).sig("unclaimedSweepBalanceOf()").checked_write(_delegateLeftover);
+        stdstore.target(address(delegate)).sig("totalUnclaimedBalance(address)").with_key(JBTokens.ETH).checked_write(_delegateLeftover);
 
         // Store the dude leftover
-        stdstore.target(address(delegate)).sig("sweepBalanceOf(address)").with_key(didPayData.payer).checked_write(
+        stdstore.target(address(delegate)).sig("sweepBalanceOf(address,address)").with_key(dude).with_key(JBTokens.ETH).checked_write(
             _dudeLeftover
         );
 
@@ -649,16 +683,16 @@ contract TestJBGenericBuybackDelegate_Units is Test {
 
         // Test: sweep
         vm.prank(dude);
-        delegate.sweep(dude, address(weth));
+        delegate.sweep(dude, JBTokens.ETH);
 
         uint256 _balanceAfterSweep = dude.balance;
         uint256 _sweptAmount = _balanceAfterSweep - _balanceBeforeSweep;
 
         // Check: correct overall sweep balance?
-        assertEq(delegate.unclaimedSweepBalanceOf(address(weth)), _delegateLeftover - _dudeLeftover);
+        assertEq(delegate.totalUnclaimedBalance(JBTokens.ETH), _delegateLeftover - _dudeLeftover);
 
         // Check: correct dude sweep balance
-        assertEq(delegate.sweepBalanceOf(dude, address(weth)), 0);
+        assertEq(delegate.sweepBalanceOf(dude, JBTokens.ETH), 0);
 
         // Check: correct swept balance
         assertEq(_sweptAmount, _dudeLeftover);
@@ -668,11 +702,11 @@ contract TestJBGenericBuybackDelegate_Units is Test {
      * @notice Test sweep revert if transfer fails
      */
     function test_Sweep_revertIfTransferFails() public {
-        // Store the delegate leftover
-        stdstore.target(address(delegate)).sig("unclaimedSweepBalanceOf()").checked_write(1 ether);
+        // Store the delegate total leftover
+        stdstore.target(address(delegate)).sig("totalUnclaimedBalance(address)").with_key(JBTokens.ETH).checked_write(1 ether);
 
         // Store the dude leftover
-        stdstore.target(address(delegate)).sig("sweepBalanceOf(address)").with_key(didPayData.payer).checked_write(
+        stdstore.target(address(delegate)).sig("sweepBalanceOf(address,address)").with_key(dude).with_key(JBTokens.ETH).checked_write(
             1 ether
         );
 
@@ -685,7 +719,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         // Check: revert?
         vm.prank(dude);
         vm.expectRevert(abi.encodeWithSelector(JBGenericBuybackDelegate.JuiceBuyback_TransferFailed.selector));
-        delegate.sweep(dude, address(weth));
+        delegate.sweep(dude, JBTokens.ETH);
     }
 
     /**
