@@ -173,7 +173,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             assertEq(_allocationsReturned.length, 1);
             assertEq(address(_allocationsReturned[0].delegate), address(delegate));
             assertEq(_allocationsReturned[0].amount, 1 ether);
-            assertEq(_allocationsReturned[0].metadata, abi.encode(_tokenCount, _swapQuote));
+            assertEq(_allocationsReturned[0].metadata, abi.encode(_tokenCount, _swapQuote, projectToken));
 
             assertEq(_weightReturned, 0);
         }
@@ -241,7 +241,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             assertEq(_allocationsReturned.length, 1);
             assertEq(address(_allocationsReturned[0].delegate), address(delegate));
             assertEq(_allocationsReturned[0].amount, 1 ether);
-            assertEq(_allocationsReturned[0].metadata, abi.encode(_tokenCount, _twapAmountOut));
+            assertEq(_allocationsReturned[0].metadata, abi.encode(_tokenCount, _twapAmountOut, projectToken));
 
             assertEq(_weightReturned, 0);
         }
@@ -293,7 +293,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         _reservedRate = bound(_reservedRate, 0, 10000);
 
         // The metadata coming from payParams(..)
-        didPayData.dataSourceMetadata = abi.encode(_tokenCount, _twapQuote);
+        didPayData.dataSourceMetadata = abi.encode(_tokenCount, _twapQuote, projectToken);
 
         // The amount the beneficiary should receive
         uint256 _nonReservedToken =
@@ -309,7 +309,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
                     address(weth) < address(projectToken),
                     int256(1 ether),
                     address(projectToken) < address(weth) ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
-                    abi.encode(_twapQuote)
+                    abi.encode(projectId, _twapQuote, weth, projectToken)
                 )
             ),
             abi.encode(-int256(_twapQuote), -int256(_twapQuote))
@@ -318,14 +318,6 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         // mock the transfer call
         vm.mockCall(
             address(projectToken), abi.encodeCall(projectToken.transfer, (dude, _nonReservedToken)), abi.encode(true)
-        );
-
-        // mock the call to the directory, to get the controller
-        vm.mockCall(address(jbxTerminal), abi.encodeCall(jbxTerminal.directory, ()), abi.encode(address(directory)));
-        vm.mockCall(
-            address(directory),
-            abi.encodeCall(directory.controllerOf, (didPayData.projectId)),
-            abi.encode(address(controller))
         );
 
         // mock call to pass the authorization check
@@ -350,6 +342,9 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             ),
             abi.encode(true)
         );
+
+        // No leftover
+        vm.mockCall(address(weth), abi.encodeCall(weth.balanceOf, (address(delegate))), abi.encode(0));
 
         // expect event
         vm.expectEmit(true, true, true, true);
@@ -442,7 +437,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         _twapQuote = bound(_twapQuote, _tokenCount + 1, type(uint256).max);
 
         // The metadata coming from payParams(..)
-        didPayData.dataSourceMetadata = abi.encode(_tokenCount, _twapQuote);
+        didPayData.dataSourceMetadata = abi.encode(_tokenCount, _twapQuote, projectToken);
 
         // mock the swap call reverting
         vm.mockCallRevert(
@@ -454,7 +449,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
                     address(weth) < address(projectToken),
                     int256(1 ether),
                     address(projectToken) < address(weth) ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
-                    abi.encode(_twapQuote)
+                    abi.encode(projectId, _twapQuote, weth, projectToken)
                 )
             ),
             abi.encode("no swap")
@@ -491,10 +486,20 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             address(jbxTerminal),
             abi.encodeCall(
                 IJBPaymentTerminal(address(jbxTerminal)).addToBalanceOf,
-                (didPayData.projectId, 1 ether, JBTokens.ETH, "", "")
+                (didPayData.projectId, 1 ether, address(weth), "", "")
             ),
             ""
         );
+
+        // Mock the approval for the addToBalance
+        vm.mockCall(
+            address(weth),
+            abi.encodeCall(weth.approve, (address(jbxTerminal), 1 ether)),
+            abi.encode(true)
+        );
+
+        // Mock the no leftover
+        vm.mockCall(address(weth), abi.encodeCall(weth.balanceOf, (address(delegate))), abi.encode(0));
 
         // expect event
         vm.expectEmit(true, true, true, true);
