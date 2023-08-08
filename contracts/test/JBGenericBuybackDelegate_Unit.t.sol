@@ -39,8 +39,16 @@ contract TestJBGenericBuybackDelegate_Units is Test {
     IUniswapV3Pool pool = IUniswapV3Pool(0x48598Ff1Cee7b4d31f8f9050C2bbAE98e17E6b17);
     IERC20 projectToken = IERC20(0x3abF2A4f8452cCC2CF7b4C1e4663147600646f66);
     IWETH9 weth = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
-    address _uniswapFactory = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
     uint24 fee = 10000;
+
+    // A random non-weth pool: The PulseDogecoin Staking Carnival Token/HEX @ 0.3%
+    IERC20 otherRandomProjectToken = IERC20(0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39);
+    IERC20 randomTerminalToken = IERC20(0x488Db574C77dd27A07f9C97BAc673BC8E9fC6Bf3);
+    IUniswapV3Pool randomPool = IUniswapV3Pool(0x7668B2Ea8490955F68F5c33E77FE150066c94fb9);
+    uint24 randomFee = 3000;
+    uint256 randomId = 420;
+
+    address _uniswapFactory = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
 
     IJBPayoutRedemptionPaymentTerminal3_1_1 jbxTerminal =
         IJBPayoutRedemptionPaymentTerminal3_1_1(makeAddr("IJBPayoutRedemptionPaymentTerminal3_1"));
@@ -120,6 +128,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         });
 
         delegate.ForTest_initPool(pool, projectId, secondsAgo, twapDelta, address(projectToken), address(weth)); 
+        delegate.ForTest_initPool(randomPool, randomId, secondsAgo, twapDelta, address(otherRandomProjectToken), address(randomTerminalToken)); 
     }
 
     /**
@@ -286,7 +295,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
     /**
      * @notice Test didPay with token received from swapping
      */
-    function test_didPay_swap(uint256 _tokenCount, uint256 _twapQuote, uint256 _reservedRate) public {
+    function test_didPay_swap_ETH(uint256 _tokenCount, uint256 _twapQuote, uint256 _reservedRate) public {
         // Bound to avoid overflow and insure swap quote > mint quote
         _tokenCount = bound(_tokenCount, 2, type(uint256).max - 1);
         _twapQuote = bound(_twapQuote, _tokenCount + 1, type(uint256).max);
@@ -345,6 +354,83 @@ contract TestJBGenericBuybackDelegate_Units is Test {
 
         // No leftover
         vm.mockCall(address(weth), abi.encodeCall(weth.balanceOf, (address(delegate))), abi.encode(0));
+
+        // expect event
+        vm.expectEmit(true, true, true, true);
+        emit BuybackDelegate_Swap(didPayData.projectId, didPayData.amount.value, _twapQuote);
+
+        vm.prank(address(jbxTerminal));
+        delegate.didPay(didPayData);
+    }
+
+    /**
+     * @notice Test didPay with token received from swapping
+     */
+    function test_didPay_swap_ERC20(uint256 _tokenCount, uint256 _twapQuote, uint256 _reservedRate) public {
+        // Bound to avoid overflow and insure swap quote > mint quote
+        _tokenCount = bound(_tokenCount, 2, type(uint256).max - 1);
+        _twapQuote = bound(_twapQuote, _tokenCount + 1, type(uint256).max);
+        _reservedRate = bound(_reservedRate, 0, 10000);
+
+        didPayData.amount = JBTokenAmount({token: address(randomTerminalToken), value: 1 ether, decimals: 18, currency: 1});
+        didPayData.forwardedAmount = JBTokenAmount({token: address(randomTerminalToken), value: 1 ether, decimals: 18, currency: 1});
+        didPayData.projectId = randomId;
+
+        vm.mockCall(address(jbxTerminal), abi.encodeCall(IJBSingleTokenPaymentTerminal.token, ()), abi.encode(randomTerminalToken));
+
+        // The metadata coming from payParams(..)
+        didPayData.dataSourceMetadata = abi.encode(_tokenCount, _twapQuote, otherRandomProjectToken);
+
+        // The amount the beneficiary should receive
+        uint256 _nonReservedToken =
+            PRBMath.mulDiv(_twapQuote, JBConstants.MAX_RESERVED_RATE - _reservedRate, JBConstants.MAX_RESERVED_RATE);
+
+        // mock the swap call
+        vm.mockCall(
+            address(randomPool),
+            abi.encodeCall(
+                randomPool.swap,
+                (
+                    address(delegate),
+                    address(randomTerminalToken) < address(otherRandomProjectToken),
+                    int256(1 ether),
+                    address(otherRandomProjectToken) < address(randomTerminalToken) ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
+                    abi.encode(randomId, _twapQuote, randomTerminalToken, otherRandomProjectToken)
+                )
+            ),
+            abi.encode(-int256(_twapQuote), -int256(_twapQuote))
+        );
+
+        // mock the transfer call
+        vm.mockCall(
+            address(otherRandomProjectToken), abi.encodeCall(otherRandomProjectToken.transfer, (dude, _nonReservedToken)), abi.encode(true)
+        );
+
+        // mock call to pass the authorization check
+        vm.mockCall(
+            address(directory),
+            abi.encodeCall(directory.isTerminalOf, (didPayData.projectId, IJBPaymentTerminal(address(jbxTerminal)))),
+            abi.encode(true)
+        );
+
+        // mock the burn call
+        vm.mockCall(
+            address(controller),
+            abi.encodeCall(controller.burnTokensOf, (address(delegate), didPayData.projectId, _twapQuote, "", true)),
+            abi.encode(true)
+        );
+
+        // mock the minting call
+        vm.mockCall(
+            address(controller),
+            abi.encodeCall(
+                controller.mintTokensOf, (didPayData.projectId, _twapQuote, address(dude), didPayData.memo, true, true)
+            ),
+            abi.encode(true)
+        );
+
+        // No leftover
+        vm.mockCall(address(randomTerminalToken), abi.encodeCall(randomTerminalToken.balanceOf, (address(delegate))), abi.encode(0));
 
         // expect event
         vm.expectEmit(true, true, true, true);
