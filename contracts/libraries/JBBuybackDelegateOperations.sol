@@ -9,7 +9,5 @@ library JBBuybackDelegateOperations {
     // 20 - JBUriOperations (Set token URI)
     // [21..23] - JB721Operations
 
-    uint256 public constant SET_TWAP_PERIOD = 24;
-    uint256 public constant SET_SLIPPAGE = 25;
-    uint256 public constant SET_POOL = 26;
+    uint256 public constant MODIFY_POOL = 24;
 }
