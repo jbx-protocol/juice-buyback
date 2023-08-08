@@ -224,13 +224,18 @@ contract JBGenericBuybackDelegate is
         // If swap failed, mint instead, with the original weight + add to balance the token in
         if (_amountReceived == 0) _mint(_data, _tokenCount);
 
-        // Track any new eth left-over
+        // Any leftover in this contract?
         uint256 _terminalTokenInThisContract = _data.forwardedAmount.token == JBTokens.ETH
             ? address(this).balance
             : IERC20(_data.forwardedAmount.token).balanceOf(address(this));
+
+        // Any previous leftover?
         uint256 _terminalTokenPreviouslyInThisContract = totalUnclaimedBalance[_data.forwardedAmount.token];
+
+        // From these previous leftover, some belonging to the beneficiary?
         uint256 _beneficiarySweepBalance = sweepBalanceOf[_data.beneficiary][_data.forwardedAmount.token];
 
+        // Add any new leftover to the beneficiary and contract balance
         if (_terminalTokenInThisContract > 0 && _terminalTokenInThisContract != _beneficiarySweepBalance) {
             sweepBalanceOf[_data.beneficiary][_data.forwardedAmount.token] +=
                 _terminalTokenInThisContract - _terminalTokenPreviouslyInThisContract;
@@ -255,11 +260,13 @@ contract JBGenericBuybackDelegate is
         (uint256 _projectId, uint256 _minimumAmountReceived, address _terminalToken, address _projectToken) =
             abi.decode(data, (uint256, uint256, address, address));
 
+        // Get the terminal token, weth if it's an ETH terminal
         address _terminalTokenWithWETH = _terminalToken == JBTokens.ETH ? address(WETH) : _terminalToken;
 
         // Check if this is really a callback - only create2 pools are added to insure safety of this check (balance pending sweep at risk)
         if (msg.sender != address(poolOf[_projectId][_terminalTokenWithWETH])) revert JuiceBuyback_Unauthorized();
 
+        // Sort the pool tokens
         bool _tokenProjectIs0 = _projectToken < _terminalTokenWithWETH;
 
         // delta is in regard of the pool balance (positive = pool need to receive)
@@ -271,7 +278,7 @@ contract JBGenericBuybackDelegate is
             revert JuiceBuyback_MaximumSlippage();
         }
 
-        // Wrap ETH
+        // Wrap ETH if needed
         if (_terminalToken == JBTokens.ETH) WETH.deposit{value: _amountToSendToPool}();
 
         // Transfer the token to the pool
@@ -313,7 +320,7 @@ contract JBGenericBuybackDelegate is
     function setPoolFor(uint256 _projectId, uint24 _fee, uint32 _secondsAgo, uint256 _twapDelta, address _terminalToken)
         external
         requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.MODIFY_POOL)
-        returns(IUniswapV3Pool _newPool)
+        returns (IUniswapV3Pool _newPool)
     {
         // Get the project token
         address _projectToken = address(CONTROLLER.tokenStore().tokenOf(_projectId));
@@ -482,10 +489,9 @@ contract JBGenericBuybackDelegate is
         internal
         returns (uint256 _amountReceived)
     {
-        address _terminalToken = _data.forwardedAmount.token == JBTokens.ETH
-            ? address(WETH)
-            : _data.forwardedAmount.token;
-            
+        address _terminalToken =
+            _data.forwardedAmount.token == JBTokens.ETH ? address(WETH) : _data.forwardedAmount.token;
+
         bool _projectTokenIs0 = address(_projectToken) < _terminalToken;
 
         IUniswapV3Pool _pool = poolOf[_data.projectId][_terminalToken];
@@ -505,6 +511,7 @@ contract JBGenericBuybackDelegate is
             return _amountReceived;
         }
 
+        // Burn the whole amount received
         CONTROLLER.burnTokensOf({
             holder: address(this),
             projectId: _data.projectId,
@@ -513,6 +520,7 @@ contract JBGenericBuybackDelegate is
             preferClaimedTokens: true
         });
 
+        // Mint it again, to add the correct portion to the reserved token and take the claimed preference into account
         CONTROLLER.mintTokensOf({
             projectId: _data.projectId,
             tokenCount: _amountReceived,

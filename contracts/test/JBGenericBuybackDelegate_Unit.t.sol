@@ -127,8 +127,10 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             _id: bytes4(hex'69')
         });
 
-        delegate.ForTest_initPool(pool, projectId, secondsAgo, twapDelta, address(projectToken), address(weth)); 
-        delegate.ForTest_initPool(randomPool, randomId, secondsAgo, twapDelta, address(otherRandomProjectToken), address(randomTerminalToken)); 
+        delegate.ForTest_initPool(pool, projectId, secondsAgo, twapDelta, address(projectToken), address(weth));
+        delegate.ForTest_initPool(
+            randomPool, randomId, secondsAgo, twapDelta, address(otherRandomProjectToken), address(randomTerminalToken)
+        );
     }
 
     /**
@@ -387,8 +389,10 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         _twapQuote = bound(_twapQuote, _tokenCount + 1, type(uint256).max);
         _reservedRate = bound(_reservedRate, 0, 10000);
 
-        didPayData.amount = JBTokenAmount({token: address(randomTerminalToken), value: 1 ether, decimals: 18, currency: 1});
-        didPayData.forwardedAmount = JBTokenAmount({token: address(randomTerminalToken), value: 1 ether, decimals: 18, currency: 1});
+        didPayData.amount =
+            JBTokenAmount({token: address(randomTerminalToken), value: 1 ether, decimals: 18, currency: 1});
+        didPayData.forwardedAmount =
+            JBTokenAmount({token: address(randomTerminalToken), value: 1 ether, decimals: 18, currency: 1});
         didPayData.projectId = randomId;
 
         // The metadata coming from payParams(..)
@@ -403,7 +407,9 @@ contract TestJBGenericBuybackDelegate_Units is Test {
                     address(delegate),
                     address(randomTerminalToken) < address(otherRandomProjectToken),
                     int256(1 ether),
-                    address(otherRandomProjectToken) < address(randomTerminalToken) ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
+                    address(otherRandomProjectToken) < address(randomTerminalToken)
+                        ? TickMath.MAX_SQRT_RATIO - 1
+                        : TickMath.MIN_SQRT_RATIO + 1,
                     abi.encode(randomId, _twapQuote, randomTerminalToken, otherRandomProjectToken)
                 )
             ),
@@ -417,7 +423,9 @@ contract TestJBGenericBuybackDelegate_Units is Test {
                     address(delegate),
                     address(randomTerminalToken) < address(otherRandomProjectToken),
                     int256(1 ether),
-                    address(otherRandomProjectToken) < address(randomTerminalToken) ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
+                    address(otherRandomProjectToken) < address(randomTerminalToken)
+                        ? TickMath.MAX_SQRT_RATIO - 1
+                        : TickMath.MIN_SQRT_RATIO + 1,
                     abi.encode(randomId, _twapQuote, randomTerminalToken, otherRandomProjectToken)
                 )
             )
@@ -461,7 +469,11 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         );
 
         // No leftover
-        vm.mockCall(address(randomTerminalToken), abi.encodeCall(randomTerminalToken.balanceOf, (address(delegate))), abi.encode(0));
+        vm.mockCall(
+            address(randomTerminalToken),
+            abi.encodeCall(randomTerminalToken.balanceOf, (address(delegate))),
+            abi.encode(0)
+        );
         vm.expectCall(address(randomTerminalToken), abi.encodeCall(randomTerminalToken.balanceOf, (address(delegate))));
 
         // expect event
@@ -486,12 +498,14 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         vm.deal(address(delegate), 10 ether);
 
         // Add a previous leftover, to test the incremental accounting (ie 5 out of 10 were there)
-        stdstore.target(address(delegate)).sig("totalUnclaimedBalance(address)").with_key(JBTokens.ETH).checked_write(5 ether);
+        stdstore.target(address(delegate)).sig("totalUnclaimedBalance(address)").with_key(JBTokens.ETH).checked_write(
+            5 ether
+        );
 
         // Out of these 5, 1 was for payer
-        stdstore.target(address(delegate)).sig("sweepBalanceOf(address,address)").with_key(didPayData.payer).with_key(JBTokens.ETH).checked_write(
-            1 ether
-        );
+        stdstore.target(address(delegate)).sig("sweepBalanceOf(address,address)").with_key(didPayData.payer).with_key(
+            JBTokens.ETH
+        ).checked_write(1 ether);
 
         // mock call to pass the authorization check
         vm.mockCall(
@@ -548,14 +562,16 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         vm.mockCall(
             address(controller),
             abi.encodeCall(
-                controller.mintTokensOf, (didPayData.projectId, _twapQuote, address(dude), didPayData.memo, didPayData.preferClaimedTokens, true)
+                controller.mintTokensOf,
+                (didPayData.projectId, _twapQuote, address(dude), didPayData.memo, didPayData.preferClaimedTokens, true)
             ),
             abi.encode(true)
         );
         vm.expectCall(
             address(controller),
             abi.encodeCall(
-                controller.mintTokensOf, (didPayData.projectId, _twapQuote, address(dude), didPayData.memo, didPayData.preferClaimedTokens, true)
+                controller.mintTokensOf,
+                (didPayData.projectId, _twapQuote, address(dude), didPayData.memo, didPayData.preferClaimedTokens, true)
             )
         );
 
@@ -661,11 +677,17 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         _tokenCount = bound(_tokenCount, 2, type(uint256).max - 1);
         _twapQuote = bound(_twapQuote, _tokenCount + 1, type(uint256).max);
 
-        didPayData.amount = JBTokenAmount({token: address(randomTerminalToken), value: 1 ether, decimals: 18, currency: 1});
-        didPayData.forwardedAmount = JBTokenAmount({token: address(randomTerminalToken), value: 1 ether, decimals: 18, currency: 1});
+        didPayData.amount =
+            JBTokenAmount({token: address(randomTerminalToken), value: 1 ether, decimals: 18, currency: 1});
+        didPayData.forwardedAmount =
+            JBTokenAmount({token: address(randomTerminalToken), value: 1 ether, decimals: 18, currency: 1});
         didPayData.projectId = randomId;
 
-        vm.mockCall(address(jbxTerminal), abi.encodeCall(IJBSingleTokenPaymentTerminal.token, ()), abi.encode(randomTerminalToken));
+        vm.mockCall(
+            address(jbxTerminal),
+            abi.encodeCall(IJBSingleTokenPaymentTerminal.token, ()),
+            abi.encode(randomTerminalToken)
+        );
 
         // The metadata coming from payParams(..)
         didPayData.dataSourceMetadata = abi.encode(_tokenCount, _twapQuote, otherRandomProjectToken);
@@ -679,7 +701,9 @@ contract TestJBGenericBuybackDelegate_Units is Test {
                     address(delegate),
                     address(randomTerminalToken) < address(otherRandomProjectToken),
                     int256(1 ether),
-                    address(otherRandomProjectToken) < address(randomTerminalToken) ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
+                    address(otherRandomProjectToken) < address(randomTerminalToken)
+                        ? TickMath.MAX_SQRT_RATIO - 1
+                        : TickMath.MIN_SQRT_RATIO + 1,
                     abi.encode(randomId, _twapQuote, randomTerminalToken, otherRandomProjectToken)
                 )
             ),
@@ -739,12 +763,15 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             abi.encode(true)
         );
         vm.expectCall(
-            address(randomTerminalToken),
-            abi.encodeCall(randomTerminalToken.approve, (address(jbxTerminal), 1 ether))
+            address(randomTerminalToken), abi.encodeCall(randomTerminalToken.approve, (address(jbxTerminal), 1 ether))
         );
 
         // Mock the no leftover
-        vm.mockCall(address(randomTerminalToken), abi.encodeCall(randomTerminalToken.balanceOf, (address(delegate))), abi.encode(0));
+        vm.mockCall(
+            address(randomTerminalToken),
+            abi.encodeCall(randomTerminalToken.balanceOf, (address(delegate))),
+            abi.encode(0)
+        );
         vm.expectCall(address(randomTerminalToken), abi.encodeCall(randomTerminalToken.balanceOf, (address(delegate))));
 
         // expect event
@@ -799,7 +826,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             _id: bytes4(hex'69')
         });
 
-        delegate.ForTest_initPool(pool, projectId, secondsAgo, twapDelta, address(projectToken), address(weth)); 
+        delegate.ForTest_initPool(pool, projectId, secondsAgo, twapDelta, address(projectToken), address(weth));
 
         // If project is token0, then received is delta0 (the negative value)
         (_delta0, _delta1) = address(projectToken) < address(weth) ? (_delta0, _delta1) : (_delta1, _delta0);
@@ -823,7 +850,9 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         );
 
         vm.prank(address(pool));
-        delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(projectId, _minReceived, JBTokens.ETH, projectToken));
+        delegate.uniswapV3SwapCallback(
+            _delta0, _delta1, abi.encode(projectId, _minReceived, JBTokens.ETH, projectToken)
+        );
 
         /**
          * Second branch
@@ -839,8 +868,8 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             _controller: controller,
             _id: bytes4(hex'69')
         });
-    
-        delegate.ForTest_initPool(pool, projectId, secondsAgo, twapDelta, address(projectToken), address(weth)); 
+
+        delegate.ForTest_initPool(pool, projectId, secondsAgo, twapDelta, address(projectToken), address(weth));
 
         vm.mockCall(
             address(weth),
@@ -895,14 +924,15 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         _dudeLeftover = bound(_dudeLeftover, 0, _delegateLeftover);
 
         // Store the delegate leftover
-        stdstore.target(address(delegate)).sig("totalUnclaimedBalance(address)").with_key(address(weth)).checked_write(_delegateLeftover);
-
-        // Store the dude leftover
-        stdstore.target(address(delegate)).sig("sweepBalanceOf(address,address)").with_key(dude).with_key(address(weth)).checked_write(
-            _dudeLeftover
+        stdstore.target(address(delegate)).sig("totalUnclaimedBalance(address)").with_key(address(weth)).checked_write(
+            _delegateLeftover
         );
 
-        if(_dudeLeftover > 0) {
+        // Store the dude leftover
+        stdstore.target(address(delegate)).sig("sweepBalanceOf(address,address)").with_key(dude).with_key(address(weth))
+            .checked_write(_dudeLeftover);
+
+        if (_dudeLeftover > 0) {
             vm.mockCall(address(weth), abi.encodeCall(weth.transfer, (dude, _dudeLeftover)), abi.encode(true));
             vm.expectCall(address(weth), abi.encodeCall(weth.transfer, (dude, _dudeLeftover)));
         }
@@ -928,12 +958,13 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         vm.deal(address(delegate), _delegateLeftover);
 
         // Store the delegate leftover
-        stdstore.target(address(delegate)).sig("totalUnclaimedBalance(address)").with_key(JBTokens.ETH).checked_write(_delegateLeftover);
+        stdstore.target(address(delegate)).sig("totalUnclaimedBalance(address)").with_key(JBTokens.ETH).checked_write(
+            _delegateLeftover
+        );
 
         // Store the dude leftover
-        stdstore.target(address(delegate)).sig("sweepBalanceOf(address,address)").with_key(dude).with_key(JBTokens.ETH).checked_write(
-            _dudeLeftover
-        );
+        stdstore.target(address(delegate)).sig("sweepBalanceOf(address,address)").with_key(dude).with_key(JBTokens.ETH)
+            .checked_write(_dudeLeftover);
 
         uint256 _balanceBeforeSweep = dude.balance;
 
@@ -959,12 +990,13 @@ contract TestJBGenericBuybackDelegate_Units is Test {
      */
     function test_sweep_revertIfTransferFails() public {
         // Store the delegate total leftover
-        stdstore.target(address(delegate)).sig("totalUnclaimedBalance(address)").with_key(JBTokens.ETH).checked_write(1 ether);
-
-        // Store the dude leftover
-        stdstore.target(address(delegate)).sig("sweepBalanceOf(address,address)").with_key(dude).with_key(JBTokens.ETH).checked_write(
+        stdstore.target(address(delegate)).sig("totalUnclaimedBalance(address)").with_key(JBTokens.ETH).checked_write(
             1 ether
         );
+
+        // Store the dude leftover
+        stdstore.target(address(delegate)).sig("sweepBalanceOf(address,address)").with_key(dude).with_key(JBTokens.ETH)
+            .checked_write(1 ether);
 
         // Deal enough ETH
         vm.deal(address(delegate), 1 ether);
@@ -1004,17 +1036,21 @@ contract TestJBGenericBuybackDelegate_Units is Test {
 
         vm.mockCall(
             address(operatorStore),
-            abi.encodeCall(operatorStore.hasPermission, (_notOwner, owner, projectId, JBBuybackDelegateOperations.MODIFY_POOL)), 
+            abi.encodeCall(
+                operatorStore.hasPermission, (_notOwner, owner, projectId, JBBuybackDelegateOperations.MODIFY_POOL)
+            ),
             abi.encode(false)
         );
         vm.expectCall(
             address(operatorStore),
-            abi.encodeCall(operatorStore.hasPermission, (_notOwner, owner, projectId, JBBuybackDelegateOperations.MODIFY_POOL))
+            abi.encodeCall(
+                operatorStore.hasPermission, (_notOwner, owner, projectId, JBBuybackDelegateOperations.MODIFY_POOL)
+            )
         );
 
         vm.mockCall(
             address(operatorStore),
-            abi.encodeCall(operatorStore.hasPermission, (_notOwner, owner, 0, JBBuybackDelegateOperations.MODIFY_POOL)), 
+            abi.encodeCall(operatorStore.hasPermission, (_notOwner, owner, 0, JBBuybackDelegateOperations.MODIFY_POOL)),
             abi.encode(false)
         );
         vm.expectCall(
@@ -1057,17 +1093,21 @@ contract TestJBGenericBuybackDelegate_Units is Test {
 
         vm.mockCall(
             address(operatorStore),
-            abi.encodeCall(operatorStore.hasPermission, (_notOwner, owner, projectId, JBBuybackDelegateOperations.MODIFY_POOL)), 
+            abi.encodeCall(
+                operatorStore.hasPermission, (_notOwner, owner, projectId, JBBuybackDelegateOperations.MODIFY_POOL)
+            ),
             abi.encode(false)
         );
         vm.expectCall(
             address(operatorStore),
-            abi.encodeCall(operatorStore.hasPermission, (_notOwner, owner, projectId, JBBuybackDelegateOperations.MODIFY_POOL))
+            abi.encodeCall(
+                operatorStore.hasPermission, (_notOwner, owner, projectId, JBBuybackDelegateOperations.MODIFY_POOL)
+            )
         );
 
         vm.mockCall(
             address(operatorStore),
-            abi.encodeCall(operatorStore.hasPermission, (_notOwner, owner, 0, JBBuybackDelegateOperations.MODIFY_POOL)), 
+            abi.encodeCall(operatorStore.hasPermission, (_notOwner, owner, 0, JBBuybackDelegateOperations.MODIFY_POOL)),
             abi.encode(false)
         );
         vm.expectCall(
@@ -1085,27 +1125,27 @@ contract TestJBGenericBuybackDelegate_Units is Test {
 }
 
 contract ForTest_JBGenericBuybackDelegate is JBGenericBuybackDelegate {
-    constructor(
-        IWETH9 _weth,
-        address _factory,
-        IJBDirectory _directory,
-        IJBController3_1 _controller,
-        bytes4 _id
-    )
-        JBGenericBuybackDelegate(
-            _weth,
-            _factory,
-            _directory,
-            _controller,
-            _id
-        )
+    constructor(IWETH9 _weth, address _factory, IJBDirectory _directory, IJBController3_1 _controller, bytes4 _id)
+        JBGenericBuybackDelegate(_weth, _factory, _directory, _controller, _id)
     {}
 
-    function ForTest_getQuote(uint256 _projectId, IJBPaymentTerminal _terminal, address _projectToken, uint256 _amountIn) external view returns (uint256 _amountOut) {
-        return _getQuote( _projectId,  _terminal,  _projectToken,  _amountIn);
+    function ForTest_getQuote(
+        uint256 _projectId,
+        IJBPaymentTerminal _terminal,
+        address _projectToken,
+        uint256 _amountIn
+    ) external view returns (uint256 _amountOut) {
+        return _getQuote(_projectId, _terminal, _projectToken, _amountIn);
     }
 
-    function ForTest_initPool(IUniswapV3Pool _pool, uint256 _projectId, uint32 _secondsAgo, uint256 _twapDelta, address _projectToken, address _terminalToken) external{
+    function ForTest_initPool(
+        IUniswapV3Pool _pool,
+        uint256 _projectId,
+        uint32 _secondsAgo,
+        uint256 _twapDelta,
+        address _projectToken,
+        address _terminalToken
+    ) external {
         secondsAgoOf[_projectId] = _secondsAgo;
         twapDeltaOf[_projectId] = _twapDelta;
         projectTokenOf[_projectId] = _projectToken;
