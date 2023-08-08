@@ -568,7 +568,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         );
 
         vm.prank(address(pool));
-        delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(_minReceived));
+        delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(projectId, _minReceived, weth, projectToken));
 
         /**
          * Second branch
@@ -597,7 +597,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         );
 
         vm.prank(address(pool));
-        delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(_minReceived));
+        delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(projectId, _minReceived, projectToken, weth));
     }
 
     /**
@@ -609,7 +609,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         uint256 _minReceived = 25;
 
         vm.expectRevert(abi.encodeWithSelector(JBGenericBuybackDelegate.JuiceBuyback_Unauthorized.selector));
-        delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(_minReceived));
+        delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(projectId, _minReceived, weth, projectToken));
     }
 
     /**
@@ -625,7 +625,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
 
         vm.prank(address(pool));
         vm.expectRevert(abi.encodeWithSelector(JBGenericBuybackDelegate.JuiceBuyback_MaximumSlippage.selector));
-        delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(_minReceived));
+        delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(projectId, _minReceived, weth, projectToken));
     }
 
     /**
@@ -707,16 +707,16 @@ contract TestJBGenericBuybackDelegate_Units is Test {
     /**
      * @notice Test increase seconds ago revert if wrong caller
      */
-    // function test_increaseSecondsAgo_revertIfWrongCaller(address _notOwner) public {
-    //     vm.assume(owner != _notOwner);
+    function test_increaseSecondsAgo_revertIfWrongCaller(address _notOwner) public {
+        vm.assume(owner != _notOwner);
 
-    //     // check: revert?
-    //     vm.expectRevert("Ownable: caller is not the owner");
+        // check: revert?
+        vm.expectRevert("Ownable: caller is not the owner");
 
-    //     // Test: change seconds ago (left uninit/at 0)
-    //     vm.startPrank(_notOwner);
-    //     delegate.increaseSecondsAgo(999);
-    // }
+        // Test: change seconds ago (left uninit/at 0)
+        vm.startPrank(_notOwner);
+        delegate.changeSecondsAgo(projectId, 999);
+    }
 
     /**
      * @notice Test set twap delta
@@ -740,16 +740,16 @@ contract TestJBGenericBuybackDelegate_Units is Test {
     /**
      * @notice Test set twap delta reverts if wrong caller
      */
-    // function test_setTwapDelta_revertWrongCaller(address _notOwner) public {
-    //     vm.assume(owner != _notOwner);
+    function test_setTwapDelta_revertWrongCaller(address _notOwner) public {
+        vm.assume(owner != _notOwner);
 
-    //     // check: revert?
-    //     vm.expectRevert("Ownable: caller is not the owner");
+        // check: revert?
+        vm.expectRevert("Ownable: caller is not the owner");
 
-    //     // Test: set the twap
-    //     vm.prank(_notOwner);
-    //     delegate.setTwapDelta(1);
-    // }
+        // Test: set the twap
+        vm.prank(_notOwner);
+        delegate.setTwapDelta(projectId, 1);
+    }
 }
 
 contract ForTest_JBGenericBuybackDelegate is JBGenericBuybackDelegate {
