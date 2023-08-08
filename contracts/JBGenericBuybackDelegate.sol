@@ -9,12 +9,14 @@ import {IJBFundingCycleDataSource3_1_1} from
     "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleDataSource3_1_1.sol";
 import {IJBPayDelegate3_1_1} from "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayDelegate3_1_1.sol";
 import {IJBPaymentTerminal} from "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPaymentTerminal.sol";
+import {IJBProjects} from "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBProjects.sol";
 import {IJBSingleTokenPaymentTerminal} from
     "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBSingleTokenPaymentTerminal.sol";
 
 import {JBTokens} from "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBTokens.sol";
 
 import {JBDidPayData3_1_1} from "@jbx-protocol/juice-contracts-v3/contracts/structs/JBDidPayData3_1_1.sol";
+import {JBOperatable} from "@jbx-protocol/juice-contracts-v3/contracts/abstract/JBOperatable.sol";
 import {JBPayParamsData} from "@jbx-protocol/juice-contracts-v3/contracts/structs/JBPayParamsData.sol";
 import {JBRedeemParamsData} from "@jbx-protocol/juice-contracts-v3/contracts/structs/JBRedeemParamsData.sol";
 import {JBPayDelegateAllocation3_1_1} from
@@ -26,7 +28,6 @@ import {JBDelegateMetadataHelper} from "@jbx-protocol/juice-delegate-metadata-li
 
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {ERC165, IERC165} from "@openzeppelin/contracts/utils/introspection/ERC165.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 import {mulDiv18} from "@prb/math/src/Common.sol";
 
@@ -37,6 +38,7 @@ import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import {OracleLibrary} from "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
 
 import {IWETH9} from "./interfaces/external/IWETH9.sol";
+import {JBBuybackDelegateOperations} from "./libraries/JBBuybackDelegateOperations.sol";
 
 /**
  * @custom:benediction DEVS BENEDICAT ET PROTEGAT CONTRACTVS MEAM
@@ -51,9 +53,9 @@ import {IWETH9} from "./interfaces/external/IWETH9.sol";
  */
 
 contract JBGenericBuybackDelegate is
-    Ownable,
     ERC165,
     JBDelegateMetadataHelper,
+    JBOperatable,
     IJBFundingCycleDataSource3_1_1,
     IJBPayDelegate3_1_1,
     IUniswapV3SwapCallback
@@ -65,6 +67,7 @@ contract JBGenericBuybackDelegate is
     error JuiceBuyback_Unauthorized();
     error JuiceBuyback_MaximumSlippage();
     error JuiceBuyback_NewSecondsAgoTooLow();
+    error JuiceBuyback_NoProjectToken();
     error JuiceBuyback_TransferFailed();
 
     //*********************************************************************//
@@ -75,18 +78,21 @@ contract JBGenericBuybackDelegate is
     event BuybackDelegate_Mint(uint256 indexed projectId);
     event BuybackDelegate_SecondsAgoChanged(uint256 indexed projectId, uint256 oldSecondsAgo, uint256 newSecondsAgo);
     event BuybackDelegate_TwapDeltaChanged(uint256 indexed projectId, uint256 oldTwapDelta, uint256 newTwapDelta);
-    event BuybackDelegate_PendingSweep(address indexed beneficiary, uint256 amount);
-    event BuybackDelegate_PoolAdded(uint256 indexed projectId, IERC20 indexed terminalToken, address newPool);
+    event BuybackDelegate_PendingSweep(address indexed beneficiary, address indexed token, uint256 amount);
+    event BuybackDelegate_PoolAdded(uint256 indexed projectId, address indexed terminalToken, address newPool);
 
     //*********************************************************************//
-    // --------------------- private constant properties ----------------- //
+    // --------------------- public constant properties ----------------- //
     //*********************************************************************//
     /**
      * @notice The unit of the max slippage (expressed in 1/10000th)
      */
-    uint256 constant SLIPPAGE_DENOMINATOR = 10000;
+    uint256 public constant SLIPPAGE_DENOMINATOR = 10000;
 
-    address immutable UNISWAP_V3_FACTORY;
+    /**
+     * @notice The uniswap v3 factory
+     */
+    address public immutable UNISWAP_V3_FACTORY;
 
     /**
      * @notice The JB Directory
@@ -99,6 +105,11 @@ contract JBGenericBuybackDelegate is
     IJBController3_1 public immutable CONTROLLER;
 
     /**
+     * @notice The project registry
+     */
+    IJBProjects public immutable PROJECTS;
+
+    /**
      * @notice The WETH contract
      */
     IWETH9 public immutable WETH;
@@ -106,7 +117,6 @@ contract JBGenericBuybackDelegate is
     /**
      * @notice The 4bytes ID of this delegate, used for metadata parsing
      */
-
     bytes4 public immutable delegateId;
 
     //*********************************************************************//
@@ -117,21 +127,31 @@ contract JBGenericBuybackDelegate is
      * @notice The uniswap pool corresponding to the project token-terminal token market
      *         (this should be carefully chosen liquidity wise)
      */
-    mapping(uint256 _projectId => mapping(IERC20 _terminalToken => IUniswapV3Pool _pool)) public poolOf;
+    mapping(uint256 _projectId => mapping(address _terminalToken => IUniswapV3Pool _pool)) public poolOf;
 
-    // the timeframe to use for the pool twap (from secondAgo to now)
+    /**
+     * @notice The timeframe to use for the pool twap (from secondAgo to now)
+     */
     mapping(uint256 _projectId => uint32 _seconds) public secondsAgoOf;
 
-    // the twap max deviation acepted (in 10_000th)
+    /**
+     * @notice The twap max deviation acepted (in 10_000th)
+     */
     mapping(uint256 _projectId => uint256 _delta) public twapDeltaOf;
 
-    // the project token
-    mapping(uint256 _projectId => IERC20 projectTokenOf) public projectTokenOf;
+    /**
+     * @notice The project token
+     */
+    mapping(uint256 _projectId => address projectTokenOf) public projectTokenOf;
 
-    // any ETH left-over in this contract (from swap in the end of liquidity range)
-    mapping(address _beneficiary => mapping(IERC20 _token => uint256 _balance)) public sweepBalanceOf;
+    /**
+     * @notice Any ETH left-over in this contract (from swap in the end of liquidity range)
+     */
+    mapping(address _beneficiary => mapping(address _token => uint256 _balance)) public sweepBalanceOf;
 
-    // running cumulative sum of ETH left-over
+    /**
+     * @notice Running cumulative sum of ETH left-over
+     */
     mapping(address _token => uint256 _contractBalance) public unclaimedSweepBalanceOf;
 
     //*********************************************************************//
@@ -147,59 +167,14 @@ contract JBGenericBuybackDelegate is
         IJBDirectory _directory,
         IJBController3_1 _controller,
         bytes4 _delegateId
-    ) {
+    ) JBOperatable(JBOperatable(address(_controller)).operatorStore()) {
         WETH = _weth;
         DIRECTORY = _directory;
         CONTROLLER = _controller;
         UNISWAP_V3_FACTORY = _factory;
         delegateId = _delegateId;
-    }
 
-    // Act as a default pool for a given project - use create2 for callback auth
-    function setPoolFor(uint256 _projectId, uint24 _fee, uint32 _secondsAgo, uint256 _twapDelta, address _terminalToken)
-        external
-        onlyOwner
-    {
-        // Get the project token
-        IERC20 _projectToken = CONTROLLER.tokenStore().tokenOf(_projectId);
-
-        bool _projectTokenIs0 = address(_projectToken) < _terminalToken;
-
-        // Compute the corresponding pool
-        IUniswapV3Pool _newPool = IUniswapV3Pool(
-            address(
-                uint160(
-                    uint256(
-                        keccak256(
-                            abi.encodePacked(
-                                hex"ff",
-                                UNISWAP_V3_FACTORY,
-                                keccak256(
-                                    abi.encode(
-                                        _projectTokenIs0 ? _projectToken : _terminalToken,
-                                        _projectTokenIs0 ? _terminalToken : _projectToken,
-                                        _fee
-                                    )
-                                ),
-                                bytes32(0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54)
-                            )
-                        )
-                    )
-                )
-            )
-        );
-
-        // Store the twap period and max slippage
-        secondsAgoOf[_projectId] = _secondsAgo;
-        twapDeltaOf[_projectId] = _twapDelta;
-        projectTokenOf[_projectId] = _projectToken;
-
-        // Store the pool
-        poolOf[_projectId][_terminalToken] = _newPool;
-
-        emit BuybackDelegate_SecondsAgoIncrease(_projectId, 0, _secondsAgo);
-        emit BuybackDelegate_TwapDeltaChanged(_projectId, 0, _twapDelta);
-        emit BuybackDelegate_PoolAdded(_projectId, _terminalToken, address(_newPool));
+        PROJECTS = _controller.projects();
     }
 
     //*********************************************************************//
@@ -234,7 +209,7 @@ contract JBGenericBuybackDelegate is
         uint256 _slippage;
         if (_validQuote) (_quote, _slippage) = abi.decode(_metadata, (uint256, uint256));
 
-        IERC20 _projectToken = projectTokenOf(_data.projectId);
+        address _projectToken = projectTokenOf[_data.projectId];
 
         if (_quote != 0) {
             // Unpack the quote from the pool, given by the frontend - this one takes precedence on the twap
@@ -250,7 +225,7 @@ contract JBGenericBuybackDelegate is
             delegateAllocations = new JBPayDelegateAllocation3_1_1[](1);
             delegateAllocations[0] = JBPayDelegateAllocation3_1_1({
                 delegate: IJBPayDelegate3_1_1(this),
-                amount: _data.forwardedAmount.value,
+                amount: _data.amount.value,
                 metadata: abi.encode(_tokenCount, _swapAmountOut, _projectToken)
             });
 
@@ -299,6 +274,7 @@ contract JBGenericBuybackDelegate is
 
             emit BuybackDelegate_PendingSweep(
                 _data.beneficiary,
+                _data.forwardedAmount.token,
                 _terminalTokenInThisContract - sweepBalanceOf[_data.beneficiary][_data.forwardedAmount.token]
             );
 
@@ -358,11 +334,76 @@ contract JBGenericBuybackDelegate is
     }
 
     /**
+     * @notice Add a pool for a given project. This pools the become the default one for a given token project-terminal token
+     *
+     * @dev    Uses create2 for callback auth and allows adding a pool not deployed yet.
+     *         This can be called by the project owner or an address having the SET_POOL permission in JBOperatorStore
+     *
+     * @param  _projectId the project id
+     * @param  _fee the fee of the pool
+     * @param  _secondsAgo the period over which the twap is computed
+     * @param  _twapDelta the maximum deviation allowed between amount received and twap
+     * @param  _terminalToken the terminal token
+     */
+    function setPoolFor(uint256 _projectId, uint24 _fee, uint32 _secondsAgo, uint256 _twapDelta, address _terminalToken)
+        external
+        requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.SET_POOL)
+    {
+        // Get the project token
+        address _projectToken = address(CONTROLLER.tokenStore().tokenOf(_projectId));
+
+        if (_projectToken == address(0)) revert JuiceBuyback_NoProjectToken();
+
+        bool _projectTokenIs0 = address(_projectToken) < _terminalToken;
+
+        // Compute the corresponding pool
+        IUniswapV3Pool _newPool = IUniswapV3Pool(
+            address(
+                uint160(
+                    uint256(
+                        keccak256(
+                            abi.encodePacked(
+                                hex"ff",
+                                UNISWAP_V3_FACTORY,
+                                keccak256(
+                                    abi.encode(
+                                        _projectTokenIs0 ? _projectToken : _terminalToken,
+                                        _projectTokenIs0 ? _terminalToken : _projectToken,
+                                        _fee
+                                    )
+                                ),
+                                bytes32(0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54)
+                            )
+                        )
+                    )
+                )
+            )
+        );
+
+        // Store the twap period and max slippage
+        secondsAgoOf[_projectId] = _secondsAgo;
+        twapDeltaOf[_projectId] = _twapDelta;
+        projectTokenOf[_projectId] = address(_projectToken);
+
+        // Store the pool
+        poolOf[_projectId][_terminalToken] = _newPool;
+
+        emit BuybackDelegate_SecondsAgoChanged(_projectId, 0, _secondsAgo);
+        emit BuybackDelegate_TwapDeltaChanged(_projectId, 0, _twapDelta);
+        emit BuybackDelegate_PoolAdded(_projectId, _terminalToken, address(_newPool));
+    }
+
+    /**
      * @notice Increase the period over which the twap is computed
+     *
+     * @dev    This can be called by the project owner or an address having the SET_TWAP_PERIOD permission in JBOperatorStore 
      *
      * @param  _newSecondsAgo the new period
      */
-    function changeSecondsAgo(uint256 _projectId, uint32 _newSecondsAgo) external onlyOwner {
+    function changeSecondsAgo(uint256 _projectId, uint32 _newSecondsAgo)
+        external
+        requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.SET_TWAP_PERIOD)
+    {
         uint256 _oldValue = secondsAgoOf[_projectId];
         secondsAgoOf[_projectId] = _newSecondsAgo;
 
@@ -372,9 +413,14 @@ contract JBGenericBuybackDelegate is
     /**
      * @notice Set the maximum deviation allowed between amount received and twap
      *
+     * @dev    This can be called by the project owner or an address having the SET_POOL permission in JBOperatorStore
+     *
      * @param  _newDelta the new delta, in 10_000th
      */
-    function setTwapDelta(uint256 _projectId, uint256 _newDelta) external onlyOwner {
+    function setTwapDelta(uint256 _projectId, uint256 _newDelta)
+        external
+        requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.SET_SLIPPAGE)
+    {
         uint256 _oldDelta = twapDeltaOf[_projectId];
         twapDeltaOf[_projectId] = _newDelta;
 
@@ -382,9 +428,9 @@ contract JBGenericBuybackDelegate is
     }
 
     /**
-     * @notice Sweep the eth left-over in this contract
+     * @notice Sweep the token left-over in this contract
      */
-    function sweep(IERC20 _token, address _beneficiary) external {
+    function sweep(address _token, address _beneficiary) external {
         // The beneficiary ETH balance in this contract leftover
         uint256 _balance = sweepBalanceOf[_beneficiary][_token];
 
@@ -400,10 +446,10 @@ contract JBGenericBuybackDelegate is
             (bool _success,) = payable(_beneficiary).call{value: _balance}("");
             if (!_success) revert JuiceBuyback_TransferFailed();
         } else {
-            _token.transfer(_beneficiary, _balance);
+            IERC20(_token).transfer(_beneficiary, _balance);
         }
 
-        emit BuybackDelegate_PendingSweep(_beneficiary, _token, 0);
+        emit BuybackDelegate_PendingSweep(_beneficiary, address(_token), 0);
     }
 
     //*********************************************************************//
@@ -417,15 +463,15 @@ contract JBGenericBuybackDelegate is
      *
      * @return  _amountOut the minimum amount received according to the twap
      */
-    function _getQuote(uint256 _projectId, IJBPaymentTerminal _terminal, IERC20 _projectToken, uint256 _amountIn)
+    function _getQuote(uint256 _projectId, IJBPaymentTerminal _terminal, address _projectToken, uint256 _amountIn)
         internal
         view
         returns (uint256 _amountOut)
     {
-        IERC20 _terminalToken = IERC20(IJBSingleTokenPaymentTerminal(address(_terminal)).token());
+        address _terminalToken = IJBSingleTokenPaymentTerminal(address(_terminal)).token();
 
         // Get the pool
-        IUniswapV3Pool _pool = poolOf[_projectId][_terminalToken];
+        IUniswapV3Pool _pool = poolOf[_projectId][address(_terminalToken)];
 
         // If non-existing or non-initialized pool, quote 0
         try _pool.slot0() returns (uint160, int24, uint16, uint16, uint16, uint8, bool unlocked) {
@@ -443,12 +489,12 @@ contract JBGenericBuybackDelegate is
         _amountOut = OracleLibrary.getQuoteAtTick({
             tick: arithmeticMeanTick,
             baseAmount: uint128(_amountIn),
-            baseToken: address(_terminalToken) == JBTokens.ETH ? address(WETH) : _terminalToken,
+            baseToken: _terminalToken == JBTokens.ETH ? address(WETH) : _terminalToken,
             quoteToken: address(_projectToken)
         });
 
         // Return the lowest twap accepted
-        _amountOut -= (_amountOut * twapDeltaOf(_projectId)) / SLIPPAGE_DENOMINATOR;
+        _amountOut -= (_amountOut * twapDeltaOf[_projectId]) / SLIPPAGE_DENOMINATOR;
     }
 
     /**
