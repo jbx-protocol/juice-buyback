@@ -311,6 +311,7 @@ contract JBGenericBuybackDelegate is
     function setPoolFor(uint256 _projectId, uint24 _fee, uint32 _secondsAgo, uint256 _twapDelta, address _terminalToken)
         external
         requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.SET_POOL)
+        returns(IUniswapV3Pool _newPool)
     {
         // Get the project token
         address _projectToken = address(CONTROLLER.tokenStore().tokenOf(_projectId));
@@ -320,7 +321,7 @@ contract JBGenericBuybackDelegate is
         bool _projectTokenIs0 = address(_projectToken) < _terminalToken;
 
         // Compute the corresponding pool
-        IUniswapV3Pool _newPool = IUniswapV3Pool(
+        _newPool = IUniswapV3Pool(
             address(
                 uint160(
                     uint256(
@@ -393,7 +394,7 @@ contract JBGenericBuybackDelegate is
     /**
      * @notice Sweep the token left-over in this contract
      */
-    function sweep(address _token, address _beneficiary) external {
+    function sweep(address _beneficiary, address _token) external {
         // The beneficiary ETH balance in this contract leftover
         uint256 _balance = sweepBalanceOf[_beneficiary][_token];
 
