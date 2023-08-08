@@ -223,7 +223,7 @@ contract JBGenericBuybackDelegate is
         returns (uint256 weight, string memory memo, JBPayDelegateAllocation3_1_1[] memory delegateAllocations)
     {
         // Find the total number of tokens to mint, as a fixed point number with 18 decimals
-        uint256 _tokenCount = mulDiv18(_data.forwardedAmount.value, _data.weight);
+        uint256 _tokenCount = mulDiv18(_data.amount.value, _data.weight);
 
         // Get a quote based on either the uni SDK quote or a twap from the pool
         uint256 _swapAmountOut;
@@ -241,7 +241,7 @@ contract JBGenericBuybackDelegate is
             // as it should be closer to the current pool state, if not, use the twap
             _swapAmountOut = _quote - ((_quote * _slippage) / SLIPPAGE_DENOMINATOR);
         } else {
-            _swapAmountOut = _getQuote(_data.projectId, _data.terminal, _projectToken, _data.forwardedAmount.value);
+            _swapAmountOut = _getQuote(_data.projectId, _data.terminal, _projectToken, _data.amount.value);
         }
 
         // If the minimum amount received from swapping is greather than received when minting, use the swap pathway
@@ -468,7 +468,6 @@ contract JBGenericBuybackDelegate is
         internal
         returns (uint256 _amountReceived)
     {
-
         bool _projectTokenIs0 = address(_projectToken) < _data.forwardedAmount.token;
 
         IUniswapV3Pool _pool = poolOf[_data.projectId][_data.forwardedAmount.token];
@@ -525,11 +524,14 @@ contract JBGenericBuybackDelegate is
             useReservedRate: true
         });
 
-//TODO: ETH transfer vs erc20:
-        // Send the eth back to the terminal balance
-        IJBPayoutRedemptionPaymentTerminal3_1_1(msg.sender).addToBalanceOf{value: _data.forwardedAmount.value}(
-            _data.projectId, _data.forwardedAmount.value, _data.forwardedAmount.token, "", ""
-        );
+        // Add the token or eth back to the terminal balance
+        if (_data.forwardedAmount.token != JBTokens.ETH) {
+            IERC20(_data.forwardedAmount.token).approve(msg.sender, _data.forwardedAmount.value);
+        }
+
+        IJBPayoutRedemptionPaymentTerminal3_1_1(msg.sender).addToBalanceOf{
+            value: _data.forwardedAmount.token == JBTokens.ETH ? _data.forwardedAmount.value : 0
+        }(_data.projectId, _data.forwardedAmount.value, _data.forwardedAmount.token, "", "");
 
         emit BuybackDelegate_Mint(_data.projectId);
     }
