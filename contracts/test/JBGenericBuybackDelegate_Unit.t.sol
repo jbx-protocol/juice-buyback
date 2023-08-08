@@ -304,10 +304,6 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         // The metadata coming from payParams(..)
         didPayData.dataSourceMetadata = abi.encode(_tokenCount, _twapQuote, projectToken);
 
-        // The amount the beneficiary should receive
-        uint256 _nonReservedToken =
-            PRBMath.mulDiv(_twapQuote, JBConstants.MAX_RESERVED_RATE - _reservedRate, JBConstants.MAX_RESERVED_RATE);
-
         // mock the swap call
         vm.mockCall(
             address(pool),
@@ -323,10 +319,18 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             ),
             abi.encode(-int256(_twapQuote), -int256(_twapQuote))
         );
-
-        // mock the transfer call
-        vm.mockCall(
-            address(projectToken), abi.encodeCall(projectToken.transfer, (dude, _nonReservedToken)), abi.encode(true)
+        vm.expectCall(
+            address(pool),
+            abi.encodeCall(
+                pool.swap,
+                (
+                    address(delegate),
+                    address(weth) < address(projectToken),
+                    int256(1 ether),
+                    address(projectToken) < address(weth) ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
+                    abi.encode(projectId, _twapQuote, weth, projectToken)
+                )
+            )
         );
 
         // mock call to pass the authorization check
@@ -335,12 +339,20 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             abi.encodeCall(directory.isTerminalOf, (didPayData.projectId, IJBPaymentTerminal(address(jbxTerminal)))),
             abi.encode(true)
         );
+        vm.expectCall(
+            address(directory),
+            abi.encodeCall(directory.isTerminalOf, (didPayData.projectId, IJBPaymentTerminal(address(jbxTerminal))))
+        );
 
         // mock the burn call
         vm.mockCall(
             address(controller),
             abi.encodeCall(controller.burnTokensOf, (address(delegate), didPayData.projectId, _twapQuote, "", true)),
             abi.encode(true)
+        );
+        vm.expectCall(
+            address(controller),
+            abi.encodeCall(controller.burnTokensOf, (address(delegate), didPayData.projectId, _twapQuote, "", true))
         );
 
         // mock the minting call
@@ -351,9 +363,12 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             ),
             abi.encode(true)
         );
-
-        // No leftover
-        vm.mockCall(address(weth), abi.encodeCall(weth.balanceOf, (address(delegate))), abi.encode(0));
+        vm.expectCall(
+            address(controller),
+            abi.encodeCall(
+                controller.mintTokensOf, (didPayData.projectId, _twapQuote, address(dude), didPayData.memo, true, true)
+            )
+        );
 
         // expect event
         vm.expectEmit(true, true, true, true);
@@ -376,14 +391,8 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         didPayData.forwardedAmount = JBTokenAmount({token: address(randomTerminalToken), value: 1 ether, decimals: 18, currency: 1});
         didPayData.projectId = randomId;
 
-        vm.mockCall(address(jbxTerminal), abi.encodeCall(IJBSingleTokenPaymentTerminal.token, ()), abi.encode(randomTerminalToken));
-
         // The metadata coming from payParams(..)
         didPayData.dataSourceMetadata = abi.encode(_tokenCount, _twapQuote, otherRandomProjectToken);
-
-        // The amount the beneficiary should receive
-        uint256 _nonReservedToken =
-            PRBMath.mulDiv(_twapQuote, JBConstants.MAX_RESERVED_RATE - _reservedRate, JBConstants.MAX_RESERVED_RATE);
 
         // mock the swap call
         vm.mockCall(
@@ -400,10 +409,18 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             ),
             abi.encode(-int256(_twapQuote), -int256(_twapQuote))
         );
-
-        // mock the transfer call
-        vm.mockCall(
-            address(otherRandomProjectToken), abi.encodeCall(otherRandomProjectToken.transfer, (dude, _nonReservedToken)), abi.encode(true)
+        vm.expectCall(
+            address(randomPool),
+            abi.encodeCall(
+                randomPool.swap,
+                (
+                    address(delegate),
+                    address(randomTerminalToken) < address(otherRandomProjectToken),
+                    int256(1 ether),
+                    address(otherRandomProjectToken) < address(randomTerminalToken) ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
+                    abi.encode(randomId, _twapQuote, randomTerminalToken, otherRandomProjectToken)
+                )
+            )
         );
 
         // mock call to pass the authorization check
@@ -412,12 +429,20 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             abi.encodeCall(directory.isTerminalOf, (didPayData.projectId, IJBPaymentTerminal(address(jbxTerminal)))),
             abi.encode(true)
         );
+        vm.expectCall(
+            address(directory),
+            abi.encodeCall(directory.isTerminalOf, (didPayData.projectId, IJBPaymentTerminal(address(jbxTerminal))))
+        );
 
         // mock the burn call
         vm.mockCall(
             address(controller),
             abi.encodeCall(controller.burnTokensOf, (address(delegate), didPayData.projectId, _twapQuote, "", true)),
             abi.encode(true)
+        );
+        vm.expectCall(
+            address(controller),
+            abi.encodeCall(controller.burnTokensOf, (address(delegate), didPayData.projectId, _twapQuote, "", true))
         );
 
         // mock the minting call
@@ -428,9 +453,16 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             ),
             abi.encode(true)
         );
+        vm.expectCall(
+            address(controller),
+            abi.encodeCall(
+                controller.mintTokensOf, (didPayData.projectId, _twapQuote, address(dude), didPayData.memo, true, true)
+            )
+        );
 
         // No leftover
         vm.mockCall(address(randomTerminalToken), abi.encodeCall(randomTerminalToken.balanceOf, (address(delegate))), abi.encode(0));
+        vm.expectCall(address(randomTerminalToken), abi.encodeCall(randomTerminalToken.balanceOf, (address(delegate))));
 
         // expect event
         vm.expectEmit(true, true, true, true);
@@ -467,6 +499,10 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             abi.encodeCall(directory.isTerminalOf, (didPayData.projectId, IJBPaymentTerminal(address(jbxTerminal)))),
             abi.encode(true)
         );
+        vm.expectCall(
+            address(directory),
+            abi.encodeCall(directory.isTerminalOf, (didPayData.projectId, IJBPaymentTerminal(address(jbxTerminal))))
+        );
 
         // mock the swap call
         vm.mockCall(
@@ -483,12 +519,29 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             ),
             abi.encode(-int256(_twapQuote), -int256(_twapQuote))
         );
+        vm.expectCall(
+            address(pool),
+            abi.encodeCall(
+                pool.swap,
+                (
+                    address(delegate),
+                    address(weth) < address(projectToken),
+                    int256(1 ether),
+                    address(projectToken) < address(weth) ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
+                    abi.encode(projectId, _twapQuote, weth, projectToken)
+                )
+            )
+        );
 
         // mock the burn call
         vm.mockCall(
             address(controller),
             abi.encodeCall(controller.burnTokensOf, (address(delegate), didPayData.projectId, _twapQuote, "", true)),
             abi.encode(true)
+        );
+        vm.expectCall(
+            address(controller),
+            abi.encodeCall(controller.burnTokensOf, (address(delegate), didPayData.projectId, _twapQuote, "", true))
         );
 
         // mock the minting call
@@ -498,6 +551,12 @@ contract TestJBGenericBuybackDelegate_Units is Test {
                 controller.mintTokensOf, (didPayData.projectId, _twapQuote, address(dude), didPayData.memo, didPayData.preferClaimedTokens, true)
             ),
             abi.encode(true)
+        );
+        vm.expectCall(
+            address(controller),
+            abi.encodeCall(
+                controller.mintTokensOf, (didPayData.projectId, _twapQuote, address(dude), didPayData.memo, didPayData.preferClaimedTokens, true)
+            )
         );
 
         // check: correct event?
@@ -541,19 +600,15 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             abi.encode("no swap")
         );
 
-        // // mock the call to the directory, to get the controller
-        // vm.mockCall(address(jbxTerminal), abi.encodeCall(jbxTerminal.directory, ()), abi.encode(address(directory)));
-        // vm.mockCall(
-        //     address(directory),
-        //     abi.encodeCall(directory.controllerOf, (didPayData.projectId)),
-        //     abi.encode(address(controller))
-        // );
-
         // mock call to pass the authorization check
         vm.mockCall(
             address(directory),
             abi.encodeCall(directory.isTerminalOf, (didPayData.projectId, IJBPaymentTerminal(address(jbxTerminal)))),
             abi.encode(true)
+        );
+        vm.expectCall(
+            address(directory),
+            abi.encodeCall(directory.isTerminalOf, (didPayData.projectId, IJBPaymentTerminal(address(jbxTerminal))))
         );
 
         // mock the minting call - this uses the weight and not the (potentially faulty) quote or twap
@@ -564,6 +619,13 @@ contract TestJBGenericBuybackDelegate_Units is Test {
                 (didPayData.projectId, _tokenCount, dude, didPayData.memo, didPayData.preferClaimedTokens, true)
             ),
             abi.encode(true)
+        );
+        vm.expectCall(
+            address(controller),
+            abi.encodeCall(
+                controller.mintTokensOf,
+                (didPayData.projectId, _tokenCount, dude, didPayData.memo, didPayData.preferClaimedTokens, true)
+            )
         );
 
         // mock the add to balance adding eth back to the terminal (need to deal eth as this transfer really occurs in test)
@@ -576,16 +638,13 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             ),
             ""
         );
-
-        // // Mock the approval for the addToBalance
-        // vm.mockCall(
-        //     address(weth),
-        //     abi.encodeCall(weth.approve, (address(jbxTerminal), 1 ether)),
-        //     abi.encode(true)
-        // );
-
-        // Mock the no leftover
-       // vm.mockCall(address(weth), abi.encodeCall(weth.balanceOf, (address(delegate))), abi.encode(0));
+        vm.expectCall(
+            address(jbxTerminal),
+            abi.encodeCall(
+                IJBPaymentTerminal(address(jbxTerminal)).addToBalanceOf,
+                (didPayData.projectId, 1 ether, JBTokens.ETH, "", "")
+            )
+        );
 
         // expect event
         vm.expectEmit(true, true, true, true);
@@ -633,6 +692,10 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             abi.encodeCall(directory.isTerminalOf, (didPayData.projectId, IJBPaymentTerminal(address(jbxTerminal)))),
             abi.encode(true)
         );
+        vm.expectCall(
+            address(directory),
+            abi.encodeCall(directory.isTerminalOf, (didPayData.projectId, IJBPaymentTerminal(address(jbxTerminal))))
+        );
 
         // mock the minting call - this uses the weight and not the (potentially faulty) quote or twap
         vm.mockCall(
@@ -642,6 +705,13 @@ contract TestJBGenericBuybackDelegate_Units is Test {
                 (didPayData.projectId, _tokenCount, dude, didPayData.memo, didPayData.preferClaimedTokens, true)
             ),
             abi.encode(true)
+        );
+        vm.expectCall(
+            address(controller),
+            abi.encodeCall(
+                controller.mintTokensOf,
+                (didPayData.projectId, _tokenCount, dude, didPayData.memo, didPayData.preferClaimedTokens, true)
+            )
         );
 
         // mock the add to balance adding eth back to the terminal (need to deal eth as this transfer really occurs in test)
@@ -654,6 +724,13 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             ),
             ""
         );
+        vm.expectCall(
+            address(jbxTerminal),
+            abi.encodeCall(
+                IJBPaymentTerminal(address(jbxTerminal)).addToBalanceOf,
+                (didPayData.projectId, 1 ether, address(randomTerminalToken), "", "")
+            )
+        );
 
         // Mock the approval for the addToBalance
         vm.mockCall(
@@ -661,9 +738,14 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             abi.encodeCall(randomTerminalToken.approve, (address(jbxTerminal), 1 ether)),
             abi.encode(true)
         );
+        vm.expectCall(
+            address(randomTerminalToken),
+            abi.encodeCall(randomTerminalToken.approve, (address(jbxTerminal), 1 ether))
+        );
 
         // Mock the no leftover
-       vm.mockCall(address(randomTerminalToken), abi.encodeCall(randomTerminalToken.balanceOf, (address(delegate))), abi.encode(0));
+        vm.mockCall(address(randomTerminalToken), abi.encodeCall(randomTerminalToken.balanceOf, (address(delegate))), abi.encode(0));
+        vm.expectCall(address(randomTerminalToken), abi.encodeCall(randomTerminalToken.balanceOf, (address(delegate))));
 
         // expect event
         vm.expectEmit(true, true, true, true);
@@ -684,6 +766,10 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             address(directory),
             abi.encodeCall(directory.isTerminalOf, (didPayData.projectId, IJBPaymentTerminal(address(_notTerminal)))),
             abi.encode(false)
+        );
+        vm.expectCall(
+            address(directory),
+            abi.encodeCall(directory.isTerminalOf, (didPayData.projectId, IJBPaymentTerminal(address(_notTerminal))))
         );
 
         vm.expectRevert(abi.encodeWithSelector(JBGenericBuybackDelegate.JuiceBuyback_Unauthorized.selector));
@@ -720,6 +806,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
 
         // mock and expect weth calls, this should transfer from delegate to pool (positive delta in the callback)
         vm.mockCall(address(weth), abi.encodeCall(weth.deposit, ()), "");
+        vm.expectCall(address(weth), abi.encodeCall(weth.deposit, ()));
 
         vm.mockCall(
             address(weth),
@@ -728,11 +815,11 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             ),
             abi.encode(true)
         );
-
-        vm.mockCall(
+        vm.expectCall(
             address(weth),
-            abi.encodeCall(weth.deposit, ()),
-            abi.encode(true)
+            abi.encodeCall(
+                weth.transfer, (address(pool), uint256(address(projectToken) < address(weth) ? _delta1 : _delta0))
+            )
         );
 
         vm.prank(address(pool));
@@ -755,15 +842,18 @@ contract TestJBGenericBuybackDelegate_Units is Test {
     
         delegate.ForTest_initPool(pool, projectId, secondsAgo, twapDelta, address(projectToken), address(weth)); 
 
-        // mock and expect weth calls, this should transfer from delegate to pool (positive delta in the callback)
-        vm.mockCall(address(weth), abi.encodeCall(weth.deposit, ()), "");
-
         vm.mockCall(
             address(weth),
             abi.encodeCall(
                 weth.transfer, (address(pool), uint256(address(projectToken) < address(weth) ? _delta1 : _delta0))
             ),
             abi.encode(true)
+        );
+        vm.expectCall(
+            address(weth),
+            abi.encodeCall(
+                weth.transfer, (address(pool), uint256(address(projectToken) < address(weth) ? _delta1 : _delta0))
+            )
         );
 
         vm.prank(address(pool));
