@@ -115,7 +115,7 @@ contract JBGenericBuybackDelegate is
     /**
      * @notice Running cumulative sum of ETH left-over
      */
-    mapping(address _token => uint256 _contractBalance) public unclaimedSweepBalanceOf;
+    mapping(address _token => uint256 _contractBalance) public totalUnclaimedBalance;
 
     //*********************************************************************//
     // ---------------------------- Constructor -------------------------- //
@@ -228,7 +228,7 @@ contract JBGenericBuybackDelegate is
         uint256 _terminalTokenInThisContract = _data.forwardedAmount.token == JBTokens.ETH
             ? address(this).balance
             : IERC20(_data.forwardedAmount.token).balanceOf(address(this));
-        uint256 _terminalTokenPreviouslyInThisContract = unclaimedSweepBalanceOf[_data.forwardedAmount.token];
+        uint256 _terminalTokenPreviouslyInThisContract = totalUnclaimedBalance[_data.forwardedAmount.token];
         uint256 _beneficiarySweepBalance = sweepBalanceOf[_data.beneficiary][_data.forwardedAmount.token];
 
         if (_terminalTokenInThisContract > 0 && _terminalTokenInThisContract != _beneficiarySweepBalance) {
@@ -238,10 +238,10 @@ contract JBGenericBuybackDelegate is
             emit BuybackDelegate_PendingSweep(
                 _data.beneficiary,
                 _data.forwardedAmount.token,
-                _terminalTokenInThisContract - sweepBalanceOf[_data.beneficiary][_data.forwardedAmount.token]
+                _terminalTokenInThisContract - _terminalTokenPreviouslyInThisContract
             );
 
-            unclaimedSweepBalanceOf[_data.forwardedAmount.token] = _terminalTokenInThisContract;
+            totalUnclaimedBalance[_data.forwardedAmount.token] = _terminalTokenInThisContract;
         }
     }
 
@@ -310,7 +310,7 @@ contract JBGenericBuybackDelegate is
      */
     function setPoolFor(uint256 _projectId, uint24 _fee, uint32 _secondsAgo, uint256 _twapDelta, address _terminalToken)
         external
-        requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.SET_POOL)
+        requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.MODIFY_POOL)
         returns(IUniswapV3Pool _newPool)
     {
         // Get the project token
@@ -366,7 +366,7 @@ contract JBGenericBuybackDelegate is
      */
     function changeSecondsAgo(uint256 _projectId, uint32 _newSecondsAgo)
         external
-        requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.SET_TWAP_PERIOD)
+        requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.MODIFY_POOL)
     {
         uint256 _oldValue = secondsAgoOf[_projectId];
         secondsAgoOf[_projectId] = _newSecondsAgo;
@@ -383,7 +383,7 @@ contract JBGenericBuybackDelegate is
      */
     function setTwapDelta(uint256 _projectId, uint256 _newDelta)
         external
-        requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.SET_SLIPPAGE)
+        requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.MODIFY_POOL)
     {
         uint256 _oldDelta = twapDeltaOf[_projectId];
         twapDeltaOf[_projectId] = _newDelta;
@@ -403,7 +403,7 @@ contract JBGenericBuybackDelegate is
 
         // Reset beneficiary balance
         sweepBalanceOf[_beneficiary][_token] = 0;
-        unclaimedSweepBalanceOf[_token] -= _balance;
+        totalUnclaimedBalance[_token] -= _balance;
 
         if (_token == JBTokens.ETH) {
             // Send the eth to the beneficiary
