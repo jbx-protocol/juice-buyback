@@ -255,10 +255,12 @@ contract JBGenericBuybackDelegate is
         (uint256 _projectId, uint256 _minimumAmountReceived, address _terminalToken, address _projectToken) =
             abi.decode(data, (uint256, uint256, address, address));
 
-        // Check if this is really a callback - only create2 pools are added to insure safety of this check (balance pending sweep at risk)
-        if (msg.sender != address(poolOf[_projectId][_terminalToken])) revert JuiceBuyback_Unauthorized();
+        address _terminalTokenWithWETH = _terminalToken == JBTokens.ETH ? address(WETH) : _terminalToken;
 
-        bool _tokenProjectIs0 = _projectToken < _terminalToken;
+        // Check if this is really a callback - only create2 pools are added to insure safety of this check (balance pending sweep at risk)
+        if (msg.sender != address(poolOf[_projectId][_terminalTokenWithWETH])) revert JuiceBuyback_Unauthorized();
+
+        bool _tokenProjectIs0 = _projectToken < _terminalTokenWithWETH;
 
         // delta is in regard of the pool balance (positive = pool need to receive)
         uint256 _amountToSendToPool = _tokenProjectIs0 ? uint256(amount1Delta) : uint256(amount0Delta);
@@ -273,7 +275,7 @@ contract JBGenericBuybackDelegate is
         if (_terminalToken == JBTokens.ETH) WETH.deposit{value: _amountToSendToPool}();
 
         // Transfer the token to the pool
-        IERC20(_terminalToken).transfer(msg.sender, _amountToSendToPool);
+        IERC20(_terminalTokenWithWETH).transfer(msg.sender, _amountToSendToPool);
     }
 
     /**
@@ -317,6 +319,8 @@ contract JBGenericBuybackDelegate is
         address _projectToken = address(CONTROLLER.tokenStore().tokenOf(_projectId));
 
         if (_projectToken == address(0)) revert JuiceBuyback_NoProjectToken();
+
+        if (_terminalToken == JBTokens.ETH) _terminalToken = address(WETH);
 
         bool _projectTokenIs0 = address(_projectToken) < _terminalToken;
 
@@ -478,9 +482,13 @@ contract JBGenericBuybackDelegate is
         internal
         returns (uint256 _amountReceived)
     {
-        bool _projectTokenIs0 = address(_projectToken) < _data.forwardedAmount.token;
+        address _terminalToken = _data.forwardedAmount.token == JBTokens.ETH
+            ? address(WETH)
+            : _data.forwardedAmount.token;
+            
+        bool _projectTokenIs0 = address(_projectToken) < _terminalToken;
 
-        IUniswapV3Pool _pool = poolOf[_data.projectId][_data.forwardedAmount.token];
+        IUniswapV3Pool _pool = poolOf[_data.projectId][_terminalToken];
 
         // Pass the token and min amount to receive as extra data
         try _pool.swap({
@@ -488,7 +496,7 @@ contract JBGenericBuybackDelegate is
             zeroForOne: !_projectTokenIs0,
             amountSpecified: int256(_data.forwardedAmount.value),
             sqrtPriceLimitX96: _projectTokenIs0 ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
-            data: abi.encode(_data.projectId, _minimumReceivedFromSwap, _data.forwardedAmount.token, _projectToken)
+            data: abi.encode(_data.projectId, _minimumReceivedFromSwap, _terminalToken, _projectToken)
         }) returns (int256 amount0, int256 amount1) {
             // Swap succeded, take note of the amount of PROJECT_TOKEN received (negative as it is an exact input)
             _amountReceived = uint256(-(_projectTokenIs0 ? amount0 : amount1));

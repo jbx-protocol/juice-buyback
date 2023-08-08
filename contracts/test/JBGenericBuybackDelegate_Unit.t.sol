@@ -86,8 +86,8 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         payer: dude,
         projectId: projectId,
         currentFundingCycleConfiguration: 0,
-        amount: JBTokenAmount({token: address(weth), value: 1 ether, decimals: 18, currency: 1}),
-        forwardedAmount: JBTokenAmount({token: address(weth), value: 1 ether, decimals: 18, currency: 1}),
+        amount: JBTokenAmount({token: JBTokens.ETH, value: 1 ether, decimals: 18, currency: 1}),
+        forwardedAmount: JBTokenAmount({token: JBTokens.ETH, value: 1 ether, decimals: 18, currency: 1}),
         projectTokenCount: 69,
         beneficiary: dude,
         preferClaimedTokens: true,
@@ -451,13 +451,13 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         didPayData.dataSourceMetadata = abi.encode(_tokenCount, _twapQuote, projectToken);
 
         // Add some leftover
-        vm.mockCall(address(weth), abi.encodeCall(weth.balanceOf, (address(delegate))), abi.encode(10 ether));
+        vm.deal(address(delegate), 10 ether);
 
         // Add a previous leftover, to test the incremental accounting (ie 5 out of 10 were there)
-        stdstore.target(address(delegate)).sig("totalUnclaimedBalance(address)").with_key(address(weth)).checked_write(5 ether);
+        stdstore.target(address(delegate)).sig("totalUnclaimedBalance(address)").with_key(JBTokens.ETH).checked_write(5 ether);
 
         // Out of these 5, 1 was for payer
-        stdstore.target(address(delegate)).sig("sweepBalanceOf(address,address)").with_key(didPayData.payer).with_key(address(weth)).checked_write(
+        stdstore.target(address(delegate)).sig("sweepBalanceOf(address,address)").with_key(didPayData.payer).with_key(JBTokens.ETH).checked_write(
             1 ether
         );
 
@@ -502,16 +502,16 @@ contract TestJBGenericBuybackDelegate_Units is Test {
 
         // check: correct event?
         vm.expectEmit(true, true, true, true);
-        emit BuybackDelegate_PendingSweep(dude, address(weth), 5 ether);
+        emit BuybackDelegate_PendingSweep(dude, JBTokens.ETH, 5 ether);
 
         vm.prank(address(jbxTerminal));
         delegate.didPay(didPayData);
 
         // Check: correct overall sweep balance?
-        assertEq(delegate.totalUnclaimedBalance(address(weth)), 10 ether);
+        assertEq(delegate.totalUnclaimedBalance(JBTokens.ETH), 10 ether);
 
         // Check: correct dude sweep balance (1 previous plus 5 from now)?
-        assertEq(delegate.sweepBalanceOf(dude, address(weth)), 6 ether);
+        assertEq(delegate.sweepBalanceOf(dude, JBTokens.ETH), 6 ether);
     }
 
     /**
@@ -541,12 +541,90 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             abi.encode("no swap")
         );
 
-        // mock the call to the directory, to get the controller
-        vm.mockCall(address(jbxTerminal), abi.encodeCall(jbxTerminal.directory, ()), abi.encode(address(directory)));
+        // // mock the call to the directory, to get the controller
+        // vm.mockCall(address(jbxTerminal), abi.encodeCall(jbxTerminal.directory, ()), abi.encode(address(directory)));
+        // vm.mockCall(
+        //     address(directory),
+        //     abi.encodeCall(directory.controllerOf, (didPayData.projectId)),
+        //     abi.encode(address(controller))
+        // );
+
+        // mock call to pass the authorization check
         vm.mockCall(
             address(directory),
-            abi.encodeCall(directory.controllerOf, (didPayData.projectId)),
-            abi.encode(address(controller))
+            abi.encodeCall(directory.isTerminalOf, (didPayData.projectId, IJBPaymentTerminal(address(jbxTerminal)))),
+            abi.encode(true)
+        );
+
+        // mock the minting call - this uses the weight and not the (potentially faulty) quote or twap
+        vm.mockCall(
+            address(controller),
+            abi.encodeCall(
+                controller.mintTokensOf,
+                (didPayData.projectId, _tokenCount, dude, didPayData.memo, didPayData.preferClaimedTokens, true)
+            ),
+            abi.encode(true)
+        );
+
+        // mock the add to balance adding eth back to the terminal (need to deal eth as this transfer really occurs in test)
+        vm.deal(address(delegate), 1 ether);
+        vm.mockCall(
+            address(jbxTerminal),
+            abi.encodeCall(
+                IJBPaymentTerminal(address(jbxTerminal)).addToBalanceOf,
+                (didPayData.projectId, 1 ether, JBTokens.ETH, "", "")
+            ),
+            ""
+        );
+
+        // // Mock the approval for the addToBalance
+        // vm.mockCall(
+        //     address(weth),
+        //     abi.encodeCall(weth.approve, (address(jbxTerminal), 1 ether)),
+        //     abi.encode(true)
+        // );
+
+        // Mock the no leftover
+       // vm.mockCall(address(weth), abi.encodeCall(weth.balanceOf, (address(delegate))), abi.encode(0));
+
+        // expect event
+        vm.expectEmit(true, true, true, true);
+        emit BuybackDelegate_Mint(didPayData.projectId);
+
+        vm.prank(address(jbxTerminal));
+        delegate.didPay(didPayData);
+    }
+
+    /**
+     * @notice Test didPay with swap reverting, should then mint
+     */
+    function test_didPay_swapRevert_ERC20(uint256 _tokenCount, uint256 _twapQuote) public {
+        _tokenCount = bound(_tokenCount, 2, type(uint256).max - 1);
+        _twapQuote = bound(_twapQuote, _tokenCount + 1, type(uint256).max);
+
+        didPayData.amount = JBTokenAmount({token: address(randomTerminalToken), value: 1 ether, decimals: 18, currency: 1});
+        didPayData.forwardedAmount = JBTokenAmount({token: address(randomTerminalToken), value: 1 ether, decimals: 18, currency: 1});
+        didPayData.projectId = randomId;
+
+        vm.mockCall(address(jbxTerminal), abi.encodeCall(IJBSingleTokenPaymentTerminal.token, ()), abi.encode(randomTerminalToken));
+
+        // The metadata coming from payParams(..)
+        didPayData.dataSourceMetadata = abi.encode(_tokenCount, _twapQuote, otherRandomProjectToken);
+
+        // mock the swap call reverting
+        vm.mockCallRevert(
+            address(randomPool),
+            abi.encodeCall(
+                randomPool.swap,
+                (
+                    address(delegate),
+                    address(randomTerminalToken) < address(otherRandomProjectToken),
+                    int256(1 ether),
+                    address(otherRandomProjectToken) < address(randomTerminalToken) ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
+                    abi.encode(randomId, _twapQuote, randomTerminalToken, otherRandomProjectToken)
+                )
+            ),
+            abi.encode("no swap")
         );
 
         // mock call to pass the authorization check
@@ -566,26 +644,26 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             abi.encode(true)
         );
 
-        // mock the add to balance addint eth back to the terminal (need to deal eth as this transfer really occurs in test)
+        // mock the add to balance adding eth back to the terminal (need to deal eth as this transfer really occurs in test)
         vm.deal(address(delegate), 1 ether);
         vm.mockCall(
             address(jbxTerminal),
             abi.encodeCall(
                 IJBPaymentTerminal(address(jbxTerminal)).addToBalanceOf,
-                (didPayData.projectId, 1 ether, address(weth), "", "")
+                (didPayData.projectId, 1 ether, address(randomTerminalToken), "", "")
             ),
             ""
         );
 
         // Mock the approval for the addToBalance
         vm.mockCall(
-            address(weth),
-            abi.encodeCall(weth.approve, (address(jbxTerminal), 1 ether)),
+            address(randomTerminalToken),
+            abi.encodeCall(randomTerminalToken.approve, (address(jbxTerminal), 1 ether)),
             abi.encode(true)
         );
 
         // Mock the no leftover
-        vm.mockCall(address(weth), abi.encodeCall(weth.balanceOf, (address(delegate))), abi.encode(0));
+       vm.mockCall(address(randomTerminalToken), abi.encodeCall(randomTerminalToken.balanceOf, (address(delegate))), abi.encode(0));
 
         // expect event
         vm.expectEmit(true, true, true, true);
@@ -651,8 +729,14 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             abi.encode(true)
         );
 
+        vm.mockCall(
+            address(weth),
+            abi.encodeCall(weth.deposit, ()),
+            abi.encode(true)
+        );
+
         vm.prank(address(pool));
-        delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(projectId, _minReceived, weth, projectToken));
+        delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(projectId, _minReceived, JBTokens.ETH, projectToken));
 
         /**
          * Second branch
@@ -783,7 +867,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
     /**
      * @notice Test sweep revert if transfer fails
      */
-    function test_Sweep_revertIfTransferFails() public {
+    function test_sweep_revertIfTransferFails() public {
         // Store the delegate total leftover
         stdstore.target(address(delegate)).sig("totalUnclaimedBalance(address)").with_key(JBTokens.ETH).checked_write(1 ether);
 
