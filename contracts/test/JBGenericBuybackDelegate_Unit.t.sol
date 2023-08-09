@@ -1037,25 +1037,25 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         vm.mockCall(
             address(operatorStore),
             abi.encodeCall(
-                operatorStore.hasPermission, (_notOwner, owner, projectId, JBBuybackDelegateOperations.MODIFY_POOL)
+                operatorStore.hasPermission, (_notOwner, owner, projectId, JBBuybackDelegateOperations.SET_POOL_PARAMS)
             ),
             abi.encode(false)
         );
         vm.expectCall(
             address(operatorStore),
             abi.encodeCall(
-                operatorStore.hasPermission, (_notOwner, owner, projectId, JBBuybackDelegateOperations.MODIFY_POOL)
+                operatorStore.hasPermission, (_notOwner, owner, projectId, JBBuybackDelegateOperations.SET_POOL_PARAMS)
             )
         );
 
         vm.mockCall(
             address(operatorStore),
-            abi.encodeCall(operatorStore.hasPermission, (_notOwner, owner, 0, JBBuybackDelegateOperations.MODIFY_POOL)),
+            abi.encodeCall(operatorStore.hasPermission, (_notOwner, owner, 0, JBBuybackDelegateOperations.SET_POOL_PARAMS)),
             abi.encode(false)
         );
         vm.expectCall(
             address(operatorStore),
-            abi.encodeCall(operatorStore.hasPermission, (_notOwner, owner, 0, JBBuybackDelegateOperations.MODIFY_POOL))
+            abi.encodeCall(operatorStore.hasPermission, (_notOwner, owner, 0, JBBuybackDelegateOperations.SET_POOL_PARAMS))
         );
 
         // check: revert?
@@ -1094,25 +1094,25 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         vm.mockCall(
             address(operatorStore),
             abi.encodeCall(
-                operatorStore.hasPermission, (_notOwner, owner, projectId, JBBuybackDelegateOperations.MODIFY_POOL)
+                operatorStore.hasPermission, (_notOwner, owner, projectId, JBBuybackDelegateOperations.SET_POOL_PARAMS)
             ),
             abi.encode(false)
         );
         vm.expectCall(
             address(operatorStore),
             abi.encodeCall(
-                operatorStore.hasPermission, (_notOwner, owner, projectId, JBBuybackDelegateOperations.MODIFY_POOL)
+                operatorStore.hasPermission, (_notOwner, owner, projectId, JBBuybackDelegateOperations.SET_POOL_PARAMS)
             )
         );
 
         vm.mockCall(
             address(operatorStore),
-            abi.encodeCall(operatorStore.hasPermission, (_notOwner, owner, 0, JBBuybackDelegateOperations.MODIFY_POOL)),
+            abi.encodeCall(operatorStore.hasPermission, (_notOwner, owner, 0, JBBuybackDelegateOperations.SET_POOL_PARAMS)),
             abi.encode(false)
         );
         vm.expectCall(
             address(operatorStore),
-            abi.encodeCall(operatorStore.hasPermission, (_notOwner, owner, 0, JBBuybackDelegateOperations.MODIFY_POOL))
+            abi.encodeCall(operatorStore.hasPermission, (_notOwner, owner, 0, JBBuybackDelegateOperations.SET_POOL_PARAMS))
         );
 
         // check: revert?

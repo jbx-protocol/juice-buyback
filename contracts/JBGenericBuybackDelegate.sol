@@ -319,7 +319,7 @@ contract JBGenericBuybackDelegate is
      */
     function setPoolFor(uint256 _projectId, uint24 _fee, uint32 _secondsAgo, uint256 _twapDelta, address _terminalToken)
         external
-        requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.MODIFY_POOL)
+        requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.CHANGE_POOL)
         returns (IUniswapV3Pool _newPool)
     {
         // Get the project token
@@ -377,7 +377,7 @@ contract JBGenericBuybackDelegate is
      */
     function changeSecondsAgo(uint256 _projectId, uint32 _newSecondsAgo)
         external
-        requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.MODIFY_POOL)
+        requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.SET_POOL_PARAMS)
     {
         uint256 _oldValue = secondsAgoOf[_projectId];
         secondsAgoOf[_projectId] = _newSecondsAgo;
@@ -394,7 +394,7 @@ contract JBGenericBuybackDelegate is
      */
     function setTwapDelta(uint256 _projectId, uint256 _newDelta)
         external
-        requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.MODIFY_POOL)
+        requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.SET_POOL_PARAMS)
     {
         uint256 _oldDelta = twapDeltaOf[_projectId];
         twapDeltaOf[_projectId] = _newDelta;
