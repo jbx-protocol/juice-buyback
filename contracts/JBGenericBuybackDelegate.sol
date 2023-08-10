@@ -113,9 +113,9 @@ contract JBGenericBuybackDelegate is
     mapping(address _beneficiary => mapping(address _token => uint256 _balance)) public sweepBalanceOf;
 
     /**
-     * @notice Running cumulative sum of ETH left-over
+     * @notice Running cumulative sum of token left-over
      */
-    mapping(address _token => uint256 _contractBalance) public totalUnclaimedBalance;
+    mapping(address _token => uint256 _contractBalance) public totalSweepBalance;
 
     //*********************************************************************//
     // ---------------------------- Constructor -------------------------- //
@@ -230,7 +230,7 @@ contract JBGenericBuybackDelegate is
             : IERC20(_data.forwardedAmount.token).balanceOf(address(this));
 
         // Any previous leftover?
-        uint256 _terminalTokenPreviouslyInThisContract = totalUnclaimedBalance[_data.forwardedAmount.token];
+        uint256 _terminalTokenPreviouslyInThisContract = totalSweepBalance[_data.forwardedAmount.token];
 
         // From these previous leftover, some belonging to the beneficiary?
         uint256 _beneficiarySweepBalance = sweepBalanceOf[_data.beneficiary][_data.forwardedAmount.token];
@@ -246,7 +246,7 @@ contract JBGenericBuybackDelegate is
                 _terminalTokenInThisContract - _terminalTokenPreviouslyInThisContract
             );
 
-            totalUnclaimedBalance[_data.forwardedAmount.token] = _terminalTokenInThisContract;
+            totalSweepBalance[_data.forwardedAmount.token] = _terminalTokenInThisContract;
         }
     }
 
@@ -414,7 +414,7 @@ contract JBGenericBuybackDelegate is
 
         // Reset beneficiary balance
         sweepBalanceOf[_beneficiary][_token] = 0;
-        totalUnclaimedBalance[_token] -= _balance;
+        totalSweepBalance[_token] -= _balance;
 
         if (_token == JBTokens.ETH) {
             // Send the eth to the beneficiary
