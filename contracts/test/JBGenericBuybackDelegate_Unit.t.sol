@@ -6,18 +6,15 @@ import "./helpers/TestBaseWorkflowV3.sol";
 
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController3_1.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBDirectory.sol";
-import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBConstants.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBTokens.sol";
 
 import {JBDelegateMetadataHelper} from "@jbx-protocol/juice-delegate-metadata-lib/src/JBDelegateMetadataHelper.sol";
 
-import "@paulrberg/contracts/math/PRBMath.sol";
 import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
-import "@uniswap/v3-periphery/contracts/libraries/PoolAddress.sol";
-
 
 import "forge-std/Test.sol";
 
+import "./helpers/PoolAddress.sol";
 import "../JBGenericBuybackDelegate.sol";
 import "../libraries/JBBuybackDelegateOperations.sol";
 
@@ -923,7 +920,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
     }
 
     function test_setPoolFor(uint256 _secondsAgo, uint256 _twapDelta, address _terminalToken, address _projectToken, uint24 _fee) public {
-        // vm.assume(_terminalToken != address(0) && _projectToken != address(0) && _fee != 0);
+        vm.assume(_terminalToken != address(0) && _projectToken != address(0) && _fee != 0);
         vm.assume(_terminalToken != _projectToken);
 
         uint256 _MAX_SECONDS_AGO = delegate.MAX_SECONDS_AGO();
@@ -931,7 +928,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
 
         _twapDelta = bound(_twapDelta, _MIN_TWAP_DELTA, type(uint256).max);
         _secondsAgo = bound(_secondsAgo, 0, _MAX_SECONDS_AGO);
-        
+
         address _pool = PoolAddress.computeAddress(
             delegate.UNISWAP_V3_FACTORY(),
             PoolAddress.getPoolKey(_terminalToken, _projectToken, _fee)
@@ -951,7 +948,6 @@ contract TestJBGenericBuybackDelegate_Units is Test {
 
         vm.prank(owner);
         delegate.setPoolFor(projectId, _fee, uint32(_secondsAgo), _twapDelta, _terminalToken);
-
     }
 
     /**
