@@ -13,6 +13,8 @@ import {JBDelegateMetadataHelper} from "@jbx-protocol/juice-delegate-metadata-li
 
 import "@paulrberg/contracts/math/PRBMath.sol";
 import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
+import "@uniswap/v3-periphery/contracts/libraries/PoolAddress.sol";
+
 
 import "forge-std/Test.sol";
 
@@ -56,6 +58,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
     IJBOperatorStore operatorStore = IJBOperatorStore(makeAddr("IJBOperatorStore"));
     IJBController3_1 controller = IJBController3_1(makeAddr("controller"));
     IJBDirectory directory = IJBDirectory(makeAddr("directory"));
+    IJBTokenStore tokenStore = IJBTokenStore(makeAddr("tokenStore"));
 
     JBDelegateMetadataHelper metadataHelper = new JBDelegateMetadataHelper();
 
@@ -117,6 +120,8 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         vm.mockCall(address(projects), abi.encodeCall(projects.ownerOf, (projectId)), abi.encode(owner));
 
         vm.mockCall(address(jbxTerminal), abi.encodeCall(IJBSingleTokenPaymentTerminal.token, ()), abi.encode(weth));
+
+        vm.mockCall(address(controller), abi.encodeCall(controller.tokenStore, ()), abi.encode(tokenStore));
 
         vm.prank(owner);
         delegate = new ForTest_JBGenericBuybackDelegate({
@@ -917,6 +922,191 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(projectId, _minReceived, weth, projectToken));
     }
 
+    function test_setPoolFor(uint256 _secondsAgo, uint256 _twapDelta, address _terminalToken, address _projectToken, uint24 _fee) public {
+        // vm.assume(_terminalToken != address(0) && _projectToken != address(0) && _fee != 0);
+        vm.assume(_terminalToken != _projectToken);
+
+        uint256 _MAX_SECONDS_AGO = delegate.MAX_SECONDS_AGO();
+        uint256 _MIN_TWAP_DELTA = delegate.MIN_TWAP_DELTA();
+
+        _twapDelta = bound(_twapDelta, _MIN_TWAP_DELTA, type(uint256).max);
+        _secondsAgo = bound(_secondsAgo, 0, _MAX_SECONDS_AGO);
+        
+        address _pool = PoolAddress.computeAddress(
+            delegate.UNISWAP_V3_FACTORY(),
+            PoolAddress.getPoolKey(_terminalToken, _projectToken, _fee)
+        );
+
+        vm.mockCall(address(tokenStore), abi.encodeCall(tokenStore.tokenOf, (projectId)), abi.encode(_projectToken));
+
+        // check: correct events?
+        vm.expectEmit(true, true, true, true);
+        emit BuybackDelegate_SecondsAgoChanged(projectId, 0, _secondsAgo);
+
+        vm.expectEmit(true, true, true, true);
+        emit BuybackDelegate_TwapDeltaChanged(projectId, 0, _twapDelta);
+
+        vm.expectEmit(true, true, true, true);
+        emit BuybackDelegate_PoolAdded(projectId, _terminalToken, address(_pool));
+
+        vm.prank(owner);
+        delegate.setPoolFor(projectId, _fee, uint32(_secondsAgo), _twapDelta, _terminalToken);
+
+    }
+
+    /**
+     * @notice Test increase seconds ago
+     */
+    function test_changeSecondsAgo(uint256 _newValue) public {
+        uint256 _MAX_SECONDS_AGO = delegate.MAX_SECONDS_AGO();
+        _newValue = bound(_newValue, 0, _MAX_SECONDS_AGO);
+
+        // check: correct event?
+        vm.expectEmit(true, true, true, true);
+        emit BuybackDelegate_SecondsAgoChanged(projectId, delegate.secondsAgoOf(projectId), _newValue);
+
+        // Test: change seconds ago
+        vm.prank(owner);
+        delegate.changeSecondsAgo(projectId, uint32(_newValue));
+
+        // Check: correct seconds ago?
+        assertEq(delegate.secondsAgoOf(projectId), _newValue);
+    }
+
+    /**
+     * @notice Test increase seconds ago revert if wrong caller
+     */
+    function test_changeSecondsAgo_revertIfWrongCaller(address _notOwner) public {
+        vm.assume(owner != _notOwner);
+
+        vm.mockCall(
+            address(operatorStore),
+            abi.encodeCall(
+                operatorStore.hasPermission, (_notOwner, owner, projectId, JBBuybackDelegateOperations.SET_POOL_PARAMS)
+            ),
+            abi.encode(false)
+        );
+        vm.expectCall(
+            address(operatorStore),
+            abi.encodeCall(
+                operatorStore.hasPermission, (_notOwner, owner, projectId, JBBuybackDelegateOperations.SET_POOL_PARAMS)
+            )
+        );
+
+        vm.mockCall(
+            address(operatorStore),
+            abi.encodeCall(
+                operatorStore.hasPermission, (_notOwner, owner, 0, JBBuybackDelegateOperations.SET_POOL_PARAMS)
+            ),
+            abi.encode(false)
+        );
+        vm.expectCall(
+            address(operatorStore),
+            abi.encodeCall(
+                operatorStore.hasPermission, (_notOwner, owner, 0, JBBuybackDelegateOperations.SET_POOL_PARAMS)
+            )
+        );
+
+        // check: revert?
+        vm.expectRevert(abi.encodeWithSignature("UNAUTHORIZED()"));
+
+        // Test: change seconds ago (left uninit/at 0)
+        vm.startPrank(_notOwner);
+        delegate.changeSecondsAgo(projectId, 999);
+    }
+
+    /**
+     * @notice Test increase seconds ago reverting on boundary
+     */
+    function test_changeSecondsAgo_revertIfNewValueTooBig(uint256 _newValue) public {
+        uint256 _MAX_SECONDS_AGO = delegate.MAX_SECONDS_AGO();
+
+        _newValue = bound(_newValue, _MAX_SECONDS_AGO + 1, type(uint32).max);
+        
+        // Check: revert?
+        vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_TwapPeriodTooLong.selector));
+
+        // Test: try to change seconds ago
+        vm.prank(owner);
+        delegate.changeSecondsAgo(projectId, uint32(_newValue));
+    }
+
+    /**
+     * @notice Test set twap delta
+     */
+    function test_setTwapDelta(uint256 _newDelta) public {
+        uint256 _MIN_TWAP_DELTA = delegate.MIN_TWAP_DELTA();
+        _newDelta = bound(_newDelta, _MIN_TWAP_DELTA, type(uint256).max);
+
+        // Check: correct event?
+        vm.expectEmit(true, true, true, true);
+        emit BuybackDelegate_TwapDeltaChanged(projectId, delegate.twapDeltaOf(projectId), _newDelta);
+
+        // Test: set the twap
+        vm.prank(owner);
+        delegate.setTwapDelta(projectId, _newDelta);
+
+        // Check: correct twap?
+        assertEq(delegate.twapDeltaOf(projectId), _newDelta);
+    }
+
+    /**
+     * @notice Test set twap delta reverts if wrong caller
+     */
+    function test_setTwapDelta_revertWrongCaller(address _notOwner) public {
+        vm.assume(owner != _notOwner);
+
+        vm.mockCall(
+            address(operatorStore),
+            abi.encodeCall(
+                operatorStore.hasPermission, (_notOwner, owner, projectId, JBBuybackDelegateOperations.SET_POOL_PARAMS)
+            ),
+            abi.encode(false)
+        );
+        vm.expectCall(
+            address(operatorStore),
+            abi.encodeCall(
+                operatorStore.hasPermission, (_notOwner, owner, projectId, JBBuybackDelegateOperations.SET_POOL_PARAMS)
+            )
+        );
+
+        vm.mockCall(
+            address(operatorStore),
+            abi.encodeCall(
+                operatorStore.hasPermission, (_notOwner, owner, 0, JBBuybackDelegateOperations.SET_POOL_PARAMS)
+            ),
+            abi.encode(false)
+        );
+        vm.expectCall(
+            address(operatorStore),
+            abi.encodeCall(
+                operatorStore.hasPermission, (_notOwner, owner, 0, JBBuybackDelegateOperations.SET_POOL_PARAMS)
+            )
+        );
+
+        // check: revert?
+        vm.expectRevert(abi.encodeWithSignature("UNAUTHORIZED()"));
+
+        // Test: set the twap
+        vm.prank(_notOwner);
+        delegate.setTwapDelta(projectId, 1);
+    }
+
+    /**
+     * @notice Test set twap delta
+     */
+    function test_setTwapDelta_revertIfNewValueTooLow(uint256 _newDelta) public {
+        uint256 _MIN_TWAP_DELTA = delegate.MIN_TWAP_DELTA();
+
+        _newDelta = bound(_newDelta, 0, _MIN_TWAP_DELTA - 1);
+
+        vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_TwapDeltaTooLow.selector));
+
+        // Test: set the twap
+        vm.prank(owner);
+        delegate.setTwapDelta(projectId, _newDelta);
+    }
+
     /**
      * @notice Test sweep
      */
@@ -1010,126 +1200,6 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         delegate.sweep(dude, JBTokens.ETH);
     }
 
-    /**
-     * @notice Test increase seconds ago
-     */
-    function test_changeSecondsAgo(uint256 _newValue) public {
-        _newValue = bound(_newValue, 0, type(uint32).max);
-
-        // check: correct event?
-        vm.expectEmit(true, true, true, true);
-        emit BuybackDelegate_SecondsAgoChanged(projectId, delegate.secondsAgoOf(projectId), _newValue);
-
-        // Test: change seconds ago
-        vm.prank(owner);
-        delegate.changeSecondsAgo(projectId, uint32(_newValue));
-
-        // Check: correct seconds ago?
-        assertEq(delegate.secondsAgoOf(projectId), _newValue);
-    }
-
-    /**
-     * @notice Test increase seconds ago revert if wrong caller
-     */
-    function test_changeSecondsAgo_revertIfWrongCaller(address _notOwner) public {
-        vm.assume(owner != _notOwner);
-
-        vm.mockCall(
-            address(operatorStore),
-            abi.encodeCall(
-                operatorStore.hasPermission, (_notOwner, owner, projectId, JBBuybackDelegateOperations.SET_POOL_PARAMS)
-            ),
-            abi.encode(false)
-        );
-        vm.expectCall(
-            address(operatorStore),
-            abi.encodeCall(
-                operatorStore.hasPermission, (_notOwner, owner, projectId, JBBuybackDelegateOperations.SET_POOL_PARAMS)
-            )
-        );
-
-        vm.mockCall(
-            address(operatorStore),
-            abi.encodeCall(
-                operatorStore.hasPermission, (_notOwner, owner, 0, JBBuybackDelegateOperations.SET_POOL_PARAMS)
-            ),
-            abi.encode(false)
-        );
-        vm.expectCall(
-            address(operatorStore),
-            abi.encodeCall(
-                operatorStore.hasPermission, (_notOwner, owner, 0, JBBuybackDelegateOperations.SET_POOL_PARAMS)
-            )
-        );
-
-        // check: revert?
-        vm.expectRevert(abi.encodeWithSignature("UNAUTHORIZED()"));
-
-        // Test: change seconds ago (left uninit/at 0)
-        vm.startPrank(_notOwner);
-        delegate.changeSecondsAgo(projectId, 999);
-    }
-
-    /**
-     * @notice Test set twap delta
-     */
-    function test_setTwapDelta(uint256 _oldDelta, uint256 _newDelta) public {
-        // Store a preexisting twap delta
-        stdstore.target(address(delegate)).sig("twapDeltaOf(uint256)").with_key(projectId).checked_write(_oldDelta);
-
-        // Check: correct event?
-        vm.expectEmit(true, true, true, true);
-        emit BuybackDelegate_TwapDeltaChanged(projectId, _oldDelta, _newDelta);
-
-        // Test: set the twap
-        vm.prank(owner);
-        delegate.setTwapDelta(projectId, _newDelta);
-
-        // Check: correct twap?
-        assertEq(delegate.twapDeltaOf(projectId), _newDelta);
-    }
-
-    /**
-     * @notice Test set twap delta reverts if wrong caller
-     */
-    function test_setTwapDelta_revertWrongCaller(address _notOwner) public {
-        vm.assume(owner != _notOwner);
-
-        vm.mockCall(
-            address(operatorStore),
-            abi.encodeCall(
-                operatorStore.hasPermission, (_notOwner, owner, projectId, JBBuybackDelegateOperations.SET_POOL_PARAMS)
-            ),
-            abi.encode(false)
-        );
-        vm.expectCall(
-            address(operatorStore),
-            abi.encodeCall(
-                operatorStore.hasPermission, (_notOwner, owner, projectId, JBBuybackDelegateOperations.SET_POOL_PARAMS)
-            )
-        );
-
-        vm.mockCall(
-            address(operatorStore),
-            abi.encodeCall(
-                operatorStore.hasPermission, (_notOwner, owner, 0, JBBuybackDelegateOperations.SET_POOL_PARAMS)
-            ),
-            abi.encode(false)
-        );
-        vm.expectCall(
-            address(operatorStore),
-            abi.encodeCall(
-                operatorStore.hasPermission, (_notOwner, owner, 0, JBBuybackDelegateOperations.SET_POOL_PARAMS)
-            )
-        );
-
-        // check: revert?
-        vm.expectRevert(abi.encodeWithSignature("UNAUTHORIZED()"));
-
-        // Test: set the twap
-        vm.prank(_notOwner);
-        delegate.setTwapDelta(projectId, 1);
-    }
 }
 
 contract ForTest_JBGenericBuybackDelegate is JBGenericBuybackDelegate {
