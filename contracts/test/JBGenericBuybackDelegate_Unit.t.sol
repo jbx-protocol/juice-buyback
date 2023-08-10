@@ -799,7 +799,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             abi.encodeCall(directory.isTerminalOf, (didPayData.projectId, IJBPaymentTerminal(address(_notTerminal))))
         );
 
-        vm.expectRevert(abi.encodeWithSelector(JBGenericBuybackDelegate.JuiceBuyback_Unauthorized.selector));
+        vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_Unauthorized.selector));
 
         vm.prank(_notTerminal);
         delegate.didPay(didPayData);
@@ -897,7 +897,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         int256 _delta1 = 1 ether;
         uint256 _minReceived = 25;
 
-        vm.expectRevert(abi.encodeWithSelector(JBGenericBuybackDelegate.JuiceBuyback_Unauthorized.selector));
+        vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_Unauthorized.selector));
         delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(projectId, _minReceived, weth, projectToken));
     }
 
@@ -913,7 +913,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         (_delta0, _delta1) = address(projectToken) < address(weth) ? (_delta0, _delta1) : (_delta1, _delta0);
 
         vm.prank(address(pool));
-        vm.expectRevert(abi.encodeWithSelector(JBGenericBuybackDelegate.JuiceBuyback_MaximumSlippage.selector));
+        vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_MaximumSlippage.selector));
         delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(projectId, _minReceived, weth, projectToken));
     }
 
@@ -1006,7 +1006,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
 
         // Check: revert?
         vm.prank(dude);
-        vm.expectRevert(abi.encodeWithSelector(JBGenericBuybackDelegate.JuiceBuyback_TransferFailed.selector));
+        vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_TransferFailed.selector));
         delegate.sweep(dude, JBTokens.ETH);
     }
 
@@ -1050,12 +1050,16 @@ contract TestJBGenericBuybackDelegate_Units is Test {
 
         vm.mockCall(
             address(operatorStore),
-            abi.encodeCall(operatorStore.hasPermission, (_notOwner, owner, 0, JBBuybackDelegateOperations.SET_POOL_PARAMS)),
+            abi.encodeCall(
+                operatorStore.hasPermission, (_notOwner, owner, 0, JBBuybackDelegateOperations.SET_POOL_PARAMS)
+            ),
             abi.encode(false)
         );
         vm.expectCall(
             address(operatorStore),
-            abi.encodeCall(operatorStore.hasPermission, (_notOwner, owner, 0, JBBuybackDelegateOperations.SET_POOL_PARAMS))
+            abi.encodeCall(
+                operatorStore.hasPermission, (_notOwner, owner, 0, JBBuybackDelegateOperations.SET_POOL_PARAMS)
+            )
         );
 
         // check: revert?
@@ -1107,12 +1111,16 @@ contract TestJBGenericBuybackDelegate_Units is Test {
 
         vm.mockCall(
             address(operatorStore),
-            abi.encodeCall(operatorStore.hasPermission, (_notOwner, owner, 0, JBBuybackDelegateOperations.SET_POOL_PARAMS)),
+            abi.encodeCall(
+                operatorStore.hasPermission, (_notOwner, owner, 0, JBBuybackDelegateOperations.SET_POOL_PARAMS)
+            ),
             abi.encode(false)
         );
         vm.expectCall(
             address(operatorStore),
-            abi.encodeCall(operatorStore.hasPermission, (_notOwner, owner, 0, JBBuybackDelegateOperations.SET_POOL_PARAMS))
+            abi.encodeCall(
+                operatorStore.hasPermission, (_notOwner, owner, 0, JBBuybackDelegateOperations.SET_POOL_PARAMS)
+            )
         );
 
         // check: revert?

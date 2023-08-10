@@ -1,7 +1,29 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "./libraries/JBBuybackDelegateImports.sol";
+import {IJBPaymentTerminal} from "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPaymentTerminal.sol";
+import {IJBPayoutRedemptionPaymentTerminal3_1_1 } from "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayoutRedemptionPaymentTerminal3_1_1.sol";
+import {IJBSingleTokenPaymentTerminal} from "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBSingleTokenPaymentTerminal.sol";
+import {JBDidPayData3_1_1} from "@jbx-protocol/juice-contracts-v3/contracts/structs/JBDidPayData3_1_1.sol";
+import {JBOperatable} from "@jbx-protocol/juice-contracts-v3/contracts/abstract/JBOperatable.sol";
+import {JBPayDelegateAllocation3_1_1} from "@jbx-protocol/juice-contracts-v3/contracts/structs/JBPayDelegateAllocation3_1_1.sol";
+import {JBPayParamsData} from "@jbx-protocol/juice-contracts-v3/contracts/structs/JBPayParamsData.sol";
+import {JBRedeemParamsData} from "@jbx-protocol/juice-contracts-v3/contracts/structs/JBRedeemParamsData.sol";
+import {JBRedemptionDelegateAllocation3_1_1} from "@jbx-protocol/juice-contracts-v3/contracts/structs/JBRedemptionDelegateAllocation3_1_1.sol";
+import {JBTokens} from "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBTokens.sol";
+
+import {JBDelegateMetadataHelper} from "@jbx-protocol/juice-delegate-metadata-lib/src/JBDelegateMetadataHelper.sol";
+
+import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
+import {ERC165, IERC165} from "@openzeppelin/contracts/utils/introspection/ERC165.sol";
+
+import {mulDiv18} from "@prb/math/src/Common.sol";
+
+import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
+import {OracleLibrary} from "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
+
+import {JBBuybackDelegateOperations} from "./libraries/JBBuybackDelegateOperations.sol";
+import /** {*} from */ "./interfaces/IJBGenericBuybackDelegate.sol";
 
 /**
  * @custom:benediction DEVS BENEDICAT ET PROTEGAT CONTRACTVS MEAM
@@ -19,30 +41,8 @@ contract JBGenericBuybackDelegate is
     ERC165,
     JBDelegateMetadataHelper,
     JBOperatable,
-    IJBFundingCycleDataSource3_1_1,
-    IJBPayDelegate3_1_1,
-    IUniswapV3SwapCallback
+    IJBGenericBuybackDelegate
 {
-    //*********************************************************************//
-    // --------------------------- custom errors ------------------------- //
-    //*********************************************************************//
-
-    error JuiceBuyback_Unauthorized();
-    error JuiceBuyback_MaximumSlippage();
-    error JuiceBuyback_NewSecondsAgoTooLow();
-    error JuiceBuyback_NoProjectToken();
-    error JuiceBuyback_TransferFailed();
-
-    //*********************************************************************//
-    // -----------------------------  events ----------------------------- //
-    //*********************************************************************//
-
-    event BuybackDelegate_Swap(uint256 indexed projectId, uint256 amountEth, uint256 amountOut);
-    event BuybackDelegate_Mint(uint256 indexed projectId);
-    event BuybackDelegate_SecondsAgoChanged(uint256 indexed projectId, uint256 oldSecondsAgo, uint256 newSecondsAgo);
-    event BuybackDelegate_TwapDeltaChanged(uint256 indexed projectId, uint256 oldTwapDelta, uint256 newTwapDelta);
-    event BuybackDelegate_PendingSweep(address indexed beneficiary, address indexed token, uint256 amount);
-    event BuybackDelegate_PoolAdded(uint256 indexed projectId, address indexed terminalToken, address newPool);
 
     //*********************************************************************//
     // --------------------- public constant properties ----------------- //
@@ -51,6 +51,21 @@ contract JBGenericBuybackDelegate is
      * @notice The unit of the max slippage (expressed in 1/10000th)
      */
     uint256 public constant SLIPPAGE_DENOMINATOR = 10000;
+
+    /**
+     * @notice The minimum twap deviation allowed (0.1%, in 1/10000th)
+     *
+     * @dev    This is to avoid bypassing the swap when a quote is not provided
+     *         (ie in fees/automated pay)
+     */
+    uint256 public constant MIN_TWAP_DELTA = 100;
+
+    /**
+     * @notice The biggest TWAP period allowed, in seconds.
+     *
+     * @dev    This is to avoid having a too long twap, bypassing the swap
+     */
+    uint256 public constant MAX_SECONDS_AGO = 2 days;
 
     /**
      * @notice The uniswap v3 factory
@@ -322,6 +337,10 @@ contract JBGenericBuybackDelegate is
         requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.CHANGE_POOL)
         returns (IUniswapV3Pool _newPool)
     {
+        if (_twapDelta < MIN_TWAP_DELTA) revert JuiceBuyback_TwapDeltaTooLow();
+
+        if (_secondsAgo > MAX_SECONDS_AGO) revert JuiceBuyback_TwapPeriodTooLong();
+
         // Get the project token
         address _projectToken = address(CONTROLLER.tokenStore().tokenOf(_projectId));
 
@@ -355,13 +374,16 @@ contract JBGenericBuybackDelegate is
             )
         );
 
+        // If this pool is already used, rather use the secondsAgo and twapDelta setters
+        if (poolOf[_projectId][_terminalToken] == _newPool) revert JuiceBuyback_PoolAlreadySet();
+
+        // Store the pool
+        poolOf[_projectId][_terminalToken] = _newPool;
+
         // Store the twap period and max slippage
         secondsAgoOf[_projectId] = _secondsAgo;
         twapDeltaOf[_projectId] = _twapDelta;
         projectTokenOf[_projectId] = address(_projectToken);
-
-        // Store the pool
-        poolOf[_projectId][_terminalToken] = _newPool;
 
         emit BuybackDelegate_SecondsAgoChanged(_projectId, 0, _secondsAgo);
         emit BuybackDelegate_TwapDeltaChanged(_projectId, 0, _twapDelta);

@@ -11,5 +11,4 @@ library JBBuybackDelegateOperations {
 
     uint256 public constant SET_POOL_PARAMS = 24;
     uint256 public constant CHANGE_POOL = 25;
-
 }
