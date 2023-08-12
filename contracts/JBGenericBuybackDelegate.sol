@@ -5,7 +5,7 @@ import {IJBPaymentTerminal} from "@jbx-protocol/juice-contracts-v3/contracts/int
 import {IJBPayoutRedemptionPaymentTerminal3_1_1 } from "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayoutRedemptionPaymentTerminal3_1_1.sol";
 import {IJBSingleTokenPaymentTerminal} from "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBSingleTokenPaymentTerminal.sol";
 import {JBDidPayData3_1_1} from "@jbx-protocol/juice-contracts-v3/contracts/structs/JBDidPayData3_1_1.sol";
-import {JBOperatable} from "@jbx-protocol/juice-contracts-v3/contracts/abstract/JBOperatable.sol";
+import {IJBOperatable, JBOperatable} from "@jbx-protocol/juice-contracts-v3/contracts/abstract/JBOperatable.sol";
 import {JBPayDelegateAllocation3_1_1} from "@jbx-protocol/juice-contracts-v3/contracts/structs/JBPayDelegateAllocation3_1_1.sol";
 import {JBPayParamsData} from "@jbx-protocol/juice-contracts-v3/contracts/structs/JBPayParamsData.sol";
 import {JBRedeemParamsData} from "@jbx-protocol/juice-contracts-v3/contracts/structs/JBRedeemParamsData.sol";
@@ -161,7 +161,7 @@ contract JBGenericBuybackDelegate is
         IJBDirectory _directory,
         IJBController3_1 _controller,
         bytes4 _delegateId
-    ) JBOperatable(JBOperatable(address(_controller)).operatorStore()) {
+    ) JBOperatable(IJBOperatable(address(_controller)).operatorStore()) {
         WETH = _weth;
         DIRECTORY = _directory;
         CONTROLLER = _controller;
@@ -191,27 +191,23 @@ contract JBGenericBuybackDelegate is
         override
         returns (uint256 weight, string memory memo, JBPayDelegateAllocation3_1_1[] memory delegateAllocations)
     {
+        address _projectToken = projectTokenOf[_data.projectId];
+
         // Find the total number of tokens to mint, as a fixed point number with 18 decimals
         uint256 _tokenCount = mulDiv18(_data.amount.value, _data.weight);
 
-        // Get a quote based on either the uni SDK quote or a twap from the pool
-        uint256 _swapAmountOut;
-
+        // Unpack the quote from the pool, given by the frontend - this one takes precedence on the twap
+        // as it should be closer to the current pool state, if not, use the twap
         (bool _validQuote, bytes memory _metadata) = getMetadata(delegateId, _data.metadata);
 
+        // Get a quote based on either the frontend quote or a twap from the pool
         uint256 _quote;
         uint256 _slippage;
         if (_validQuote) (_quote, _slippage) = abi.decode(_metadata, (uint256, uint256));
 
-        address _projectToken = projectTokenOf[_data.projectId];
-
-        if (_quote != 0) {
-            // Unpack the quote from the pool, given by the frontend - this one takes precedence on the twap
-            // as it should be closer to the current pool state, if not, use the twap
-            _swapAmountOut = _quote - ((_quote * _slippage) / SLIPPAGE_DENOMINATOR);
-        } else {
-            _swapAmountOut = _getQuote(_data.projectId, _data.terminal, _projectToken, _data.amount.value);
-        }
+        uint256 _swapAmountOut = _quote == 0
+         ? _getQuote(_data.projectId, _data.terminal, _projectToken, _data.amount.value)
+         : _quote - ((_quote * _slippage) / SLIPPAGE_DENOMINATOR);
 
         // If the minimum amount received from swapping is greather than received when minting, use the swap pathway
         if (_tokenCount < _swapAmountOut) {
