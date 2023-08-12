@@ -12,7 +12,7 @@ import {JBRedeemParamsData} from "@jbx-protocol/juice-contracts-v3/contracts/str
 import {JBRedemptionDelegateAllocation3_1_1} from "@jbx-protocol/juice-contracts-v3/contracts/structs/JBRedemptionDelegateAllocation3_1_1.sol";
 import {JBTokens} from "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBTokens.sol";
 
-import {JBDelegateMetadataHelper} from "@jbx-protocol/juice-delegate-metadata-lib/src/JBDelegateMetadataHelper.sol";
+import {JBDelegateMetadataLib} from "@jbx-protocol/juice-delegate-metadata-lib/src/JBDelegateMetadataLib.sol";
 
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {ERC165, IERC165} from "@openzeppelin/contracts/utils/introspection/ERC165.sol";
@@ -39,7 +39,6 @@ import /** {*} from */ "./interfaces/IJBGenericBuybackDelegate.sol";
 
 contract JBGenericBuybackDelegate is
     ERC165,
-    JBDelegateMetadataHelper,
     JBOperatable,
     IJBGenericBuybackDelegate
 {
@@ -198,7 +197,7 @@ contract JBGenericBuybackDelegate is
 
         // Unpack the quote from the pool, given by the frontend - this one takes precedence on the twap
         // as it should be closer to the current pool state, if not, use the twap
-        (bool _validQuote, bytes memory _metadata) = getMetadata(delegateId, _data.metadata);
+        (bool _validQuote, bytes memory _metadata) = JBDelegateMetadataLib.getMetadata(delegateId, _data.metadata);
 
         // Get a quote based on either the frontend quote or a twap from the pool
         uint256 _quote;
