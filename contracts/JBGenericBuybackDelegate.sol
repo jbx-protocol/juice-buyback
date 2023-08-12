@@ -61,6 +61,21 @@ contract JBGenericBuybackDelegate is
     uint256 public constant MIN_TWAP_DELTA = 100;
 
     /**
+     * @notice The minimmaximum twap deviation allowed (9%, in 1/10000th)
+     *
+     * @dev    This is to avoid bypassing the swap when a quote is not provided
+     *         (ie in fees/automated pay)
+     */
+    uint256 public constant MAX_TWAP_DELTA = 9000;
+
+    /**
+     * @notice The smallest TWAP period allowed, in seconds.
+     *
+     * @dev    This is to avoid having a too short twap, prone to pool manipulation
+     */ 
+    uint256 public constant MIN_SECONDS_AGO = 2 minutes;
+
+    /**
      * @notice The biggest TWAP period allowed, in seconds.
      *
      * @dev    This is to avoid having a too long twap, bypassing the swap
@@ -337,9 +352,9 @@ contract JBGenericBuybackDelegate is
         requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.CHANGE_POOL)
         returns (IUniswapV3Pool _newPool)
     {
-        if (_twapDelta < MIN_TWAP_DELTA) revert JuiceBuyback_TwapDeltaTooLow();
+        if (_twapDelta < MIN_TWAP_DELTA || _twapDelta > MAX_TWAP_DELTA) revert JuiceBuyback_InvalidTwapDelta();
 
-        if (_secondsAgo > MAX_SECONDS_AGO) revert JuiceBuyback_TwapPeriodTooLong();
+        if ( _secondsAgo < MIN_SECONDS_AGO || _secondsAgo > MAX_SECONDS_AGO) revert JuiceBuyback_InvalidTwapPeriod();
 
         // Get the project token
         address _projectToken = address(CONTROLLER.tokenStore().tokenOf(_projectId));
@@ -401,7 +416,7 @@ contract JBGenericBuybackDelegate is
         external
         requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.SET_POOL_PARAMS)
     {
-        if (_newSecondsAgo > MAX_SECONDS_AGO) revert JuiceBuyback_TwapPeriodTooLong();
+        if (_newSecondsAgo < MIN_SECONDS_AGO || _newSecondsAgo > MAX_SECONDS_AGO) revert JuiceBuyback_InvalidTwapPeriod();
 
         uint256 _oldValue = secondsAgoOf[_projectId];
         secondsAgoOf[_projectId] = _newSecondsAgo;
@@ -420,7 +435,7 @@ contract JBGenericBuybackDelegate is
         external
         requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.SET_POOL_PARAMS)
     {
-        if (_newDelta < MIN_TWAP_DELTA) revert JuiceBuyback_TwapDeltaTooLow();
+        if (_newDelta < MIN_TWAP_DELTA || _newDelta > MAX_TWAP_DELTA) revert JuiceBuyback_InvalidTwapDelta();
 
         uint256 _oldDelta = twapDeltaOf[_projectId];
         twapDeltaOf[_projectId] = _newDelta;

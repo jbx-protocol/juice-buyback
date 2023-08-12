@@ -923,11 +923,14 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         vm.assume(_terminalToken != address(0) && _projectToken != address(0) && _fee != 0);
         vm.assume(_terminalToken != _projectToken);
 
+        uint256 _MIN_SECONDS_AGO = delegate.MIN_SECONDS_AGO();
         uint256 _MAX_SECONDS_AGO = delegate.MAX_SECONDS_AGO();
-        uint256 _MIN_TWAP_DELTA = delegate.MIN_TWAP_DELTA();
 
-        _twapDelta = bound(_twapDelta, _MIN_TWAP_DELTA, type(uint256).max);
-        _secondsAgo = bound(_secondsAgo, 0, _MAX_SECONDS_AGO);
+        uint256 _MIN_TWAP_DELTA = delegate.MIN_TWAP_DELTA();
+        uint256 _MAX_TWAP_DELTA = delegate.MAX_TWAP_DELTA();
+
+        _twapDelta = bound(_twapDelta, _MIN_TWAP_DELTA, _MAX_TWAP_DELTA);
+        _secondsAgo = bound(_secondsAgo, _MIN_SECONDS_AGO, _MAX_SECONDS_AGO);
 
         address _pool = PoolAddress.computeAddress(
             delegate.UNISWAP_V3_FACTORY(),
@@ -955,7 +958,9 @@ contract TestJBGenericBuybackDelegate_Units is Test {
      */
     function test_changeSecondsAgo(uint256 _newValue) public {
         uint256 _MAX_SECONDS_AGO = delegate.MAX_SECONDS_AGO();
-        _newValue = bound(_newValue, 0, _MAX_SECONDS_AGO);
+        uint256 _MIN_SECONDS_AGO = delegate.MIN_SECONDS_AGO();
+
+        _newValue = bound(_newValue, _MIN_SECONDS_AGO, _MAX_SECONDS_AGO);
 
         // check: correct event?
         vm.expectEmit(true, true, true, true);
@@ -1014,13 +1019,23 @@ contract TestJBGenericBuybackDelegate_Units is Test {
     /**
      * @notice Test increase seconds ago reverting on boundary
      */
-    function test_changeSecondsAgo_revertIfNewValueTooBig(uint256 _newValue) public {
+    function test_changeSecondsAgo_revertIfNewValueTooBigOrTooLow(uint256 _newValueSeed) public {
         uint256 _MAX_SECONDS_AGO = delegate.MAX_SECONDS_AGO();
+        uint256 _MIN_SECONDS_AGO = delegate.MIN_SECONDS_AGO();
 
-        _newValue = bound(_newValue, _MAX_SECONDS_AGO + 1, type(uint32).max);
+        uint256 _newValue = bound(_newValueSeed, _MAX_SECONDS_AGO + 1, type(uint32).max);
         
         // Check: revert?
-        vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_TwapPeriodTooLong.selector));
+        vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapPeriod.selector));
+
+        // Test: try to change seconds ago
+        vm.prank(owner);
+        delegate.changeSecondsAgo(projectId, uint32(_newValue));
+
+        _newValue = bound(_newValueSeed, 0, _MIN_SECONDS_AGO - 1);
+        
+        // Check: revert?
+        vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapPeriod.selector));
 
         // Test: try to change seconds ago
         vm.prank(owner);
@@ -1032,7 +1047,8 @@ contract TestJBGenericBuybackDelegate_Units is Test {
      */
     function test_setTwapDelta(uint256 _newDelta) public {
         uint256 _MIN_TWAP_DELTA = delegate.MIN_TWAP_DELTA();
-        _newDelta = bound(_newDelta, _MIN_TWAP_DELTA, type(uint256).max);
+        uint256 _MAX_TWAP_DELTA = delegate.MAX_TWAP_DELTA();
+        _newDelta = bound(_newDelta, _MIN_TWAP_DELTA, _MAX_TWAP_DELTA);
 
         // Check: correct event?
         vm.expectEmit(true, true, true, true);
@@ -1091,12 +1107,21 @@ contract TestJBGenericBuybackDelegate_Units is Test {
     /**
      * @notice Test set twap delta
      */
-    function test_setTwapDelta_revertIfNewValueTooLow(uint256 _newDelta) public {
+    function test_setTwapDelta_revertIfInvalidNewValue(uint256 _newDeltaSeed) public {
         uint256 _MIN_TWAP_DELTA = delegate.MIN_TWAP_DELTA();
+        uint256 _MAX_TWAP_DELTA = delegate.MAX_TWAP_DELTA();
 
-        _newDelta = bound(_newDelta, 0, _MIN_TWAP_DELTA - 1);
+        uint256 _newDelta = bound(_newDeltaSeed, 0, _MIN_TWAP_DELTA - 1);
 
-        vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_TwapDeltaTooLow.selector));
+        vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapDelta.selector));
+
+        // Test: set the twap
+        vm.prank(owner);
+        delegate.setTwapDelta(projectId, _newDelta);
+
+        _newDelta = bound(_newDeltaSeed, _MAX_TWAP_DELTA + 1, type(uint256).max);
+
+        vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapDelta.selector));
 
         // Test: set the twap
         vm.prank(owner);

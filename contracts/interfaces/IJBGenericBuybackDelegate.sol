@@ -22,8 +22,8 @@ interface IJBGenericBuybackDelegate is IJBPayDelegate3_1_1, IJBFundingCycleDataS
     error JuiceBuyback_NoProjectToken();
     error JuiceBuyback_PoolAlreadySet();
     error JuiceBuyback_TransferFailed();
-    error JuiceBuyback_TwapDeltaTooLow();
-    error JuiceBuyback_TwapPeriodTooLong();
+    error JuiceBuyback_InvalidTwapDelta();
+    error JuiceBuyback_InvalidTwapPeriod();
     error JuiceBuyback_Unauthorized();
 
     /////////////////////////////////////////////////////////////////////
