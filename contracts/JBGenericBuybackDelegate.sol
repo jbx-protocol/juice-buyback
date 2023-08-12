@@ -123,16 +123,6 @@ contract JBGenericBuybackDelegate is
     mapping(uint256 _projectId => mapping(address _terminalToken => IUniswapV3Pool _pool)) public poolOf;
 
     /**
-     * @notice The timeframe to use for the pool twap (from secondAgo to now)
-     */
-    mapping(uint256 _projectId => uint32 _seconds) public secondsAgoOf;
-
-    /**
-     * @notice The twap max deviation acepted (in 10_000th)
-     */
-    mapping(uint256 _projectId => uint256 _delta) public twapDeltaOf;
-
-    /**
      * @notice The project token
      */
     mapping(uint256 _projectId => address projectTokenOf) public projectTokenOf;
@@ -146,6 +136,17 @@ contract JBGenericBuybackDelegate is
      * @notice Running cumulative sum of token left-over
      */
     mapping(address _token => uint256 _contractBalance) public totalSweepBalance;
+
+    /////////////////////////////////////////////////////////////////////
+    //                    Internal global variables                    //
+    /////////////////////////////////////////////////////////////////////
+
+    /**
+     * @notice The twap max deviation acepted (in 10_000th) and timeframe to use for the pool twap (from secondAgo to now)
+     *
+     * @dev    Params are uint128 and uint32 packed in a uint256, with the max deviation in the 128 most significant bits
+     */
+    mapping(uint256 _projectId => uint256 _params) internal twapParamsOf;
 
     //*********************************************************************//
     // ---------------------------- Constructor -------------------------- //
@@ -170,9 +171,9 @@ contract JBGenericBuybackDelegate is
         PROJECTS = _controller.projects();
     }
 
-    //*********************************************************************//
-    // ---------------------- external functions ------------------------- //
-    //*********************************************************************//
+    /////////////////////////////////////////////////////////////////////
+    //                         View functions                          //
+    /////////////////////////////////////////////////////////////////////
 
     /**
      * @notice The datasource implementation
@@ -228,6 +229,32 @@ contract JBGenericBuybackDelegate is
         // If minting, do not use this as delegate (delegateAllocations is left uninitialised)
         return (_data.weight, _data.memo, delegateAllocations);
     }
+
+    /**
+     * @notice The timeframe to use for the pool twap (from secondAgo to now)
+     *
+     * @param  _projectId the project id
+     *
+     * @return _secondsAgo the period over which the twap is computed
+     */
+    function secondsAgoOf(uint256 _projectId) external view returns(uint32) {
+        return uint32(twapParamsOf[_projectId]);
+    }
+
+    /**
+     * @notice The twap max deviation acepted (in 10_000th)
+     *
+     * @param  _projectId the project id
+     *
+     * @return _delta the maximum deviation allowed between amount received and twap
+     */
+    function twapDeltaOf(uint256 _projectId) external view returns(uint256) {
+        return twapParamsOf[_projectId] >> 128;
+    }
+
+    /////////////////////////////////////////////////////////////////////
+    //                       External functions                        //
+    /////////////////////////////////////////////////////////////////////
 
     /**
      * @notice Delegate to either swap to the beneficiary or mint to the beneficiary
@@ -396,8 +423,7 @@ contract JBGenericBuybackDelegate is
         poolOf[_projectId][_terminalToken] = _newPool;
 
         // Store the twap period and max slippage
-        secondsAgoOf[_projectId] = _secondsAgo;
-        twapDeltaOf[_projectId] = _twapDelta;
+        twapParamsOf[_projectId] = _twapDelta << 128 | _secondsAgo;
         projectTokenOf[_projectId] = address(_projectToken);
 
         emit BuybackDelegate_SecondsAgoChanged(_projectId, 0, _secondsAgo);
@@ -418,8 +444,10 @@ contract JBGenericBuybackDelegate is
     {
         if (_newSecondsAgo < MIN_SECONDS_AGO || _newSecondsAgo > MAX_SECONDS_AGO) revert JuiceBuyback_InvalidTwapPeriod();
 
-        uint256 _oldValue = secondsAgoOf[_projectId];
-        secondsAgoOf[_projectId] = _newSecondsAgo;
+        uint256 _twapParams = twapParamsOf[_projectId];
+        uint256 _oldValue = uint128(_twapParams);
+
+        twapParamsOf[_projectId] = uint256(_newSecondsAgo) | ((_twapParams >> 128) << 128);
 
         emit BuybackDelegate_SecondsAgoChanged(_projectId, _oldValue, _newSecondsAgo);
     }
@@ -437,8 +465,10 @@ contract JBGenericBuybackDelegate is
     {
         if (_newDelta < MIN_TWAP_DELTA || _newDelta > MAX_TWAP_DELTA) revert JuiceBuyback_InvalidTwapDelta();
 
-        uint256 _oldDelta = twapDeltaOf[_projectId];
-        twapDeltaOf[_projectId] = _newDelta;
+        uint256 _twapParams = twapParamsOf[_projectId];
+        uint256 _oldDelta = _twapParams >> 128;
+
+        twapParamsOf[_projectId] = _newDelta << 128 | ((_twapParams << 128) >> 128);
 
         emit BuybackDelegate_TwapDeltaChanged(_projectId, _oldDelta, _newDelta);
     }
@@ -498,8 +528,13 @@ contract JBGenericBuybackDelegate is
             return 0;
         }
 
+        // Get and unpack the twap params
+        uint256 _twapParams = twapParamsOf[_projectId];
+        uint32 _quotePeriod = uint32(_twapParams);
+        uint256 _maxDelta = _twapParams >> 128;
+
         // Get the twap tick
-        (int24 arithmeticMeanTick,) = OracleLibrary.consult(address(_pool), secondsAgoOf[_projectId]);
+        (int24 arithmeticMeanTick,) = OracleLibrary.consult(address(_pool), _quotePeriod);
 
         // Get a quote based on this twap tick
         _amountOut = OracleLibrary.getQuoteAtTick({
@@ -510,7 +545,7 @@ contract JBGenericBuybackDelegate is
         });
 
         // Return the lowest twap accepted
-        _amountOut -= (_amountOut * twapDeltaOf[_projectId]) / SLIPPAGE_DENOMINATOR;
+        _amountOut -= (_amountOut * _maxDelta) / SLIPPAGE_DENOMINATOR;
     }
 
     /**

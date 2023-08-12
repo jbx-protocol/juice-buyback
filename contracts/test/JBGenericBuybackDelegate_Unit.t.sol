@@ -950,7 +950,14 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         emit BuybackDelegate_PoolAdded(projectId, _terminalToken, address(_pool));
 
         vm.prank(owner);
-        delegate.setPoolFor(projectId, _fee, uint32(_secondsAgo), _twapDelta, _terminalToken);
+        address _newPool = address(delegate.setPoolFor(projectId, _fee, uint32(_secondsAgo), _twapDelta, _terminalToken));
+
+        // Check: correct params stored?
+        assertEq(delegate.secondsAgoOf(projectId), _secondsAgo);
+        assertEq(delegate.twapDeltaOf(projectId), _twapDelta);
+        assertEq(address(delegate.poolOf(projectId, _terminalToken)), _pool);
+        assertEq(_newPool, _pool);
+
     }
 
     /**
@@ -1245,8 +1252,7 @@ contract ForTest_JBGenericBuybackDelegate is JBGenericBuybackDelegate {
         address _projectToken,
         address _terminalToken
     ) external {
-        secondsAgoOf[_projectId] = _secondsAgo;
-        twapDeltaOf[_projectId] = _twapDelta;
+        twapParamsOf[_projectId] = _twapDelta << 128 | _secondsAgo;
         projectTokenOf[_projectId] = _projectToken;
         poolOf[_projectId][_terminalToken] = _pool;
     }
