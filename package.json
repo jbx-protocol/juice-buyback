@@ -21,7 +21,7 @@
     "deploy-mainnet": "source .env && forge script DeployMainnet --rpc-url $MAINNET_RPC_PROVIDER_URL --broadcast --mnemonic-paths mnemonic.txt --verify --etherscan-api-key $ETHERSCAN_API_KEY --sender $SENDER_ADDRESS"
   },
   "dependencies": {
-    "@jbx-protocol/juice-contracts-v3": "^4.0.1",
+    "@jbx-protocol/juice-contracts-v3": "^5.0.0",
     "@jbx-protocol/juice-delegate-metadata-lib": "https://github.com/jbx-protocol/juice-delegate-metadata-lib.git",
     "@openzeppelin/contracts": "^4.9.2",
     "@prb/math": "^4.0.1",
