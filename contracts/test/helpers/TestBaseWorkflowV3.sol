@@ -91,7 +91,7 @@ contract TestBaseWorkflowV3 is Test {
         _jbPrices = new JBPrices(_multisig);
         vm.label(address(_jbPrices), "JBPrices");
 
-        address contractAtNoncePlusOne = addressFrom(address(this), 5);
+        address contractAtNoncePlusOne = computeCreateAddress(address(this), vm.getNonce(address(this)) + 1);
 
         // JBFundingCycleStore
         _jbFundingCycleStore = new JBFundingCycleStore(IJBDirectory(contractAtNoncePlusOne));
