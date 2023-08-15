@@ -41,21 +41,23 @@ interface IJBGenericBuybackDelegate is IJBPayDelegate3_1_1, IJBFundingCycleDataS
     //                             Getters                             //
     /////////////////////////////////////////////////////////////////////
 
-    function SLIPPAGE_DENOMINATOR() external returns (uint256);
-    function MIN_TWAP_DELTA() external returns (uint256);
-    function MAX_SECONDS_AGO() external returns (uint256);
-    function UNISWAP_V3_FACTORY() external returns (address);
-    function DIRECTORY() external returns (IJBDirectory);
-    function CONTROLLER() external returns (IJBController3_1);
-    function PROJECTS() external returns (IJBProjects);
-    function WETH() external returns (IWETH9);
-    function delegateId() external returns (bytes4);
-    function poolOf(uint256 _projectId, address _terminalToken) external returns (IUniswapV3Pool _pool);
-    function secondsAgoOf(uint256 _projectId) external returns (uint32 _seconds);
-    function twapDeltaOf(uint256 _projectId) external returns (uint256 _delta);
-    function projectTokenOf(uint256 _projectId) external returns (address projectTokenOf);
-    function sweepBalanceOf(address _beneficiary, address _token) external returns (uint256 _balance);
-    function totalSweepBalance(address _token) external returns (uint256 _contractBalance);
+    function SLIPPAGE_DENOMINATOR() external view returns (uint256);
+    function MIN_TWAP_DELTA() external view returns (uint256);
+    function MAX_TWAP_DELTA() external view returns (uint256);
+    function MIN_SECONDS_AGO() external view returns (uint256);
+    function MAX_SECONDS_AGO() external view returns (uint256);
+    function UNISWAP_V3_FACTORY() external view returns (address);
+    function DIRECTORY() external view returns (IJBDirectory);
+    function CONTROLLER() external view returns (IJBController3_1);
+    function PROJECTS() external view returns (IJBProjects);
+    function WETH() external view returns (IWETH9);
+    function delegateId() external view returns (bytes4);
+    function poolOf(uint256 _projectId, address _terminalToken) external view returns (IUniswapV3Pool _pool);
+    function secondsAgoOf(uint256 _projectId) external view returns (uint32 _seconds);
+    function twapDeltaOf(uint256 _projectId) external view returns (uint256 _delta);
+    function projectTokenOf(uint256 _projectId) external view returns (address projectTokenOf);
+    function sweepBalanceOf(address _beneficiary, address _token) external view returns (uint256 _balance);
+    function totalSweepBalance(address _token) external view returns (uint256 _contractBalance);
 
     /////////////////////////////////////////////////////////////////////
     //                    State-changing functions                     //
