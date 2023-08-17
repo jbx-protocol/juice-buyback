@@ -175,8 +175,6 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         override
         returns (uint256 weight, string memory memo, JBPayDelegateAllocation3_1_1[] memory delegateAllocations)
     {
-        address _projectToken = projectTokenOf[_data.projectId];
-
         // Get a quote based on either the frontend quote or a twap from the pool
         uint256 _swapQuote;
         uint256 _minimumTotalAmountOut;
@@ -192,6 +190,8 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
          }
         }
         
+        address _projectToken = projectTokenOf[_data.projectId];
+
         // Find the total number of tokens to mint, as a fixed point number with 18 decimals
         uint256 _tokenCount = mulDiv18(_amountToSwapWith, _data.weight);
 
