@@ -199,9 +199,12 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         uint256 _minimumTotalAmountOut;
         uint256 _amountToSwapWith;
         if (_validQuote) (_swapQuote, _minimumTotalAmountOut, _amountToSwapWith) = abi.decode(_metadata, (uint256, uint256, uint256));
+        else {
+            _amountToSwapWith = _data.amount.value;
+        }
 
         uint256 _swapAmountOut =
-            _swapQuote != 0 ? _swapQuote : _getQuote(_data.projectId, _data.terminal, _projectToken, _data.amount.value);
+            _swapQuote != 0 ? _swapQuote : _getQuote(_data.projectId, _data.terminal, _projectToken, _amountToSwapWith);
 
         // If the minimum amount received from swapping is greather than received when minting, use the swap pathway
         if (_tokenCount < _swapAmountOut) {
@@ -210,7 +213,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             delegateAllocations[0] = JBPayDelegateAllocation3_1_1({
                 delegate: IJBPayDelegate3_1_1(this),
                 amount: _data.amount.value,
-                metadata: abi.encode(_swapQuote == 0, _swapQuote, _minimumTotalAmountOut, _amountToSwapWith, _projectToken)
+                metadata: abi.encode(_swapAmountOut, _minimumTotalAmountOut, _amountToSwapWith, _projectToken)
             });
 
             return (0, _data.memo, delegateAllocations);
@@ -262,8 +265,8 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             revert JuiceBuyback_Unauthorized();
         }
 
-        (bool _usedTwap, uint256 _exactSwapAmountOut,  uint256 _minimumTotalAmountOut, uint256 _amountToSwapWith, IERC20 _projectToken) =
-            abi.decode(_data.dataSourceMetadata, (bool, uint256, uint256, uint256, uint256, IERC20));
+        (uint256 _exactSwapAmountOut,  uint256 _minimumTotalAmountOut, uint256 _amountToSwapWith, IERC20 _projectToken) =
+            abi.decode(_data.dataSourceMetadata, (uint256, uint256, uint256, uint256, IERC20));
 
         // Make sure the amount to swap with is at most the full amount forwarded.
         if (_amountToSwapWith > _data.forwardedAmount.value) {
@@ -275,7 +278,8 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
 
         // If swap failed, mint instead, with the original weight + add to balance the token in
         if (!_swapSucceeded) {
-            if (_usedTwap) {
+            // if 0, suggests TWAP was used.
+            if (_minimumTotalAmountOut == 0) {
                 _mint(_data, _data.forwardedAmount.value);
             } else {
                 revert JuiceBuyback_MaximumSlippage();
@@ -290,10 +294,10 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             if (_terminalTokenInThisContract != 0) {
                 uitn256 _mintAmount = _mint(_data, _terminalTokenInThisContract);
 
-                if (_mintAmount + _exactSwapAmountOut < _minimumTotalAmountOut) {
+                if (_minimumTotalAmountOut != 0 && _mintAmount + _exactSwapAmountOut < _minimumTotalAmountOut) {
                     revert JuiceBuyback_NotEnoughTokensReceived();
                 }
-            } else if (_minimumTotalAmountOut > _exactSwapAmountOut) {
+            } else if (_minimumTotalAmountOut != 0 && _minimumTotalAmountOut > _exactSwapAmountOut) {
                 revert JuiceBuyback_NotEnoughTokensReceived();
             }
         }
