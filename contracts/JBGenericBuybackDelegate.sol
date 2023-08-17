@@ -568,8 +568,6 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
 
         IUniswapV3Pool _pool = poolOf[_data.projectId][_terminalToken];
 
-        uint256 _amountReceived;
-
         // Pass the token and min amount to receive as extra data
         try _pool.swap({
             recipient: address(this),
@@ -578,7 +576,6 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             sqrtPriceLimitX96: _projectTokenIs0 ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
             data: abi.encode(_data.projectId, _data.forwardedAmount.value, _terminalToken, _projectToken)
         }) returns (int256, int256) {} catch {
-            // implies _amountReceived = 0 -> will later mint when back in didPay
             return false;
         }
 
@@ -594,14 +591,14 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         // Mint it again, to add the correct portion to the reserved token and take the claimed preference into account
         CONTROLLER.mintTokensOf({
             projectId: _data.projectId,
-            tokenCount: _amountReceived,
+            tokenCount: _exactAmountReceivedFromSwap,
             beneficiary: address(_data.beneficiary),
             memo: _data.memo,
             preferClaimedTokens: _data.preferClaimedTokens,
             useReservedRate: true
         });
 
-        emit BuybackDelegate_Swap(_data.projectId, _data.forwardedAmount.value, _amountReceived);
+        emit BuybackDelegate_Swap(_data.projectId, _data.forwardedAmount.value, _exactAmountReceivedFromSwap);
 
         return true;
     }
