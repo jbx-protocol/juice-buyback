@@ -306,9 +306,9 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
      *
      * @dev    Slippage controle is achieved here
      */
-    function uniswapV3SwapCallback(int256 amount0Delta, int256 amount1Delta, bytes calldata data) external override {
+    function uniswapV3SwapCallback(int256 amount0Delta, int256, bytes calldata data) external override {
         // Unpack the data
-        (uint256 _projectId, uint256 _paidAmount, address _terminalToken, address _projectToken) =
+        (uint256 _projectId, uint256 _paidAmount, address _terminalToken) =
             abi.decode(data, (uint256, uint256, address, address));
 
         // Get the terminal token, weth if it's an ETH terminal
@@ -317,23 +317,11 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         // Check if this is really a callback - only create2 pools are added to insure safety of this check (balance pending sweep at risk)
         if (msg.sender != address(poolOf[_projectId][_terminalTokenWithWETH])) revert JuiceBuyback_Unauthorized();
 
-        // Sort the pool tokens
-        bool _tokenProjectIs0 = _projectToken < _terminalTokenWithWETH;
-
-        // delta is in regard of the pool balance (positive = pool need to receive)
-        uint256 _amountToSendToPool = _tokenProjectIs0 ? uint256(amount1Delta) : uint256(amount0Delta);
-        uint256 _amountReceivedForBeneficiary = _tokenProjectIs0 ? uint256(-amount0Delta) : uint256(-amount1Delta);
-
-        // Revert if slippage is too high
-        if (_amountToSendToPool > _paidAmount) {
-            revert JuiceBuyback_MaximumSlippage();
-        }
-
         // Wrap ETH if needed
-        if (_terminalToken == JBTokens.ETH) WETH.deposit{value: _amountToSendToPool}();
+        if (_terminalToken == JBTokens.ETH) WETH.deposit{value: _paidAmount}();
 
         // Transfer the token to the pool
-        IERC20(_terminalTokenWithWETH).transfer(msg.sender, _amountToSendToPool);
+        IERC20(_terminalTokenWithWETH).transfer(msg.sender, _paidAmount);
     }
 
     /**
@@ -574,7 +562,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             zeroForOne: !_projectTokenIs0,
             amountSpecified: -int256(_exactAmountReceivedFromSwap),
             sqrtPriceLimitX96: _projectTokenIs0 ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
-            data: abi.encode(_data.projectId, _data.forwardedAmount.value, _terminalToken, _projectToken)
+            data: abi.encode(_data.projectId, _data.forwardedAmount.value, _terminalToken)
         }) returns (int256, int256) {} catch {
             return false;
         }
