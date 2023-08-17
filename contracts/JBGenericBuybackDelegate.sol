@@ -293,10 +293,10 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
                 uitn256 _mintAmount = _mint(_data, _terminalTokenInThisContract);
 
                 if (_mintAmount + _exactSwapAmountOut < _minimumTotalAmountOut) {
-                    revert JuiceBuyback_TooFew();
+                    revert JuiceBuyback_NotEnoughTokensReceived();
                 }
             } else if (_minimumTotalAmountOut > _exactSwapAmountOut) {
-                revert JuiceBuyback_TooFew();
+                revert JuiceBuyback_NotEnoughTokensReceived();
             }
         }
     }
