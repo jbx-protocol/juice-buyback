@@ -185,10 +185,8 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             (bool _validQuote, bytes memory _metadata) = JBDelegateMetadataLib.getMetadata(delegateId, _data.metadata);
 
             if (_validQuote) (_swapQuote, _minimumTotalAmountOut, _amountToSwapWith) = abi.decode(_metadata, (uint256, uint256, uint256));
-            else {
-                _amountToSwapWith = _data.amount.value;
+            if (_amountToSwapWith == 0) _amountToSwapWith = _data.amount.value;
          }
-        }
         
         address _projectToken = projectTokenOf[_data.projectId];
 
