@@ -205,7 +205,8 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         // Get a quote based on either the frontend quote or a twap from the pool
         uint256 _swapQuote;
         uint256 _minimumTotalAmountOut;
-        if (_validQuote) (_swapQuote, _minimumTotalAmountOut) = abi.decode(_metadata, (uint256, uint256));
+        uint256 _amountToSwapWith;
+        if (_validQuote) (_swapQuote, _minimumTotalAmountOut, _amountToSwapWith) = abi.decode(_metadata, (uint256, uint256, uint256));
 
         uint256 _swapAmountOut =
             _swapQuote != 0 ? _swapQuote : _getQuote(_data.projectId, _data.terminal, _projectToken, _data.amount.value);
@@ -217,7 +218,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             delegateAllocations[0] = JBPayDelegateAllocation3_1_1({
                 delegate: IJBPayDelegate3_1_1(this),
                 amount: _data.amount.value,
-                metadata: abi.encode(_swapQuote == 0, _swapQuote, _minimumTotalAmountOut, _projectToken)
+                metadata: abi.encode(_swapQuote == 0, _swapQuote, _minimumTotalAmountOut, _amountToSwapWith, _projectToken)
             });
 
             return (0, _data.memo, delegateAllocations);
@@ -269,11 +270,16 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             revert JuiceBuyback_Unauthorized();
         }
 
-        (bool _usedTwap, uint256 _exactSwapAmountOut, uint256 _minimumTotalAmountOut, IERC20 _projectToken) =
-            abi.decode(_data.dataSourceMetadata, (bool, uint256, uint256, uint256, IERC20));
+        (bool _usedTwap, uint256 _exactSwapAmountOut,  uint256 _minimumTotalAmountOut, uint256 _amountToSwapWith, IERC20 _projectToken) =
+            abi.decode(_data.dataSourceMetadata, (bool, uint256, uint256, uint256, uint256, IERC20));
+
+        // Make sure the amount to swap with is at most the full amount forwarded.
+        if (_amountToSwapWith > _data.forwardedAmount.value) {
+            revert JuiceBuyback_InsufficientPayAmount();
+        }
 
         // Try swapping
-        bool _swapSucceeded = _swap(_data, _exactSwapAmountOut, _projectToken);
+        bool _swapSucceeded = _swap(_data, _exactSwapAmountOut, _amountToSwapWith, _projectToken);
 
         // If swap failed, mint instead, with the original weight + add to balance the token in
         if (!_swapSucceeded) {
@@ -306,10 +312,10 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
      *
      * @dev    Slippage controle is achieved here
      */
-    function uniswapV3SwapCallback(int256 amount0Delta, int256, bytes calldata data) external override {
+    function uniswapV3SwapCallback(int256, int256, bytes calldata _data) external override {
         // Unpack the data
-        (uint256 _projectId, uint256 _paidAmount, address _terminalToken) =
-            abi.decode(data, (uint256, uint256, address, address));
+        (uint256 _projectId, uint256 _amountToSwapWith, address _terminalToken) =
+            abi.decode(_data, (uint256, uint256, uint256, address));
 
         // Get the terminal token, weth if it's an ETH terminal
         address _terminalTokenWithWETH = _terminalToken == JBTokens.ETH ? address(WETH) : _terminalToken;
@@ -318,10 +324,10 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         if (msg.sender != address(poolOf[_projectId][_terminalTokenWithWETH])) revert JuiceBuyback_Unauthorized();
 
         // Wrap ETH if needed
-        if (_terminalToken == JBTokens.ETH) WETH.deposit{value: _paidAmount}();
+        if (_terminalToken == JBTokens.ETH) WETH.deposit{value: _amountToSwapWith}();
 
         // Transfer the token to the pool
-        IERC20(_terminalTokenWithWETH).transfer(msg.sender, _paidAmount);
+        IERC20(_terminalTokenWithWETH).transfer(msg.sender, _amountToSwapWith);
     }
 
     /**
@@ -459,7 +465,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
 
     /**
      * @notice Sweep the token left-over in this contract
-     */
+    */
     function sweep(address _beneficiary, address _token) external {
         // The beneficiary ETH balance in this contract leftover
         uint256 _balance = sweepBalanceOf[_beneficiary][_token];
@@ -545,7 +551,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
      * @param  _data the didPayData passed by the terminal
      * @param  _exactAmountReceivedFromSwap the amount received, to prevent slippage
      */
-    function _swap(JBDidPayData3_1_1 calldata _data, uint256 _exactAmountReceivedFromSwap, IERC20 _projectToken)
+    function _swap(JBDidPayData3_1_1 calldata _data, uint256 _exactAmountReceivedFromSwap, uint256 _amountToSwapWith, IERC20 _projectToken)
         internal
         returns (bool _swapSucceeded)
     {
@@ -562,7 +568,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             zeroForOne: !_projectTokenIs0,
             amountSpecified: -int256(_exactAmountReceivedFromSwap),
             sqrtPriceLimitX96: _projectTokenIs0 ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
-            data: abi.encode(_data.projectId, _data.forwardedAmount.value, _terminalToken)
+            data: abi.encode(_data.projectId, _amountToSwapWith, _terminalToken)
         }) returns (int256, int256) {} catch {
             return false;
         }

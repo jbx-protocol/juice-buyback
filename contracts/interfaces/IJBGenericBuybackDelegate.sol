@@ -18,6 +18,7 @@ interface IJBGenericBuybackDelegate is IJBPayDelegate3_1_1, IJBFundingCycleDataS
     /////////////////////////////////////////////////////////////////////
 
     error JuiceBuyback_MaximumSlippage();
+    error JuiceBuyback_InsufficientPayAmount();
     error JuiceBuyback_NotEnoughTokensReceived();
     error JuiceBuyback_NewSecondsAgoTooLow();
     error JuiceBuyback_NoProjectToken();
