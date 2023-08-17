@@ -205,7 +205,6 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
          }
         }
         
-
         uint256 _swapAmountOut =
             _swapQuote != 0 ? _swapQuote : _getQuote(_data.projectId, _data.terminal, _projectToken, _amountToSwapWith);
 
