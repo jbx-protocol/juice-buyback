@@ -166,26 +166,21 @@ contract TestJBGenericBuybackDelegate_Integration is TestBaseWorkflowV3 {
         );
 
         // "Issue" the token with $JBX address (for create2 trick) - to refactor
-        stdstore
-            .target(address(_jbTokenStore))
-            .sig(_jbTokenStore.tokenOf.selector)
-            .with_key(_projectId)
-            .checked_write(address(jbx));
-        
+        stdstore.target(address(_jbTokenStore)).sig(_jbTokenStore.tokenOf.selector).with_key(_projectId).checked_write(
+            address(jbx)
+        );
+
         JBToken _template = new JBToken("jbx", "jbx", _projectId);
         vm.etch(address(jbx), address(_template).code);
 
         // Correct ownership
-        stdstore
-            .target(address(jbx))
-            .sig(Ownable(address(jbx)).owner.selector)
-            .checked_write(address(_jbTokenStore));
+        stdstore.target(address(jbx)).sig(Ownable(address(jbx)).owner.selector).checked_write(address(_jbTokenStore));
     }
 
     modifier poolAdded() {
         vm.prank(_multisig);
         address _newPool = address(_delegate.setPoolFor(_projectId, fee, uint32(cardinality), twapDelta, address(weth)));
-        assertEq(_newPool, address(pool), "wrong computed pool address");     
+        assertEq(_newPool, address(pool), "wrong computed pool address");
         _;
     }
 
@@ -369,7 +364,7 @@ contract TestJBGenericBuybackDelegate_Integration is TestBaseWorkflowV3 {
         assertEq(_jbController.reservedTokenBalanceOf(_projectId), reservedAmount);
     }
 
-// TODO: refactor with a REAL integration test (using terminal.pay)
+    // TODO: refactor with a REAL integration test (using terminal.pay)
 
     /**
      * @notice Test the uniswap callback reverting when max slippage is hit

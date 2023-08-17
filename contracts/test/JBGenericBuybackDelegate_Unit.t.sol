@@ -919,7 +919,13 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(projectId, _minReceived, weth, projectToken));
     }
 
-    function test_setPoolFor(uint256 _secondsAgo, uint256 _twapDelta, address _terminalToken, address _projectToken, uint24 _fee) public {
+    function test_setPoolFor(
+        uint256 _secondsAgo,
+        uint256 _twapDelta,
+        address _terminalToken,
+        address _projectToken,
+        uint24 _fee
+    ) public {
         vm.assume(_terminalToken != address(0) && _projectToken != address(0) && _fee != 0);
         vm.assume(_terminalToken != _projectToken);
 
@@ -933,8 +939,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         _secondsAgo = bound(_secondsAgo, _MIN_SECONDS_AGO, _MAX_SECONDS_AGO);
 
         address _pool = PoolAddress.computeAddress(
-            delegate.UNISWAP_V3_FACTORY(),
-            PoolAddress.getPoolKey(_terminalToken, _projectToken, _fee)
+            delegate.UNISWAP_V3_FACTORY(), PoolAddress.getPoolKey(_terminalToken, _projectToken, _fee)
         );
 
         vm.mockCall(address(tokenStore), abi.encodeCall(tokenStore.tokenOf, (projectId)), abi.encode(_projectToken));
@@ -950,14 +955,14 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         emit BuybackDelegate_PoolAdded(projectId, _terminalToken, address(_pool));
 
         vm.prank(owner);
-        address _newPool = address(delegate.setPoolFor(projectId, _fee, uint32(_secondsAgo), _twapDelta, _terminalToken));
+        address _newPool =
+            address(delegate.setPoolFor(projectId, _fee, uint32(_secondsAgo), _twapDelta, _terminalToken));
 
         // Check: correct params stored?
         assertEq(delegate.secondsAgoOf(projectId), _secondsAgo);
         assertEq(delegate.twapDeltaOf(projectId), _twapDelta);
         assertEq(address(delegate.poolOf(projectId, _terminalToken)), _pool);
         assertEq(_newPool, _pool);
-
     }
 
     /**
@@ -1031,7 +1036,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         uint256 _MIN_SECONDS_AGO = delegate.MIN_SECONDS_AGO();
 
         uint256 _newValue = bound(_newValueSeed, _MAX_SECONDS_AGO + 1, type(uint32).max);
-        
+
         // Check: revert?
         vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapPeriod.selector));
 
@@ -1040,7 +1045,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         delegate.changeSecondsAgo(projectId, uint32(_newValue));
 
         _newValue = bound(_newValueSeed, 0, _MIN_SECONDS_AGO - 1);
-        
+
         // Check: revert?
         vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapPeriod.selector));
 
@@ -1227,7 +1232,6 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_TransferFailed.selector));
         delegate.sweep(dude, JBTokens.ETH);
     }
-
 }
 
 contract ForTest_JBGenericBuybackDelegate is JBGenericBuybackDelegate {

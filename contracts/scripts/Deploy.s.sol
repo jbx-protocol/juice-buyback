@@ -6,7 +6,6 @@ import "forge-std/Script.sol";
 import "../JBGenericBuybackDelegate.sol";
 
 contract DeployGeneric is Script {
-
     uint256 _chainId = block.chainid;
     string _network;
 
@@ -26,33 +25,40 @@ contract DeployGeneric is Script {
     bytes4 constant _delegateId = bytes4("BUYB");
 
     function setUp() public {
-        if(_chainId == 1) {
+        if (_chainId == 1) {
             _network = "mainnet";
             _weth = _wethMainnet;
             _factory = _factoryMainnet;
-        }
-        else if(_chainId == 5) {
+        } else if (_chainId == 5) {
             _network = "goerli";
             _weth = _wethGoerli;
             _factory = _factoryGoerli;
-        }
-        else if(_chainId == 1337) {
+        } else if (_chainId == 1337) {
             _network = "sepolia";
             _weth = _wethSepolia;
             _factory = _factorySepolia;
+        } else {
+            revert("Invalid RPC / no juice contracts deployed on this network");
         }
-        else revert("Invalid RPC / no juice contracts deployed on this network");
 
         _directory = IJBDirectory(
             stdJson.readAddress(
-                vm.readFile(string.concat("node_modules/@jbx-protocol/juice-contracts-v3/deployments/", _network, "/JBDirectory.json")),
+                vm.readFile(
+                    string.concat(
+                        "node_modules/@jbx-protocol/juice-contracts-v3/deployments/", _network, "/JBDirectory.json"
+                    )
+                ),
                 ".address"
             )
         );
 
         _controller = IJBController3_1(
             stdJson.readAddress(
-                vm.readFile(string.concat("node_modules/@jbx-protocol/juice-contracts-v3/deployments/", _network, "/JBController3_1.json")),
+                vm.readFile(
+                    string.concat(
+                        "node_modules/@jbx-protocol/juice-contracts-v3/deployments/", _network, "/JBController3_1.json"
+                    )
+                ),
                 ".address"
             )
         );
