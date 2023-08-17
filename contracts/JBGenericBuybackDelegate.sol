@@ -23,7 +23,7 @@ import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import {OracleLibrary} from "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
 
 import {JBBuybackDelegateOperations} from "./libraries/JBBuybackDelegateOperations.sol";
-import /** * {*} from */ "./interfaces/IJBGenericBuybackDelegate.sol";
+import /** {*} from */ "./interfaces/IJBGenericBuybackDelegate.sol";
 
 /**
  * @custom:benediction DEVS BENEDICAT ET PROTEGAT CONTRACTVS MEAM
