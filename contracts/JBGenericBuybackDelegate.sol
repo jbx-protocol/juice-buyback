@@ -217,7 +217,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             delegateAllocations[0] = JBPayDelegateAllocation3_1_1({
                 delegate: IJBPayDelegate3_1_1(this),
                 amount: _data.amount.value,
-                metadata: abi.encode(_swapQuote, _minimumTotalAmountOut, _projectToken)
+                metadata: abi.encode(_swapQuote == 0, _swapQuote, _minimumTotalAmountOut, _projectToken)
             });
 
             return (0, _data.memo, delegateAllocations);
@@ -269,15 +269,19 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             revert JuiceBuyback_Unauthorized();
         }
 
-        (uint256 _exactSwapAmountOut, uint256 _minimumTotalAmountOut, IERC20 _projectToken) =
-            abi.decode(_data.dataSourceMetadata, (uint256, uint256, uint256, IERC20));
+        (bool _usedTwap, uint256 _exactSwapAmountOut, uint256 _minimumTotalAmountOut, IERC20 _projectToken) =
+            abi.decode(_data.dataSourceMetadata, (bool, uint256, uint256, uint256, IERC20));
 
         // Try swapping
-        bool _swapSucceeded = _swap(_data, _exactSwapAmountOut, _projectToken);
+        bool _swapSucceeded = _swap(_data, _usedTwap, _exactSwapAmountOut, _projectToken);
 
         // If swap failed, mint instead, with the original weight + add to balance the token in
         if (!_swapSucceeded) {
-            _mint(_data, _data.forwardedAmount.value);
+            if (_usedTwap) {
+                _mint(_data, _data.forwardedAmount.value);
+            } else {
+                revert JuiceBuyback_MaximumSlippage();
+            }
         } else {
             // Any leftover in this contract?
             uint256 _terminalTokenInThisContract = _data.forwardedAmount.token == JBTokens.ETH
@@ -553,10 +557,12 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
      * @param  _data the didPayData passed by the terminal
      * @param  _exactAmountReceivedFromSwap the amount received, to prevent slippage
      */
-    function _swap(JBDidPayData3_1_1 calldata _data, uint256 _exactAmountReceivedFromSwap, IERC20 _projectToken)
-        internal
-        returns (bool _swapSucceeded)
-    {
+    function _swap(
+        JBDidPayData3_1_1 calldata _data,
+        bool _usedTwap,
+        uint256 _exactAmountReceivedFromSwap,
+        IERC20 _projectToken
+    ) internal returns (bool _swapSucceeded) {
         address _terminalToken =
             _data.forwardedAmount.token == JBTokens.ETH ? address(WETH) : _data.forwardedAmount.token;
 
