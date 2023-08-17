@@ -572,7 +572,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         try _pool.swap({
             recipient: address(this),
             zeroForOne: !_projectTokenIs0,
-            amountSpecified: int256(-_exactAmountReceivedFromSwap),
+            amountSpecified: -int256(_exactAmountReceivedFromSwap),
             sqrtPriceLimitX96: _projectTokenIs0 ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
             data: abi.encode(_data.projectId, _data.forwardedAmount.value, _terminalToken, _projectToken)
         }) returns (int256, int256) {} catch {
