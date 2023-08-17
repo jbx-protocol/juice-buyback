@@ -70,5 +70,4 @@ interface IJBGenericBuybackDelegate is IJBPayDelegate3_1_1, IJBFundingCycleDataS
     function changeSecondsAgo(uint256 _projectId, uint32 _newSecondsAgo) external;
 
     function setTwapDelta(uint256 _projectId, uint256 _newDelta) external;
-    function sweep(address _beneficiary, address _token) external;
 }

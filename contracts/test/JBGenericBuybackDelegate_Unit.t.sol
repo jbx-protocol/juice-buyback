@@ -585,10 +585,12 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         delegate.didPay(didPayData);
 
         // Check: correct overall sweep balance?
-        assertEq(delegate.totalSweepBalance(JBTokens.ETH), 10 ether);
+        // TODO commented out for compile purposes since totalSweepBalance is no longer used
+        //assertEq(delegate.totalSweepBalance(JBTokens.ETH), 10 ether);
 
         // Check: correct dude sweep balance (1 previous plus 5 from now)?
-        assertEq(delegate.sweepBalanceOf(dude, JBTokens.ETH), 6 ether);
+        // TODO commented out for compile purposes since totalSweepBalance is no longer used
+        //assertEq(delegate.sweepBalanceOf(dude, JBTokens.ETH), 6 ether);
     }
 
     /**
@@ -1162,13 +1164,16 @@ contract TestJBGenericBuybackDelegate_Units is Test {
 
         // Test: sweep
         vm.prank(dude);
-        delegate.sweep(dude, address(weth));
+        // TODO commented out for compile purposes since totalSweepBalance is no longer used
+        //delegate.sweep(dude, address(weth));
 
         // Check: correct overall sweep balance?
-        assertEq(delegate.totalSweepBalance(address(weth)), _delegateLeftover - _dudeLeftover);
+        // TODO commented out for compile purposes since totalSweepBalance is no longer used
+        //assertEq(delegate.totalSweepBalance(address(weth)), _delegateLeftover - _dudeLeftover);
 
         // Check: correct dude sweep balance
-        assertEq(delegate.sweepBalanceOf(dude, address(weth)), 0);
+        // TODO commented out for compile purposes since totalSweepBalance is no longer used
+        //assertEq(delegate.sweepBalanceOf(dude, address(weth)), 0);
     }
 
     /**
@@ -1193,19 +1198,23 @@ contract TestJBGenericBuybackDelegate_Units is Test {
 
         // Test: sweep
         vm.prank(dude);
-        delegate.sweep(dude, JBTokens.ETH);
+        // TODO commented out for compile purposes since totalSweepBalance is no longer used
+        // delegate.sweep(dude, JBTokens.ETH);
 
         uint256 _balanceAfterSweep = dude.balance;
         uint256 _sweptAmount = _balanceAfterSweep - _balanceBeforeSweep;
 
         // Check: correct overall sweep balance?
-        assertEq(delegate.totalSweepBalance(JBTokens.ETH), _delegateLeftover - _dudeLeftover);
+        // TODO commented out for compile purposes since totalSweepBalance is no longer used
+        //assertEq(delegate.totalSweepBalance(JBTokens.ETH), _delegateLeftover - _dudeLeftover);
 
         // Check: correct dude sweep balance
-        assertEq(delegate.sweepBalanceOf(dude, JBTokens.ETH), 0);
+        // TODO commented out for compile purposes since totalSweepBalance is no longer used
+        //assertEq(delegate.sweepBalanceOf(dude, JBTokens.ETH), 0);
 
         // Check: correct swept balance
-        assertEq(_sweptAmount, _dudeLeftover);
+        // TODO commented out for compile purposes since totalSweepBalance is no longer used
+        //assertEq(_sweptAmount, _dudeLeftover);
     }
 
     /**
@@ -1229,8 +1238,9 @@ contract TestJBGenericBuybackDelegate_Units is Test {
 
         // Check: revert?
         vm.prank(dude);
-        vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_TransferFailed.selector));
-        delegate.sweep(dude, JBTokens.ETH);
+        // TODO commented out for compile purposes since totalSweepBalance is no longer used
+        // vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_TransferFailed.selector));
+        //delegate.sweep(dude, JBTokens.ETH);
     }
 }
 
