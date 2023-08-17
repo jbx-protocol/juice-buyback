@@ -198,6 +198,10 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
 
         // If the minimum amount received from swapping is greather than received when minting, use the swap pathway
         if (_tokenCount < _swapAmountOut) {
+            // Make sure the amount to swap with is at most the full amount forwarded.
+            if (_amountToSwapWith > _data.amount.value) {
+               revert JuiceBuyback_InsufficientPayAmount();
+            }
             // Return this delegate as the one to use, along the quote and reserved rate, and do not mint from the terminal
             delegateAllocations = new JBPayDelegateAllocation3_1_1[](1);
             delegateAllocations[0] = JBPayDelegateAllocation3_1_1({
@@ -257,11 +261,6 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
 
         (uint256 _exactSwapAmountOut, uint256 _minimumTotalAmountOut, uint256 _amountToSwapWith, uint256 _weight, IERC20 _projectToken) =
             abi.decode(_data.dataSourceMetadata, (uint256, uint256, uint256, uint256, IERC20));
-
-        // Make sure the amount to swap with is at most the full amount forwarded.
-        if (_amountToSwapWith > _data.forwardedAmount.value) {
-            revert JuiceBuyback_InsufficientPayAmount();
-        }
 
         // Try swapping
         bool _swapSucceeded = _swap(_data, _exactSwapAmountOut, _amountToSwapWith, _projectToken);
