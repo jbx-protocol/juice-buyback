@@ -273,7 +273,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             abi.decode(_data.dataSourceMetadata, (bool, uint256, uint256, uint256, IERC20));
 
         // Try swapping
-        bool _swapSucceeded = _swap(_data, _usedTwap, _exactSwapAmountOut, _projectToken);
+        bool _swapSucceeded = _swap(_data, _exactSwapAmountOut, _projectToken);
 
         // If swap failed, mint instead, with the original weight + add to balance the token in
         if (!_swapSucceeded) {
@@ -557,12 +557,10 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
      * @param  _data the didPayData passed by the terminal
      * @param  _exactAmountReceivedFromSwap the amount received, to prevent slippage
      */
-    function _swap(
-        JBDidPayData3_1_1 calldata _data,
-        bool _usedTwap,
-        uint256 _exactAmountReceivedFromSwap,
-        IERC20 _projectToken
-    ) internal returns (bool _swapSucceeded) {
+    function _swap(JBDidPayData3_1_1 calldata _data, uint256 _exactAmountReceivedFromSwap, IERC20 _projectToken)
+        internal
+        returns (bool _swapSucceeded)
+    {
         address _terminalToken =
             _data.forwardedAmount.token == JBTokens.ETH ? address(WETH) : _data.forwardedAmount.token;
 
