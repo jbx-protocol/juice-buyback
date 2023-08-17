@@ -187,9 +187,6 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
     {
         address _projectToken = projectTokenOf[_data.projectId];
 
-        // Find the total number of tokens to mint, as a fixed point number with 18 decimals
-        uint256 _tokenCount = mulDiv18(_data.amount.value, _data.weight);
-
         // Get a quote based on either the frontend quote or a twap from the pool
         uint256 _swapQuote;
         uint256 _minimumTotalAmountOut;
@@ -205,6 +202,9 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
          }
         }
         
+        // Find the total number of tokens to mint, as a fixed point number with 18 decimals
+        uint256 _tokenCount = mulDiv18(_amountToSwapWith, _data.weight);
+
         uint256 _swapAmountOut =
             _swapQuote != 0 ? _swapQuote : _getQuote(_data.projectId, _data.terminal, _projectToken, _amountToSwapWith);
 
