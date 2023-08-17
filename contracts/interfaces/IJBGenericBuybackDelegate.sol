@@ -58,8 +58,6 @@ interface IJBGenericBuybackDelegate is IJBPayDelegate3_1_1, IJBFundingCycleDataS
     function secondsAgoOf(uint256 _projectId) external view returns (uint32 _seconds);
     function twapDeltaOf(uint256 _projectId) external view returns (uint256 _delta);
     function projectTokenOf(uint256 _projectId) external view returns (address projectTokenOf);
-    function sweepBalanceOf(address _beneficiary, address _token) external view returns (uint256 _balance);
-    function totalSweepBalance(address _token) external view returns (uint256 _contractBalance);
 
     /////////////////////////////////////////////////////////////////////
     //                    State-changing functions                     //

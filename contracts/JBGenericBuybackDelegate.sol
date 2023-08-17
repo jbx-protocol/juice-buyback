@@ -121,16 +121,6 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
      */
     mapping(uint256 _projectId => address projectTokenOf) public projectTokenOf;
 
-    /**
-     * @notice Any ETH left-over in this contract (from swap in the end of liquidity range)
-     */
-    mapping(address _beneficiary => mapping(address _token => uint256 _balance)) public sweepBalanceOf;
-
-    /**
-     * @notice Running cumulative sum of token left-over
-     */
-    mapping(address _token => uint256 _contractBalance) public totalSweepBalance;
-
     /////////////////////////////////////////////////////////////////////
     //                    Internal global variables                    //
     /////////////////////////////////////////////////////////////////////
@@ -459,31 +449,6 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         twapParamsOf[_projectId] = _newDelta << 128 | ((_twapParams << 128) >> 128);
 
         emit BuybackDelegate_TwapDeltaChanged(_projectId, _oldDelta, _newDelta);
-    }
-
-    /**
-     * @notice Sweep the token left-over in this contract
-    */
-    function sweep(address _beneficiary, address _token) external {
-        // The beneficiary ETH balance in this contract leftover
-        uint256 _balance = sweepBalanceOf[_beneficiary][_token];
-
-        // If no balance, don't do anything
-        if (_balance == 0) return;
-
-        // Reset beneficiary balance
-        sweepBalanceOf[_beneficiary][_token] = 0;
-        totalSweepBalance[_token] -= _balance;
-
-        if (_token == JBTokens.ETH) {
-            // Send the eth to the beneficiary
-            (bool _success,) = payable(_beneficiary).call{value: _balance}("");
-            if (!_success) revert JuiceBuyback_TransferFailed();
-        } else {
-            IERC20(_token).transfer(_beneficiary, _balance);
-        }
-
-        emit BuybackDelegate_PendingSweep(_beneficiary, address(_token), 0);
     }
 
     //*********************************************************************//
