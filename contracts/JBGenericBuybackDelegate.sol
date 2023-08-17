@@ -190,18 +190,21 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         // Find the total number of tokens to mint, as a fixed point number with 18 decimals
         uint256 _tokenCount = mulDiv18(_data.amount.value, _data.weight);
 
-        // Unpack the quote from the pool, given by the frontend - this one takes precedence on the twap
-        // as it should be closer to the current pool state, if not, use the twap
-        (bool _validQuote, bytes memory _metadata) = JBDelegateMetadataLib.getMetadata(delegateId, _data.metadata);
-
         // Get a quote based on either the frontend quote or a twap from the pool
         uint256 _swapQuote;
         uint256 _minimumTotalAmountOut;
         uint256 _amountToSwapWith;
-        if (_validQuote) (_swapQuote, _minimumTotalAmountOut, _amountToSwapWith) = abi.decode(_metadata, (uint256, uint256, uint256));
-        else {
-            _amountToSwapWith = _data.amount.value;
+        {
+            // Unpack the quote from the pool, given by the frontend - this one takes precedence on the twap
+            // as it should be closer to the current pool state, if not, use the twap
+            (bool _validQuote, bytes memory _metadata) = JBDelegateMetadataLib.getMetadata(delegateId, _data.metadata);
+
+            if (_validQuote) (_swapQuote, _minimumTotalAmountOut, _amountToSwapWith) = abi.decode(_metadata, (uint256, uint256, uint256));
+            else {
+                _amountToSwapWith = _data.amount.value;
+         }
         }
+        
 
         uint256 _swapAmountOut =
             _swapQuote != 0 ? _swapQuote : _getQuote(_data.projectId, _data.terminal, _projectToken, _amountToSwapWith);
@@ -213,7 +216,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             delegateAllocations[0] = JBPayDelegateAllocation3_1_1({
                 delegate: IJBPayDelegate3_1_1(this),
                 amount: _data.amount.value,
-                metadata: abi.encode(_swapAmountOut, _minimumTotalAmountOut, _amountToSwapWith, _projectToken)
+                metadata: abi.encode(_swapAmountOut, _minimumTotalAmountOut, _amountToSwapWith, _data.weight, _projectToken)
             });
 
             return (0, _data.memo, delegateAllocations);
@@ -265,7 +268,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             revert JuiceBuyback_Unauthorized();
         }
 
-        (uint256 _exactSwapAmountOut,  uint256 _minimumTotalAmountOut, uint256 _amountToSwapWith, IERC20 _projectToken) =
+        (uint256 _exactSwapAmountOut, uint256 _minimumTotalAmountOut, uint256 _amountToSwapWith, uint256 _weight, IERC20 _projectToken) =
             abi.decode(_data.dataSourceMetadata, (uint256, uint256, uint256, uint256, IERC20));
 
         // Make sure the amount to swap with is at most the full amount forwarded.
@@ -280,7 +283,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         if (!_swapSucceeded) {
             // if 0, suggests TWAP was used.
             if (_minimumTotalAmountOut == 0) {
-                _mint(_data, _data.forwardedAmount.value);
+                _mint(_data, _data.forwardedAmount.value, _weight);
             } else {
                 revert JuiceBuyback_MaximumSlippage();
             }
@@ -292,7 +295,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
 
             // Add any new leftover to the beneficiary and contract balance
             if (_terminalTokenInThisContract != 0) {
-                uitn256 _mintAmount = _mint(_data, _terminalTokenInThisContract);
+                uint256 _mintAmount = _mint(_data, _terminalTokenInThisContract, _weight);
 
                 if (_minimumTotalAmountOut != 0 && _mintAmount + _exactSwapAmountOut < _minimumTotalAmountOut) {
                     revert JuiceBuyback_NotEnoughTokensReceived();
@@ -311,7 +314,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
     function uniswapV3SwapCallback(int256, int256, bytes calldata _data) external override {
         // Unpack the data
         (uint256 _projectId, uint256 _amountToSwapWith, address _terminalToken) =
-            abi.decode(_data, (uint256, uint256, uint256, address));
+            abi.decode(_data, (uint256, uint256, address));
 
         // Get the terminal token, weth if it's an ETH terminal
         address _terminalTokenWithWETH = _terminalToken == JBTokens.ETH ? address(WETH) : _terminalToken;
@@ -599,8 +602,8 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
      * @param  _data the didPayData passed by the terminal
      * @param  _amount the amount of token out to mint
      */
-    function _mint(JBDidPayData3_1_1 calldata _data, uint256 _amount) internal returns (uint256 _tokenCount) {
-        _tokenCount = mulDiv18(_amount, _data.weight);
+    function _mint(JBDidPayData3_1_1 calldata _data, uint256 _amount, uint256 _weight) internal returns (uint256 _tokenCount) {
+        _tokenCount = mulDiv18(_amount, _weight);
 
         // Mint to the beneficiary with the fc reserve rate
         CONTROLLER.mintTokensOf({
