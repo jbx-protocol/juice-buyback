@@ -578,8 +578,14 @@ contract JBGenericBuybackDelegate is
             // Swap succeded, take note of the amount of PROJECT_TOKEN received (negative as it is an exact input)
             _amountReceived = uint256(-(_projectTokenIs0 ? amount0 : amount1));
         } catch {
-            // implies _amountReceived = 0 -> will later mint when back in didPay
-            return _amountReceived;
+            // Check if a quote was passed from the frontend
+            (bool _validQuote, ) = JBDelegateMetadataLib.getMetadata(delegateId, _data.payerMetadata);
+
+            // If so, revert 
+            if(_validQuote) revert JuiceBuyback_MaximumSlippage();
+            
+            // The quote used was a twap, this is most likely a fee -> mint
+            return _amountReceived; // = 0 and will later mint
         }
 
         // Burn the whole amount received

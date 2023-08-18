@@ -592,15 +592,70 @@ contract TestJBGenericBuybackDelegate_Units is Test {
     }
 
     /**
-     * @notice Test didPay with swap reverting, should then mint
+     * @notice Test didPay with swap reverting when a quote has been provided, should then revert
      */
+    function test_didPay_swapRevertWithQuote(uint256 _tokenCount, uint256 _userQuote) public {
+        _tokenCount = bound(_tokenCount, 2, type(uint256).max - 1);
+        _userQuote = bound(_userQuote, _tokenCount + 1, type(uint256).max);
 
-    function test_didPay_swapRevert(uint256 _tokenCount, uint256 _twapQuote) public {
+        // The metadata coming from payParams(..)
+        didPayData.dataSourceMetadata = abi.encode(_tokenCount, _userQuote, projectToken);
+
+        // The metadata passed from the frontend, with the quote
+        bytes[] memory _data = new bytes[](1);
+        _data[0] = abi.encode(_userQuote, 100);
+
+        // Pass the delegate id
+        bytes4[] memory _ids = new bytes4[](1);
+        _ids[0] = bytes4(hex"69");
+
+        // Generate the metadata
+        didPayData.payerMetadata = metadataHelper.createMetadata(_ids, _data);
+
+        // mock the swap call reverting
+        vm.mockCallRevert(
+            address(pool),
+            abi.encodeCall(
+                pool.swap,
+                (
+                    address(delegate),
+                    address(weth) < address(projectToken),
+                    int256(1 ether),
+                    address(projectToken) < address(weth) ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
+                    abi.encode(projectId, _userQuote, weth, projectToken)
+                )
+            ),
+            abi.encode("no swap")
+        );
+
+        // mock call to pass the authorization check
+        vm.mockCall(
+            address(directory),
+            abi.encodeCall(directory.isTerminalOf, (didPayData.projectId, IJBPaymentTerminal(address(jbxTerminal)))),
+            abi.encode(true)
+        );
+        vm.expectCall(
+            address(directory),
+            abi.encodeCall(directory.isTerminalOf, (didPayData.projectId, IJBPaymentTerminal(address(jbxTerminal))))
+        );
+
+        vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_MaximumSlippage.selector));
+        vm.prank(address(jbxTerminal));
+        delegate.didPay(didPayData);
+    }
+
+    /**
+     * @notice Test didPay with swap reverting while using a twap, should then mint
+     */
+    function test_didPay_swapRevertWithTwap(uint256 _tokenCount, uint256 _twapQuote) public {
         _tokenCount = bound(_tokenCount, 2, type(uint256).max - 1);
         _twapQuote = bound(_twapQuote, _tokenCount + 1, type(uint256).max);
 
         // The metadata coming from payParams(..)
         didPayData.dataSourceMetadata = abi.encode(_tokenCount, _twapQuote, projectToken);
+
+        // No quote provided by the user
+        didPayData.payerMetadata =  abi.encode('');
 
         // mock the swap call reverting
         vm.mockCallRevert(
