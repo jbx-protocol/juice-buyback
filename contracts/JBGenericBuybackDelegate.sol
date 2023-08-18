@@ -176,7 +176,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         returns (uint256 weight, string memory memo, JBPayDelegateAllocation3_1_1[] memory delegateAllocations)
     {
         // Get a quote based on either the frontend quote or a twap from the pool
-        uint256 _swapQuote;
+        uint256 _exactSwapAmountOut;
         uint256 _minimumTotalAmountOut;
         uint256 _amountToSwapWith;
         {
@@ -184,7 +184,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             // as it should be closer to the current pool state, if not, use the twap
             (bool _validQuote, bytes memory _metadata) = JBDelegateMetadataLib.getMetadata(delegateId, _data.metadata);
 
-            if (_validQuote) (_swapQuote, _minimumTotalAmountOut, _amountToSwapWith) = abi.decode(_metadata, (uint256, uint256, uint256));
+            if (_validQuote) (_exactSwapAmountOut, _minimumTotalAmountOut, _amountToSwapWith) = abi.decode(_metadata, (uint256, uint256, uint256));
             if (_amountToSwapWith == 0) _amountToSwapWith = _data.amount.value;
          }
         
@@ -194,7 +194,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         uint256 _tokenCount = mulDiv18(_amountToSwapWith, _data.weight);
 
         uint256 _swapAmountOut =
-            _swapQuote != 0 ? _swapQuote : _getQuote(_data.projectId, _data.terminal, _projectToken, _amountToSwapWith);
+            _exactSwapAmountOut != 0 ? _exactSwapAmountOut : _getQuote(_data.projectId, _data.terminal, _projectToken, _amountToSwapWith);
 
         // If the minimum amount received from swapping is greather than received when minting, use the swap pathway
         if (_tokenCount < _swapAmountOut) {
