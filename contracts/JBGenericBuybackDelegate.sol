@@ -10,7 +10,8 @@ import {IJBDirectory} from "@jbx-protocol/juice-contracts-v3/contracts/interface
 import {IJBController3_1} from "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController3_1.sol";
 import {IJBProjects} from "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBController3_1.sol";
 import {IJBOperatable} from "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBOperatable.sol";
-import {IJBFundingCycleDataSource3_1_1} from "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleDataSource3_1_1.sol";
+import {IJBFundingCycleDataSource3_1_1} from
+    "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBFundingCycleDataSource3_1_1.sol";
 import {IJBPayDelegate3_1_1} from "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPayDelegate3_1_1.sol";
 import {JBPayDelegateAllocation3_1_1} from
     "@jbx-protocol/juice-contracts-v3/contracts/structs/JBPayDelegateAllocation3_1_1.sol";
@@ -36,7 +37,6 @@ import {IWETH9} from "./interfaces/external/IWETH9.sol";
 /// @notice Functions as a Data Source and Delegate allowing beneficiaries of payments to get the highest amount
 /// of a project's token between minting using the project weight and swapping in a given Uniswap V3 pool.
 contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDelegate {
-   
     //*********************************************************************//
     // --------------------- internal stored properties ------------------ //
     //*********************************************************************//
@@ -48,7 +48,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
     //*********************************************************************//
     // --------------------- public constant properties ------------------ //
     //*********************************************************************//
-    
+
     /// @notice The unit of the max slippage.
     uint256 public constant SLIPPAGE_DENOMINATOR = 10_000;
 
@@ -130,10 +130,10 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
     //*********************************************************************//
     // ------------------------- external views -------------------------- //
     //*********************************************************************//
-    
+
     /// @notice The DataSource implementation that determines if a swap path and/or a mint path should be taken.
     /// @param  _data The data passed to the data source in terminal.pay(..). _data.metadata can have a Uniswap quote and specify how much of the payment should be used to swap, otherwise a quote will be determined from a TWAP and use the full amount paid in.
-    /// @return weight The weight to use, which is the original weight passed in if no swap path is taken, 0 if only the swap path is taken, and an adjusted weight if the both the swap and mint paths are taken. 
+    /// @return weight The weight to use, which is the original weight passed in if no swap path is taken, 0 if only the swap path is taken, and an adjusted weight if the both the swap and mint paths are taken.
     /// @return memo the original memo passed
     /// @return delegateAllocations The amount to send to delegates instead of adding to the local balance. This is empty if only the mint path is taken.
     function payParams(JBPayParamsData calldata _data)
@@ -309,13 +309,13 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         // Get the terminal token, using WETH if the token paid in is ETH.
         address _terminalTokenWithWETH = _terminalToken == JBTokens.ETH ? address(WETH) : _terminalToken;
 
-        // Make sure this call is being made from within the swap execution. 
+        // Make sure this call is being made from within the swap execution.
         if (msg.sender != address(poolOf[_projectId][_terminalTokenWithWETH])) revert JuiceBuyback_Unauthorized();
 
         // Keep a reference to the amount of tokens that should be sent to fulfill the swap.
         uint256 _amountToSendToPool = _tokenProjectIs0 ? uint256(_amount1Delta) : uint256(_amount0Delta);
 
-        // Wrap ETH into WETH if relevant. 
+        // Wrap ETH into WETH if relevant.
         if (_terminalToken == JBTokens.ETH) WETH.deposit{value: _amountToSendToPool}();
 
         // Transfer the token to the pool.
@@ -346,7 +346,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
 
         // Make sure the project has issued a token.
         if (_projectToken == address(0)) revert JuiceBuyback_NoProjectToken();
-        
+
         // If the terminal token specified in ETH, use WETH instead.
         if (_terminalToken == JBTokens.ETH) _terminalToken = address(WETH);
 
@@ -430,7 +430,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
 
         // Keep a reference to the currently stored TWAP params.
         uint256 _twapParams = _twapParamsOf[_projectId];
-        
+
         // Keep a reference to the old slippage value.
         uint256 _oldDelta = _twapParams >> 128;
 
@@ -501,7 +501,6 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         address _terminalToken,
         bool _projectTokenIs0
     ) internal returns (uint256 _amountReceived) {
-        
         // Get a reference to the pool that'll be used to make the swap.
         IUniswapV3Pool _pool = poolOf[_data.projectId][_terminalToken];
 
@@ -551,9 +550,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
     /// @param _data The didPayData passed by the terminal.
     /// @param _amount The amount to add back to the project's balance.
     /// @param _weight The relative amount of tokens that should be minted when a project receives funds.
-    function _mint(JBDidPayData3_1_1 calldata _data, uint256 _amount, uint256 _weight)
-        internal
-    {
+    function _mint(JBDidPayData3_1_1 calldata _data, uint256 _amount, uint256 _weight) internal {
         // Mint to the beneficiary, making sure the reserved rate gets taken into account.
         CONTROLLER.mintTokensOf({
             projectId: _data.projectId,
