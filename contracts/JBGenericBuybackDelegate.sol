@@ -21,7 +21,7 @@ import {JBDelegateMetadataLib} from "@jbx-protocol/juice-delegate-metadata-lib/s
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {ERC165, IERC165} from "@openzeppelin/contracts/utils/introspection/ERC165.sol";
 
-import {mulDiv18} from "@prb/math/src/Common.sol";
+import {mulDiv18, mulDiv} from "@prb/math/src/Common.sol";
 
 import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import {OracleLibrary} from "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
@@ -183,42 +183,52 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         override
         returns (uint256 weight, string memory memo, JBPayDelegateAllocation3_1_1[] memory delegateAllocations)
     {
-        // Get a quote based on either the frontend quote or a twap from the pool
+        // Keep a reference to the minimum number of tokens expected to be swapped for.
         uint256 _minimumSwapAmountOut;
+
+        // Keep a reference to the amount from the payment to allocate towards a swap.
         uint256 _amountToSwapWith;
+
+        // Keep a reference to a flag indicating if the quote passed into the metadata is valid.
         bool _validQuote;
+
+        // Scoped section to prevent Stack Too Deep.
         {
             bytes memory _metadata;
 
-            // Unpack the quote from the pool, given by the frontend - this one takes precedence on the twap
-            // as it should be closer to the current pool state, if not, use the twap
+            // Unpack the quote from the pool, given by the frontend.
             (_validQuote, _metadata) = JBDelegateMetadataLib.getMetadata(delegateId, _data.metadata);
-
             if (_validQuote) (_minimumSwapAmountOut, _amountToSwapWith) = abi.decode(_metadata, (uint256, uint256));
+
+            // If no amount was specified to swap with, default to the full amount of the payment.
             if (_amountToSwapWith == 0) _amountToSwapWith = _data.amount.value;
         }
 
-        // Find the total number of tokens to mint, as a fixed point number with 18 decimals
+        // Find the default total number of tokens to mint as if no Buyback Delegate were installed, as a fixed point number with 18 decimals
         uint256 _tokenCount = mulDiv18(_amountToSwapWith, _data.weight);
 
+        // Keep a reference to the project's token.
         address _projectToken = projectTokenOf[_data.projectId];
 
+        // Keep a reference to the token being used by the terminal that is calling this delegate.
+        address _terminalToken = _data.amount.token == JBTokens.ETH ? address(WETH) : _data.amount.token;
+
+        // If a minimum amount of tokens to swap for wasn't specified, resolve a value as good as possible using a TWAP.
         if (_minimumSwapAmountOut == 0) {
-            _minimumSwapAmountOut = _getQuote(_data.projectId, _data.terminal, _projectToken, _amountToSwapWith);
+            _minimumSwapAmountOut = _getQuote(_data.projectId, _data.terminal, _projectToken, _amountToSwapWith, _terminalToken);
         }
 
-        // If the minimum amount received from swapping is greather than received when minting, use the swap pathway
+        // If the minimum amount received from swapping is greather than received when minting, use the swap path.
         if (_tokenCount < _minimumSwapAmountOut) {
-            // Make sure the amount to swap with is at most the full amount forwarded.
+            // Make sure the amount to swap with is at most the full amount being paid.
             if (_amountToSwapWith > _data.amount.value) {
                 revert JuiceBuyback_InsufficientPayAmount();
             }
 
-            address _terminalToken = _data.amount.token == JBTokens.ETH ? address(WETH) : _data.amount.token;
-
+            // Keep a reference to a flag indicating if the pool will reference the project token as the first in the pair.
             bool _projectTokenIs0 = address(_projectToken) < _terminalToken;
 
-            // Return this delegate as the one to use, along the quote and reserved rate, and do not mint from the terminal
+            // Return this delegate as the one to use, while forwarding the amount to swap with. Speficy metadata that allows the swap to be executed.
             delegateAllocations = new JBPayDelegateAllocation3_1_1[](1);
             delegateAllocations[0] = JBPayDelegateAllocation3_1_1({
                 delegate: IJBPayDelegate3_1_1(this),
@@ -226,7 +236,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
                 metadata: abi.encode(_validQuote, _minimumSwapAmountOut, _data.weight, _terminalToken, _projectTokenIs0)
             });
 
-            // Mint the amount not specified for swaping
+            // Mint the amount not specified for swaping.
             return (
                 mulDiv(_data.amount.value - _amountToSwapWith, _data.weight, _data.amount.value),
                 _data.memo,
@@ -234,7 +244,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             );
         }
 
-        // If minting, do not use this as delegate (delegateAllocations is left uninitialised)
+        // If minting, delegateAllocations is left uninitialised.
         return (_data.weight, _data.memo, delegateAllocations);
     }
 
@@ -275,11 +285,12 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
      * @param _data the delegate data passed by the terminal
      */
     function didPay(JBDidPayData3_1_1 calldata _data) external payable override {
-        // Access control as minting is authorized to this delegate
+        // Make sure only a payment terminal belonging to the project can access this functionality.
         if (!DIRECTORY.isTerminalOf(_data.projectId, IJBPaymentTerminal(msg.sender))) {
             revert JuiceBuyback_Unauthorized();
         }
 
+        // Parse the metadata passed in from the data source.
         (
             bool _validQuote,
             uint256 _minimumSwapAmountOut,
@@ -288,11 +299,11 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             bool _projectTokenIs0
         ) = abi.decode(_data.dataSourceMetadata, (bool, uint256, uint256, address, bool));
 
-        // Try swapping
+        // Get a reference to the amount of tokens that was swapped for.
         uint256 _exactSwapAmountOut =
             _swap(_data, _minimumSwapAmountOut, _data.forwardedAmount.value, _terminalToken, _projectTokenIs0);
 
-        // If swap failed, mint instead, with the original weight + add to balance the token in
+        // If no tokens were swapped for, mint instead if the quote was determined from a TWAP. Otherwise revert so that the caller can refine their provided quote.
         if (_exactSwapAmountOut == 0) {
             // if a valid quote, suggests TWAP wasn't used.
             if (_validQuote) {
@@ -301,12 +312,12 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
                 _mint(_data, _data.forwardedAmount.value, _weight);
             }
         } else {
-            // Any leftover in this contract?
+            // If the swap was successfull, get a reference to any amount of tokens paid in remaining in this contract.
             uint256 _terminalTokenInThisContract = _data.forwardedAmount.token == JBTokens.ETH
                 ? address(this).balance
                 : IERC20(_data.forwardedAmount.token).balanceOf(address(this));
 
-            // Add any new leftover to the beneficiary and contract balance
+            // Use any leftover amount of tokens paid in remaining to mint.
             if (_terminalTokenInThisContract != 0) {
                 _mint(_data, _terminalTokenInThisContract, _weight);
             }
@@ -322,23 +333,23 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         external
         override
     {
-        // Unpack the data
+        // Unpack the data passed in through the swap hook.
         (uint256 _projectId, address _terminalToken, bool _tokenProjectIs0) =
             abi.decode(_data, (uint256, address, bool));
 
-        // Get the terminal token, weth if it's an ETH terminal
+        // Get the terminal token, using WETH if the token paid in is ETH.
         address _terminalTokenWithWETH = _terminalToken == JBTokens.ETH ? address(WETH) : _terminalToken;
 
-        // Check if this is really a callback - only create2 pools are added to insure safety of this check (balance pending sweep at risk)
+        // Make sure this call is being made from within the swap execution. 
         if (msg.sender != address(poolOf[_projectId][_terminalTokenWithWETH])) revert JuiceBuyback_Unauthorized();
 
-        // delta is in regard of the pool balance (positive = pool need to receive)
+        // Keep a reference to the amount of tokens that should be sent to fulfill the swap.
         uint256 _amountToSendToPool = _tokenProjectIs0 ? uint256(_amount1Delta) : uint256(_amount0Delta);
 
-        // Wrap ETH if needed
+        // Wrap ETH into WETH if relevant. 
         if (_terminalToken == JBTokens.ETH) WETH.deposit{value: _amountToSendToPool}();
 
-        // Transfer the token to the pool
+        // Transfer the token to the pool.
         IERC20(_terminalTokenWithWETH).transfer(msg.sender, _amountToSendToPool);
     }
 
@@ -379,20 +390,25 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.CHANGE_POOL)
         returns (IUniswapV3Pool _newPool)
     {
+        // Make sure the provided delta is within sane bounds.
         if (_twapDelta < MIN_TWAP_DELTA || _twapDelta > MAX_TWAP_DELTA) revert JuiceBuyback_InvalidTwapDelta();
 
+        // Make sure the provided period is within sane bounds.
         if (_secondsAgo < MIN_SECONDS_AGO || _secondsAgo > MAX_SECONDS_AGO) revert JuiceBuyback_InvalidTwapPeriod();
 
-        // Get the project token
+        // Keep a reference to the project's token.
         address _projectToken = address(CONTROLLER.tokenStore().tokenOf(_projectId));
 
+        // Make sure the project has issued a token.
         if (_projectToken == address(0)) revert JuiceBuyback_NoProjectToken();
-
+        
+        // If the terminal token specified in ETH, use WETH instead.
         if (_terminalToken == JBTokens.ETH) _terminalToken = address(WETH);
 
+        // Keep a reference to a flag indicating if the pool will reference the project token as the first in the pair.
         bool _projectTokenIs0 = address(_projectToken) < _terminalToken;
 
-        // Compute the corresponding pool
+        // Compute the corresponding pool's address, which is a function of both tokens and the specified fee.
         _newPool = IUniswapV3Pool(
             address(
                 uint160(
@@ -416,13 +432,13 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             )
         );
 
-        // If this pool is already used, rather use the secondsAgo and twapDelta setters
+        // Make sure this pool has yet to be specified in this delegate.
         if (poolOf[_projectId][_terminalToken] == _newPool) revert JuiceBuyback_PoolAlreadySet();
 
-        // Store the pool
+        // Store the pool.
         poolOf[_projectId][_terminalToken] = _newPool;
 
-        // Store the twap period and max slippage
+        // Store the twap period and max slipage.
         twapParamsOf[_projectId] = _twapDelta << 128 | _secondsAgo;
         projectTokenOf[_projectId] = address(_projectToken);
 
@@ -442,13 +458,18 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         external
         requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.SET_POOL_PARAMS)
     {
+        // Make sure the provided period is within sane bounds.
         if (_newSecondsAgo < MIN_SECONDS_AGO || _newSecondsAgo > MAX_SECONDS_AGO) {
             revert JuiceBuyback_InvalidTwapPeriod();
         }
 
+        // Keep a reference to the currently stored TWAP params.
         uint256 _twapParams = twapParamsOf[_projectId];
+
+        // Keep a reference to the old period value.
         uint256 _oldValue = uint128(_twapParams);
 
+        // Store the new packed value of the TWAP params.
         twapParamsOf[_projectId] = uint256(_newSecondsAgo) | ((_twapParams >> 128) << 128);
 
         emit BuybackDelegate_SecondsAgoChanged(_projectId, _oldValue, _newSecondsAgo);
@@ -465,11 +486,16 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         external
         requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.SET_POOL_PARAMS)
     {
+        // Make sure the provided delta is within sane bounds.
         if (_newDelta < MIN_TWAP_DELTA || _newDelta > MAX_TWAP_DELTA) revert JuiceBuyback_InvalidTwapDelta();
 
+        // Keep a reference to the currently stored TWAP params.
         uint256 _twapParams = twapParamsOf[_projectId];
+        
+        // Keep a reference to the old slippage value.
         uint256 _oldDelta = _twapParams >> 128;
 
+        // Store the new packed value of the TWAP params.
         twapParamsOf[_projectId] = _newDelta << 128 | ((_twapParams << 128) >> 128);
 
         emit BuybackDelegate_TwapDeltaChanged(_projectId, _oldDelta, _newDelta);
@@ -486,34 +512,32 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
      *
      * @return  _amountOut the minimum amount received according to the twap
      */
-    function _getQuote(uint256 _projectId, IJBPaymentTerminal _terminal, address _projectToken, uint256 _amountIn)
+    function _getQuote(uint256 _projectId, IJBPaymentTerminal _terminal, address _projectToken, uint256 _amountIn, address _terminalToken)
         internal
         view
         returns (uint256 _amountOut)
     {
-        address _terminalToken = IJBSingleTokenPaymentTerminal(address(_terminal)).token();
-
-        // Get the pool
+        // Get a reference to the pool that'll be used to make the swap.
         IUniswapV3Pool _pool = poolOf[_projectId][address(_terminalToken)];
 
-        // If non-existing or non-initialized pool, quote 0
+        // Make sure the pool exists.
         try _pool.slot0() returns (uint160, int24, uint16, uint16, uint16, uint8, bool unlocked) {
-            // non initialized?
+            // If the pool hasn't been initialized, return an empty quote.
             if (!unlocked) return 0;
         } catch {
-            // invalid address or not deployed yet?
+            // If the address is invalid or if the pool has not yet been deployed, return an empty quote.
             return 0;
         }
 
-        // Get and unpack the twap params
+        // Unpack the TWAP params and get a reference to the period and slippage.
         uint256 _twapParams = twapParamsOf[_projectId];
         uint32 _quotePeriod = uint32(_twapParams);
         uint256 _maxDelta = _twapParams >> 128;
 
-        // Get the twap tick
+        // Keep a reference to the TWAP tick.
         (int24 arithmeticMeanTick,) = OracleLibrary.consult(address(_pool), _quotePeriod);
 
-        // Get a quote based on this twap tick
+        // Get a quote based on this TWAP tick.
         _amountOut = OracleLibrary.getQuoteAtTick({
             tick: arithmeticMeanTick,
             baseAmount: uint128(_amountIn),
@@ -521,7 +545,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             quoteToken: address(_projectToken)
         });
 
-        // Return the lowest twap accepted
+        // Return the lowest TWAP tolerable.
         _amountOut -= (_amountOut * _maxDelta) / SLIPPAGE_DENOMINATOR;
     }
 
@@ -545,9 +569,11 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         address _terminalToken,
         bool _projectTokenIs0
     ) internal returns (uint256 _amountReceived) {
+        
+        // Get a reference to the pool that'll be used to make the swap.
         IUniswapV3Pool _pool = poolOf[_data.projectId][_terminalToken];
 
-        // Pass the token and min amount to receive as extra data
+        // Try swapping.
         try _pool.swap({
             recipient: address(this),
             zeroForOne: !_projectTokenIs0,
@@ -555,19 +581,19 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             sqrtPriceLimitX96: _projectTokenIs0 ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
             data: abi.encode(_data.projectId, _terminalToken, _projectTokenIs0)
         }) returns (int256 amount0, int256 amount1) {
-            // Swap succeded, take note of the amount of PROJECT_TOKEN received (negative as it is an exact input)
+            // If the swap succeded, take note of the amount of tokens received. This will return as negative since it is an exact input.
             _amountReceived = uint256(-(_projectTokenIs0 ? amount0 : amount1));
         } catch {
-            // implies _amountReceived = 0 -> will later mint when back in didPay
+            // If the swap failed, return.
             return 0;
         }
 
-        // Revert if slippage is too high
+        // Make sure the slippage is tolerable.
         if (_amountReceived < _minimumSwapAmountOut) {
             revert JuiceBuyback_MaximumSlippage();
         }
 
-        // Burn the whole amount received
+        // Burn the whole amount received.
         CONTROLLER.burnTokensOf({
             holder: address(this),
             projectId: _data.projectId,
@@ -576,7 +602,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             preferClaimedTokens: true
         });
 
-        // Mint it again, to add the correct portion to the reserved token and take the claimed preference into account
+        // Mint the whole amount of tokens again, such that the correct portion of reserved tokens get taken into account.
         CONTROLLER.mintTokensOf({
             projectId: _data.projectId,
             tokenCount: _amountReceived,
@@ -599,9 +625,10 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         internal
         returns (uint256 _tokenCount)
     {
+        // Keep a reference to the amount of tokens that should be minted.
         _tokenCount = mulDiv18(_amount, _weight);
 
-        // Mint to the beneficiary with the fc reserve rate
+        // Mint to the beneficiary, making sure the reserved rate gets taken into account.
         CONTROLLER.mintTokensOf({
             projectId: _data.projectId,
             tokenCount: _tokenCount,
@@ -611,11 +638,12 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             useReservedRate: true
         });
 
-        // Add the token or eth back to the terminal balance
+        // If the token paid in wasn't ETH, give the terminal permission to pull them back into its balance.
         if (_data.forwardedAmount.token != JBTokens.ETH) {
             IERC20(_data.forwardedAmount.token).approve(msg.sender, _data.forwardedAmount.value);
         }
 
+        // Add the paid amount back to the project's terminal balance.
         IJBPayoutRedemptionPaymentTerminal3_1_1(msg.sender).addToBalanceOf{
             value: _data.forwardedAmount.token == JBTokens.ETH ? _amount : 0
         }(_data.projectId, _amount, _data.forwardedAmount.token, "", "");
