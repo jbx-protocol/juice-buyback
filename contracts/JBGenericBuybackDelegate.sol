@@ -15,17 +15,12 @@ import {JBRedeemParamsData} from "@jbx-protocol/juice-contracts-v3/contracts/str
 import {JBRedemptionDelegateAllocation3_1_1} from
     "@jbx-protocol/juice-contracts-v3/contracts/structs/JBRedemptionDelegateAllocation3_1_1.sol";
 import {JBTokens} from "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBTokens.sol";
-
 import {JBDelegateMetadataLib} from "@jbx-protocol/juice-delegate-metadata-lib/src/JBDelegateMetadataLib.sol";
-
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {ERC165, IERC165} from "@openzeppelin/contracts/utils/introspection/ERC165.sol";
-
 import {mulDiv18, mulDiv} from "@prb/math/src/Common.sol";
-
 import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import {OracleLibrary} from "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
-
 import {JBBuybackDelegateOperations} from "./libraries/JBBuybackDelegateOperations.sol";
 import
 /**
@@ -33,120 +28,88 @@ import
      */
     "./interfaces/IJBGenericBuybackDelegate.sol";
 
-/**
- * @custom:benediction DEVS BENEDICAT ET PROTEGAT CONTRACTVS MEAM
- *
- * @title  Generic Buyback Delegate compatible with any jb terminal, any project token (except fee on transfer)
- *
- * @notice Datasource and delegate allowing pay beneficiary to get the highest amount
- *         of project tokens between minting using the project weigh and swapping in a
- *         given Uniswap V3 pool
- *
- * @dev    This supports any terminal and token, as well as any number of projects using it.
- */
-
+/// @custom:benediction DEVS BENEDICAT ET PROTEGAT CONTRACTVS MEAM
+/// @title JBGenericBuybackDelegate
+/// @notice Generic Buyback Delegate compatible with any Juicebox payment terminal and any project token that can be pooled.
+/// @notice Functions as a Data Source and Delegate allowing beneficiaries of payments to get the highest amount
+/// of a project's token between minting using the project weight and swapping in a given Uniswap V3 pool.
 contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDelegate {
+   
     //*********************************************************************//
-    // --------------------- public constant properties ----------------- //
+    // --------------------- internal stored properties ------------------ //
     //*********************************************************************//
-    /**
-     * @notice The unit of the max slippage (expressed in 1/10000th)
-     */
-    uint256 public constant SLIPPAGE_DENOMINATOR = 10000;
 
-    /**
-     * @notice The minimum twap deviation allowed (0.1%, in 1/10000th)
-     *
-     * @dev    This is to avoid bypassing the swap when a quote is not provided
-     *         (ie in fees/automated pay)
-     */
+    /// @notice The TWAP max deviation acepted and timeframe to use for the pool twap, packed in a uint256.
+    /// @custom:param _projectId The ID of the project to which the TWAP params apply.
+    mapping(uint256 _projectId => uint256) internal _twapParamsOf;
+
+    //*********************************************************************//
+    // --------------------- public constant properties ------------------ //
+    //*********************************************************************//
+    
+    /// @notice The unit of the max slippage.
+    uint256 public constant SLIPPAGE_DENOMINATOR = 10_000;
+
+    /// @notice The minimum twap deviation allowed, out of MAX_SLIPPAGE.
+    /// @dev This serves to avoid operators settings values that force the bypassing the swap when a quote is not provided in payment metadata.
     uint256 public constant MIN_TWAP_DELTA = 100;
 
-    /**
-     * @notice The minimmaximum twap deviation allowed (9%, in 1/10000th)
-     *
-     * @dev    This is to avoid bypassing the swap when a quote is not provided
-     *         (ie in fees/automated pay)
-     */
+    /// @notice The maximum twap deviation allowed, out of MAX_SLIPPAGE.
+    /// @dev This serves to avoid operators settings values that force the bypassing the swap when a quote is not provided in payment metadata.
     uint256 public constant MAX_TWAP_DELTA = 9000;
 
-    /**
-     * @notice The smallest TWAP period allowed, in seconds.
-     *
-     * @dev    This is to avoid having a too short twap, prone to pool manipulation
-     */
+    /// @notice The smallest TWAP period allowed, in seconds.
+    /// @dev This serves to avoid operators settings values that force the bypassing the swap when a quote is not provided in payment metadata.
     uint256 public constant MIN_SECONDS_AGO = 2 minutes;
 
-    /**
-     * @notice The biggest TWAP period allowed, in seconds.
-     *
-     * @dev    This is to avoid having a too long twap, bypassing the swap
-     */
+    /// @notice The largest TWAP period allowed, in seconds.
+    /// @dev This serves to avoid operators settings values that force the bypassing the swap when a quote is not provided in payment metadata.
     uint256 public constant MAX_SECONDS_AGO = 2 days;
 
-    /**
-     * @notice The uniswap v3 factory
-     */
+    //*********************************************************************//
+    // -------------------- public immutable properties ------------------ //
+    //*********************************************************************//
+
+    /// @notice The uniswap v3 factory used to reference pools from.
     address public immutable UNISWAP_V3_FACTORY;
 
-    /**
-     * @notice The JB Directory
-     */
+    /// @notice The directory of terminals and controllers.
     IJBDirectory public immutable DIRECTORY;
 
-    /**
-     * @notice The project controller
-     */
+    /// @notice The controller used to mint and burn tokens from.
     IJBController3_1 public immutable CONTROLLER;
 
-    /**
-     * @notice The project registry
-     */
+    /// @notice The project registry.
     IJBProjects public immutable PROJECTS;
 
-    /**
-     * @notice The WETH contract
-     */
+    /// @notice The WETH contract.
     IWETH9 public immutable WETH;
 
-    /**
-     * @notice The 4bytes ID of this delegate, used for metadata parsing
-     */
+    /// @notice The 4bytes ID of this delegate, used for metadata parsing.
     bytes4 public immutable delegateId;
 
     //*********************************************************************//
     // --------------------- public stored properties -------------------- //
     //*********************************************************************//
 
-    /**
-     * @notice The uniswap pool corresponding to the project token-terminal token market
-     *         (this should be carefully chosen liquidity wise)
-     */
-    mapping(uint256 _projectId => mapping(address _terminalToken => IUniswapV3Pool _pool)) public poolOf;
+    /// @notice The uniswap pool corresponding to the project token <-> terminal token pair.
+    /// @custom:param _projectId The ID of the project to which the pool applies.
+    /// @custom:param _terminalToken The address of the token being used to make payments in.
+    mapping(uint256 _projectId => mapping(address _terminalToken => IUniswapV3Pool)) public poolOf;
 
-    /**
-     * @notice The project token
-     */
-    mapping(uint256 _projectId => address projectTokenOf) public projectTokenOf;
-
-    /////////////////////////////////////////////////////////////////////
-    //                    Internal global variables                    //
-    /////////////////////////////////////////////////////////////////////
-
-    /**
-     * @notice The twap max deviation acepted (in 10_000th) and timeframe to use for the pool twap (from secondAgo to now)
-     *
-     * @dev    Params are uint128 and uint32 packed in a uint256, with the max deviation in the 128 most significant bits
-     */
-    mapping(uint256 _projectId => uint256 _params) internal twapParamsOf;
+    /// @notice Each project's token.
+    /// @custom:param _projectId The ID of the project to which the token belongs.
+    mapping(uint256 _projectId => address) public projectTokenOf;
 
     //*********************************************************************//
-    // ---------------------------- Constructor -------------------------- //
+    // ---------------------------- constructor -------------------------- //
     //*********************************************************************//
 
-    /**
-     * @dev No other logic besides initializing the immutables
-     */
+    /// @param _weth The WETH contract.
+    /// @param _factory The uniswap v3 factory used to reference pools from.
+    /// @param _directory The directory of terminals and controllers.
+    /// @param _controller The controller used to mint and burn tokens from.
+    /// @param _delegateId The 4bytes ID of this delegate, used for metadata parsing.
     constructor(
         IWETH9 _weth,
         address _factory,
@@ -159,24 +122,18 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         CONTROLLER = _controller;
         UNISWAP_V3_FACTORY = _factory;
         delegateId = _delegateId;
-
         PROJECTS = _controller.projects();
     }
 
-    /////////////////////////////////////////////////////////////////////
-    //                         View functions                          //
-    /////////////////////////////////////////////////////////////////////
-
-    /**
-     * @notice The datasource implementation
-     *
-     * @param  _data the data passed to the data source in terminal.pay(..). _data.metadata need to have the Uniswap quote
-     *               this quote should be set as 0 if the user wants to use the vanilla minting path
-     * @return weight the weight to use (the one passed if not max reserved rate, 0 if swapping or the one corresponding
-     *         to the reserved token to mint if minting)
-     * @return memo the original memo passed
-     * @return delegateAllocations The amount to send to delegates instead of adding to the local balance.
-     */
+    //*********************************************************************//
+    // ------------------------- external views -------------------------- //
+    //*********************************************************************//
+    
+    /// @notice The DataSource implementation that determines if a swap path and/or a mint path should be taken.
+    /// @param  _data The data passed to the data source in terminal.pay(..). _data.metadata can have a Uniswap quote and specify how much of the payment should be used to swap, otherwise a quote will be determined from a TWAP and use the full amount paid in.
+    /// @return weight The weight to use, which is the original weight passed in if no swap path is taken, 0 if only the swap path is taken, and an adjusted weight if the both the swap and mint paths are taken. 
+    /// @return memo the original memo passed
+    /// @return delegateAllocations The amount to send to delegates instead of adding to the local balance. This is empty if only the mint path is taken.
     function payParams(JBPayParamsData calldata _data)
         external
         view
@@ -215,7 +172,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
 
         // If a minimum amount of tokens to swap for wasn't specified, resolve a value as good as possible using a TWAP.
         if (_minimumSwapAmountOut == 0) {
-            _minimumSwapAmountOut = _getQuote(_data.projectId, _data.terminal, _projectToken, _amountToSwapWith, _terminalToken);
+            _minimumSwapAmountOut = _getQuote(_data.projectId, _projectToken, _amountToSwapWith, _terminalToken);
         }
 
         // If the minimum amount received from swapping is greather than received when minting, use the swap path.
@@ -248,42 +205,53 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         return (_data.weight, _data.memo, delegateAllocations);
     }
 
-    /**
-     * @notice The timeframe to use for the pool twap (from secondAgo to now)
-     *
-     * @param  _projectId the project id
-     *
-     * @return _secondsAgo the period over which the twap is computed
-     */
+    /// @notice The timeframe to use for the pool TWAP.
+    /// @param  _projectId The ID of the project for which the value applies.
+    /// @return _secondsAgo The period over which the TWAP is computed.
     function secondsAgoOf(uint256 _projectId) external view returns (uint32) {
-        return uint32(twapParamsOf[_projectId]);
+        return uint32(_twapParamsOf[_projectId]);
     }
 
-    /**
-     * @notice The twap max deviation acepted (in 10_000th)
-     *
-     * @param  _projectId the project id
-     *
-     * @return _delta the maximum deviation allowed between amount received and twap
-     */
+    /// @notice The TWAP max deviation acepted, out of SLIPPAGE_DENOMINATOR.
+    /// @param  _projectId The ID of the project for which the value applies.
+    /// @return _delta the maximum deviation allowed between the token amount received and the TWAP quote.
     function twapDeltaOf(uint256 _projectId) external view returns (uint256) {
-        return twapParamsOf[_projectId] >> 128;
+        return _twapParamsOf[_projectId] >> 128;
     }
 
-    /////////////////////////////////////////////////////////////////////
-    //                       External functions                        //
-    /////////////////////////////////////////////////////////////////////
+    /// @notice Generic redeem params, for interface completion.
+    /// @dev This is a passthrough of the redemption parameters
+    /// @param _data The redeem data passed by the terminal.
+    function redeemParams(JBRedeemParamsData calldata _data)
+        external
+        pure
+        override
+        returns (
+            uint256 reclaimAmount,
+            string memory memo,
+            JBRedemptionDelegateAllocation3_1_1[] memory delegateAllocations
+        )
+    {
+        return (_data.reclaimAmount.value, _data.memo, delegateAllocations);
+    }
 
-    /**
-     * @notice Delegate to either swap to the beneficiary or mint to the beneficiary
-     *
-     * @dev    This delegate is called only if the quote for the swap is bigger than the lowest received when minting.
-     *         If the swap reverts (slippage, liquidity, etc), the delegate will then mint the same amount of token as
-     *         if the delegate was not used.
-     *         If the beneficiary requests non claimed token, the swap is not used (as it is, per definition, claimed token)
-     *
-     * @param _data the delegate data passed by the terminal
-     */
+    //*********************************************************************//
+    // -------------------------- public views --------------------------- //
+    //*********************************************************************//
+
+    function supportsInterface(bytes4 _interfaceId) public view override(ERC165, IERC165) returns (bool) {
+        return _interfaceId == type(IJBFundingCycleDataSource3_1_1).interfaceId
+            || _interfaceId == type(IJBPayDelegate3_1_1).interfaceId || super.supportsInterface(_interfaceId);
+    }
+
+    //*********************************************************************//
+    // ---------------------- external transactions ---------------------- //
+    //*********************************************************************//
+
+    /// @notice Delegate used to swap a provided amount to the beneficiary, using any leftover amount to mint.
+    /// @dev This delegate is called only if the quote for the swap is bigger than the quote when minting.
+    /// If the swap reverts (slippage, liquidity, etc), the delegate will then mint the same amount of token as if the delegate was not used.
+    /// @param _data The delegate data passed by the terminal.
     function didPay(JBDidPayData3_1_1 calldata _data) external payable override {
         // Make sure only a payment terminal belonging to the project can access this functionality.
         if (!DIRECTORY.isTerminalOf(_data.projectId, IJBPaymentTerminal(msg.sender))) {
@@ -324,11 +292,10 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         }
     }
 
-    /**
-     * @notice The Uniswap V3 pool callback (where token transfer should happens)
-     *
-     * @dev    Slippage controle is achieved here
-     */
+    /// @notice The Uniswap V3 pool callback where the token transfer is expected to happen.
+    /// @param _amount0Delta The amount of token 0 being used for the swap.
+    /// @param _amount1Delta The amount of token 1 being used for the swap.
+    /// @param _data Data passed in by the swap operation.
     function uniswapV3SwapCallback(int256 _amount0Delta, int256 _amount1Delta, bytes calldata _data)
         external
         override
@@ -353,38 +320,14 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         IERC20(_terminalTokenWithWETH).transfer(msg.sender, _amountToSendToPool);
     }
 
-    /**
-     * @notice Generic redeem params, for interface completion
-     *
-     * @dev This is a passthrough of the redemption parameters
-     *
-     * @param _data the redeem data passed by the terminal
-     */
-    function redeemParams(JBRedeemParamsData calldata _data)
-        external
-        pure
-        override
-        returns (
-            uint256 reclaimAmount,
-            string memory memo,
-            JBRedemptionDelegateAllocation3_1_1[] memory delegateAllocations
-        )
-    {
-        return (_data.reclaimAmount.value, _data.memo, delegateAllocations);
-    }
-
-    /**
-     * @notice Add a pool for a given project. This pools the become the default one for a given token project-terminal token
-     *
-     * @dev    Uses create2 for callback auth and allows adding a pool not deployed yet.
-     *         This can be called by the project owner or an address having the SET_POOL permission in JBOperatorStore
-     *
-     * @param  _projectId the project id
-     * @param  _fee the fee of the pool
-     * @param  _secondsAgo the period over which the twap is computed
-     * @param  _twapDelta the maximum deviation allowed between amount received and twap
-     * @param  _terminalToken the terminal token
-     */
+    /// @notice Add a pool for a given project. This pool the becomes the default for a given token project <--> terminal token pair.
+    /// @dev Uses create2 for callback auth and allows adding a pool not deployed yet.
+    /// This can be called by the project owner or an address having the SET_POOL permission in JBOperatorStore
+    /// @param _projectId The ID of the project having its pool set.
+    /// @param _fee The fee that is used in the pool being set.
+    /// @param _secondsAgo The period over which the TWAP is computed.
+    /// @param _twapDelta The maximum deviation allowed between amount received and TWAP.
+    /// @param _terminalToken The terminal token that payments are made in.
     function setPoolFor(uint256 _projectId, uint24 _fee, uint32 _secondsAgo, uint256 _twapDelta, address _terminalToken)
         external
         requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.CHANGE_POOL)
@@ -439,7 +382,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         poolOf[_projectId][_terminalToken] = _newPool;
 
         // Store the twap period and max slipage.
-        twapParamsOf[_projectId] = _twapDelta << 128 | _secondsAgo;
+        _twapParamsOf[_projectId] = _twapDelta << 128 | _secondsAgo;
         projectTokenOf[_projectId] = address(_projectToken);
 
         emit BuybackDelegate_SecondsAgoChanged(_projectId, 0, _secondsAgo);
@@ -447,13 +390,10 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         emit BuybackDelegate_PoolAdded(_projectId, _terminalToken, address(_newPool));
     }
 
-    /**
-     * @notice Increase the period over which the twap is computed
-     *
-     * @dev    This can be called by the project owner or an address having the SET_TWAP_PERIOD permission in JBOperatorStore
-     *
-     * @param  _newSecondsAgo the new period
-     */
+    /// @notice Increase the period over which the TWAP is computed.
+    /// @dev This can be called by the project owner or an address having the SET_TWAP_PERIOD permission in JBOperatorStore.
+    /// @param _projectId The ID for which the new value applies.
+    /// @param _newSecondsAgo The new TWAP period.
     function changeSecondsAgo(uint256 _projectId, uint32 _newSecondsAgo)
         external
         requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.SET_POOL_PARAMS)
@@ -464,24 +404,21 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         }
 
         // Keep a reference to the currently stored TWAP params.
-        uint256 _twapParams = twapParamsOf[_projectId];
+        uint256 _twapParams = _twapParamsOf[_projectId];
 
         // Keep a reference to the old period value.
         uint256 _oldValue = uint128(_twapParams);
 
         // Store the new packed value of the TWAP params.
-        twapParamsOf[_projectId] = uint256(_newSecondsAgo) | ((_twapParams >> 128) << 128);
+        _twapParamsOf[_projectId] = uint256(_newSecondsAgo) | ((_twapParams >> 128) << 128);
 
         emit BuybackDelegate_SecondsAgoChanged(_projectId, _oldValue, _newSecondsAgo);
     }
 
-    /**
-     * @notice Set the maximum deviation allowed between amount received and twap
-     *
-     * @dev    This can be called by the project owner or an address having the SET_POOL permission in JBOperatorStore
-     *
-     * @param  _newDelta the new delta, in 10_000th
-     */
+    /// @notice Set the maximum deviation allowed between amount received and TWAP.
+    /// @dev This can be called by the project owner or an address having the SET_POOL permission in JBOperatorStore.
+    /// @param _projectId The ID for which the new value applies.
+    /// @param _newDelta the new delta, out of SLIPPAGE_DENOMINATOR.
     function setTwapDelta(uint256 _projectId, uint256 _newDelta)
         external
         requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.SET_POOL_PARAMS)
@@ -490,13 +427,13 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         if (_newDelta < MIN_TWAP_DELTA || _newDelta > MAX_TWAP_DELTA) revert JuiceBuyback_InvalidTwapDelta();
 
         // Keep a reference to the currently stored TWAP params.
-        uint256 _twapParams = twapParamsOf[_projectId];
+        uint256 _twapParams = _twapParamsOf[_projectId];
         
         // Keep a reference to the old slippage value.
         uint256 _oldDelta = _twapParams >> 128;
 
         // Store the new packed value of the TWAP params.
-        twapParamsOf[_projectId] = _newDelta << 128 | ((_twapParams << 128) >> 128);
+        _twapParamsOf[_projectId] = _newDelta << 128 | ((_twapParams << 128) >> 128);
 
         emit BuybackDelegate_TwapDeltaChanged(_projectId, _oldDelta, _newDelta);
     }
@@ -505,14 +442,13 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
     // ---------------------- internal functions ------------------------- //
     //*********************************************************************//
 
-    /**
-     * @notice  Get a quote based on twap over a secondsAgo period, taking into account a twapDelta max deviation
-     *
-     * @param   _amountIn the amount to swap
-     *
-     * @return  _amountOut the minimum amount received according to the twap
-     */
-    function _getQuote(uint256 _projectId, IJBPaymentTerminal _terminal, address _projectToken, uint256 _amountIn, address _terminalToken)
+    /// @notice Get a quote based on TWAP over a secondsAgo period, taking into account a twapDelta max deviation.
+    /// @param _projectId The ID of the project for which the swap is being made.
+    /// @param _projectToken The project's token being swapped for.
+    /// @param _amountIn The amount being used to swap.
+    /// @param _terminalToken The token paid in being used to swap.
+    /// @return _amountOut the minimum amount received according to the TWAP.
+    function _getQuote(uint256 _projectId, address _projectToken, uint256 _amountIn, address _terminalToken)
         internal
         view
         returns (uint256 _amountOut)
@@ -530,7 +466,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         }
 
         // Unpack the TWAP params and get a reference to the period and slippage.
-        uint256 _twapParams = twapParamsOf[_projectId];
+        uint256 _twapParams = _twapParamsOf[_projectId];
         uint32 _quotePeriod = uint32(_twapParams);
         uint256 _maxDelta = _twapParams >> 128;
 
@@ -549,19 +485,13 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         _amountOut -= (_amountOut * _maxDelta) / SLIPPAGE_DENOMINATOR;
     }
 
-    /**
-     * @notice Swap the terminal token to receive the project toke_beforeTransferTon
-     *
-     * @dev    This delegate first receive the whole amount of project token,
-     *         then send the non-reserved token to the beneficiary,
-     *         then burn the rest of this delegate balance (ie the amount of reserved token),
-     *         then mint the same amount as received (this will add the reserved token, following the fc rate)
-     *         then burn the difference (ie this delegate balance)
-     *         -> End result is having the correct balances (beneficiary and reserve), according to the reserve rate
-     *
-     * @param  _data the didPayData passed by the terminal
-     * @param  _minimumSwapAmountOut the amount received, to prevent slippage
-     */
+    /// @notice Swap the terminal token to receive the project token.
+    /// @param _data The didPayData passed by the terminal.
+    /// @param _minimumSwapAmountOut The minimum amount of project tokens received from the swap.
+    /// @param _amountToSwapWith The amount of tokens that are being used with which to make the swap.
+    /// @param _terminalToken The token paid in being used to swap.
+    /// @param _projectTokenIs0 A flag indicating if the pool will reference the project token as the first in the pair.
+    /// @return _amountReceived The amount of tokens received from the swap.
     function _swap(
         JBDidPayData3_1_1 calldata _data,
         uint256 _minimumSwapAmountOut,
@@ -615,23 +545,17 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         emit BuybackDelegate_Swap(_data.projectId, _data.forwardedAmount.value, _amountReceived);
     }
 
-    /**
-     * @notice Mint the token out, sending back the token in the terminal
-     *
-     * @param  _data the didPayData passed by the terminal
-     * @param  _amount the amount of token out to mint
-     */
+    /// @notice Add the specified amount of funds back into the project's terminal, and mint the appropriate amount of project tokens.
+    /// @param _data The didPayData passed by the terminal.
+    /// @param _amount The amount to add back to the project's balance.
+    /// @param _weight The relative amount of tokens that should be minted when a project receives funds.
     function _mint(JBDidPayData3_1_1 calldata _data, uint256 _amount, uint256 _weight)
         internal
-        returns (uint256 _tokenCount)
     {
-        // Keep a reference to the amount of tokens that should be minted.
-        _tokenCount = mulDiv18(_amount, _weight);
-
         // Mint to the beneficiary, making sure the reserved rate gets taken into account.
         CONTROLLER.mintTokensOf({
             projectId: _data.projectId,
-            tokenCount: _tokenCount,
+            tokenCount: mulDiv18(_amount, _weight),
             beneficiary: _data.beneficiary,
             memo: _data.memo,
             preferClaimedTokens: _data.preferClaimedTokens,
@@ -649,14 +573,5 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         }(_data.projectId, _amount, _data.forwardedAmount.token, "", "");
 
         emit BuybackDelegate_Mint(_data.projectId);
-    }
-
-    //*********************************************************************//
-    // ---------------------- peripheral functions ----------------------- //
-    //*********************************************************************//
-
-    function supportsInterface(bytes4 _interfaceId) public view override(ERC165, IERC165) returns (bool) {
-        return _interfaceId == type(IJBFundingCycleDataSource3_1_1).interfaceId
-            || _interfaceId == type(IJBPayDelegate3_1_1).interfaceId || super.supportsInterface(_interfaceId);
     }
 }
