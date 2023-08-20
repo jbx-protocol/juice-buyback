@@ -369,6 +369,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
                                         _fee
                                     )
                                 ),
+                                // POOL_INIT_CODE_HASH from https://github.com/Uniswap/v3-periphery/blob/main/contracts/libraries/PoolAddress.sol
                                 bytes32(0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54)
                             )
                         )
