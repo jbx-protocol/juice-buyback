@@ -224,7 +224,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
                 delegate: IJBPayDelegate3_1_1(this),
                 amount: _amountToSwapWith,
                 metadata: abi.encode(
-                    _validQuote, _minimumSwapAmountOut, _amountToSwapWith, _data.weight, _terminalToken, _projectTokenIs0
+                    _validQuote, _minimumSwapAmountOut, _data.weight, _terminalToken, _projectTokenIs0
                     )
             });
 
@@ -285,15 +285,14 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         (
             bool _validQuote,
             uint256 _minimumSwapAmountOut,
-            uint256 _amountToSwapWith,
             uint256 _weight,
             address _terminalToken,
             bool _projectTokenIs0
-        ) = abi.decode(_data.dataSourceMetadata, (bool, uint256, uint256, uint256, address, bool));
+        ) = abi.decode(_data.dataSourceMetadata, (bool, uint256, uint256, address, bool));
 
         // Try swapping
         uint256 _exactSwapAmountOut =
-            _swap(_data, _minimumSwapAmountOut, _amountToSwapWith, _terminalToken, _projectTokenIs0);
+            _swap(_data, _minimumSwapAmountOut, _data.forwardedAmount.value, _terminalToken, _projectTokenIs0);
 
         // If swap failed, mint instead, with the original weight + add to balance the token in
         if (_exactSwapAmountOut == 0) {
