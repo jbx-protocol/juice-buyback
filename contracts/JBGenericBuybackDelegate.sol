@@ -223,9 +223,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             delegateAllocations[0] = JBPayDelegateAllocation3_1_1({
                 delegate: IJBPayDelegate3_1_1(this),
                 amount: _amountToSwapWith,
-                metadata: abi.encode(
-                    _validQuote, _minimumSwapAmountOut, _data.weight, _terminalToken, _projectTokenIs0
-                    )
+                metadata: abi.encode(_validQuote, _minimumSwapAmountOut, _data.weight, _terminalToken, _projectTokenIs0)
             });
 
             // Mint the amount not specified for swaping
