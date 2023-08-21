@@ -239,7 +239,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         (_weightReturned, _memoReturned, _allocationsReturned) = delegate.payParams(payParams);
 
         // Bypass testing uniswap oracle lib
-        uint256 _twapAmountOut = delegate.ForTest_getQuote(projectId, jbxTerminal, address(projectToken), 1 ether);
+        uint256 _twapAmountOut = delegate.ForTest_getQuote(projectId, address(projectToken), 1 ether, address(weth));
 
         // Mint pathway if more token received when minting:
         if (_tokenCount >= _twapAmountOut) {
@@ -1251,11 +1251,11 @@ contract ForTest_JBGenericBuybackDelegate is JBGenericBuybackDelegate {
 
     function ForTest_getQuote(
         uint256 _projectId,
-        IJBPaymentTerminal _terminal,
         address _projectToken,
-        uint256 _amountIn
+        uint256 _amountIn,
+        address _terminalToken
     ) external view returns (uint256 _amountOut) {
-        return _getQuote(_projectId, _terminal, _projectToken, _amountIn);
+        return _getQuote(_projectId,_projectToken, _amountIn, _terminalToken);
     }
 
     function ForTest_initPool(
@@ -1266,7 +1266,7 @@ contract ForTest_JBGenericBuybackDelegate is JBGenericBuybackDelegate {
         address _projectToken,
         address _terminalToken
     ) external {
-        twapParamsOf[_projectId] = _twapDelta << 128 | _secondsAgo;
+        _twapParamsOf[_projectId] = _twapDelta << 128 | _secondsAgo;
         projectTokenOf[_projectId] = _projectToken;
         poolOf[_projectId][_terminalToken] = _pool;
     }
