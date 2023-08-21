@@ -140,18 +140,13 @@ contract TestJBGenericBuybackDelegate_Units is Test {
      *
      * @dev    _tokenCount == weight, as we use a value of 1.
      */
-    function test_payParams_callWithQuote(uint256 _tokenCount, uint256 _swapOutCount, uint256 _slippage) public {
+    function test_payParams_callWithQuote(uint256 _tokenCount, uint256 _swapOutCount) public {
         // Avoid overflow when computing slippage (cannot swap uint256.max tokens)
         _swapOutCount = bound(_swapOutCount, 1, type(uint240).max);
 
-        _slippage = bound(_slippage, 1, 10000);
-
-        // Take max slippage into account
-        uint256 _swapQuote = _swapOutCount - ((_swapOutCount * _slippage) / 10000);
-
         // Pass the quote as metadata
         bytes[] memory _data = new bytes[](1);
-        _data[0] = abi.encode(_swapOutCount, _slippage);
+        _data[0] = abi.encode(_swapOutCount, 1 ether);
 
         // Pass the delegate id
         bytes4[] memory _ids = new bytes4[](1);
@@ -174,7 +169,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         (_weightReturned, _memoReturned, _allocationsReturned) = delegate.payParams(payParams);
 
         // Mint pathway if more token received when minting:
-        if (_tokenCount >= _swapQuote) {
+        if (_tokenCount >= _swapOutCount) {
             // No delegate allocation returned
             assertEq(_allocationsReturned.length, 0);
 
@@ -186,7 +181,11 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             assertEq(_allocationsReturned.length, 1);
             assertEq(address(_allocationsReturned[0].delegate), address(delegate));
             assertEq(_allocationsReturned[0].amount, 1 ether);
-            assertEq(_allocationsReturned[0].metadata, abi.encode(_tokenCount, _swapQuote, projectToken));
+            assertEq(
+                _allocationsReturned[0].metadata, 
+                abi.encode(true, _swapOutCount, payParams.weight, address(weth), address(projectToken) < address(weth)),
+                "wrong metadata"
+            );
 
             assertEq(_weightReturned, 0);
         }
