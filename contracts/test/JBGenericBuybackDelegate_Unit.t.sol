@@ -140,13 +140,18 @@ contract TestJBGenericBuybackDelegate_Units is Test {
      *
      * @dev    _tokenCount == weight, as we use a value of 1.
      */
-    function test_payParams_callWithQuote(uint256 _tokenCount, uint256 _swapOutCount) public {
-        // Avoid overflow when computing slippage (cannot swap uint256.max tokens)
-        _swapOutCount = bound(_swapOutCount, 1, type(uint240).max);
+    function test_payParams_callWithQuote(uint256 _weight, uint256 _swapOutCount, uint256 _amountIn) public {
+        // Use between 1 wei and the whole amount from pay(..)
+        _amountIn = bound(_amountIn, 1, payParams.amount.value);
+
+        // Avoid accidentally using the twap (triggered if out == 0)
+        _swapOutCount = bound(_swapOutCount, 1, type(uint256).max);
+
+        uint256 _tokenCount = mulDiv18(_amountIn, _weight);
 
         // Pass the quote as metadata
         bytes[] memory _data = new bytes[](1);
-        _data[0] = abi.encode(_swapOutCount, 1 ether);
+        _data[0] = abi.encode(_swapOutCount, _amountIn);
 
         // Pass the delegate id
         bytes4[] memory _ids = new bytes4[](1);
@@ -156,7 +161,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         bytes memory _metadata = metadataHelper.createMetadata(_ids, _data);
 
         // Set the relevant payParams data
-        payParams.weight = _tokenCount;
+        payParams.weight = _weight;
         payParams.metadata = _metadata;
 
         // Returned values to catch:
@@ -171,27 +176,31 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         // Mint pathway if more token received when minting:
         if (_tokenCount >= _swapOutCount) {
             // No delegate allocation returned
-            assertEq(_allocationsReturned.length, 0);
+            assertEq(_allocationsReturned.length, 0, "Wrong allocation length");
 
             // weight unchanged
-            assertEq(_weightReturned, _tokenCount);
+            assertEq(_weightReturned, _weight, "Weight isn't unchanged");
         }
         // Swap pathway (return the delegate allocation)
         else {
-            assertEq(_allocationsReturned.length, 1);
-            assertEq(address(_allocationsReturned[0].delegate), address(delegate));
-            assertEq(_allocationsReturned[0].amount, 1 ether);
+            assertEq(_allocationsReturned.length, 1, "Wrong allocation length");
+            assertEq(address(_allocationsReturned[0].delegate), address(delegate), "wrong delegate address returned");
+            assertEq(_allocationsReturned[0].amount, _amountIn, "worng amount in returned");
             assertEq(
                 _allocationsReturned[0].metadata, 
                 abi.encode(true, _swapOutCount, payParams.weight, address(weth), address(projectToken) < address(weth)),
                 "wrong metadata"
             );
 
-            assertEq(_weightReturned, 0);
+            assertEq(
+                _weightReturned,
+                mulDiv(payParams.amount.value - _amountIn, payParams.weight, payParams.amount.value),
+                "wrong weight returned (for the leftover)"
+            );
         }
 
         // Same memo in any case
-        assertEq(_memoReturned, payParams.memo);
+        assertEq(_memoReturned, payParams.memo, "wrong memo");
     }
 
     /**
