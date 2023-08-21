@@ -148,16 +148,16 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         // Keep a reference to the amount from the payment to allocate towards a swap.
         uint256 _amountToSwapWith;
 
-        // Keep a reference to a flag indicating if the quote passed into the metadata is valid.
-        bool _validQuote;
+        // Keep a reference to a flag indicating if the quote passed into the metadata exists.
+        bool _quoteExists;
 
         // Scoped section to prevent Stack Too Deep.
         {
             bytes memory _metadata;
 
             // Unpack the quote from the pool, given by the frontend.
-            (_validQuote, _metadata) = JBDelegateMetadataLib.getMetadata(delegateId, _data.metadata);
-            if (_validQuote) (_minimumSwapAmountOut, _amountToSwapWith) = abi.decode(_metadata, (uint256, uint256));
+            (_quoteExists, _metadata) = JBDelegateMetadataLib.getMetadata(delegateId, _data.metadata);
+            if (_quoteExists) (_minimumSwapAmountOut, _amountToSwapWith) = abi.decode(_metadata, (uint256, uint256));
 
             // If no amount was specified to swap with, default to the full amount of the payment.
             if (_amountToSwapWith == 0) _amountToSwapWith = _data.amount.value;
@@ -192,7 +192,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             delegateAllocations[0] = JBPayDelegateAllocation3_1_1({
                 delegate: IJBPayDelegate3_1_1(this),
                 amount: _amountToSwapWith,
-                metadata: abi.encode(_validQuote, _minimumSwapAmountOut, _data.weight, _terminalToken, _projectTokenIs0)
+                metadata: abi.encode(_quoteExists, _minimumSwapAmountOut, _data.weight, _terminalToken, _projectTokenIs0)
             });
 
             // Mint the amount not specified for swaping.
@@ -262,7 +262,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
 
         // Parse the metadata passed in from the data source.
         (
-            bool _validQuote,
+            bool _quoteExists,
             uint256 _minimumSwapAmountOut,
             uint256 _weight,
             address _terminalToken,
@@ -276,7 +276,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         // If no tokens were swapped for, mint instead if the quote was determined from a TWAP. Otherwise revert so that the caller can refine their provided quote.
         if (_exactSwapAmountOut == 0) {
             // if a valid quote, suggests TWAP wasn't used.
-            if (_validQuote) {
+            if (_quoteExists) {
                 revert JuiceBuyback_MaximumSlippage();
             } else {
                 _mint(_data, _data.forwardedAmount.value, _weight);
