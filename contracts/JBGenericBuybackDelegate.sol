@@ -271,7 +271,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
 
         // Get a reference to the amount of tokens that was swapped for.
         uint256 _exactSwapAmountOut =
-            _swap(_data, _minimumSwapAmountOut, _data.forwardedAmount.value, _terminalToken, _projectTokenIs0);
+            _swap(_data, _data.forwardedAmount.value, _terminalToken, _projectTokenIs0);
 
         // If no tokens were swapped for, mint instead if the quote was determined from a TWAP. Otherwise revert so that the caller can refine their provided quote.
         if (_exactSwapAmountOut == 0) {
@@ -282,6 +282,11 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
                 _mint(_data, _data.forwardedAmount.value, _weight);
             }
         } else {
+             // Make sure the slippage is tolerable.
+            if (_quoteExists && _exactSwapAmountOut < _minimumSwapAmountOut) {
+                revert JuiceBuyback_MaximumSlippage();
+            }
+
             // If the swap was successfull, get a reference to any amount of tokens paid in remaining in this contract.
             uint256 _terminalTokenInThisContract = _data.forwardedAmount.token == JBTokens.ETH
                 ? address(this).balance
@@ -490,14 +495,12 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
 
     /// @notice Swap the terminal token to receive the project token.
     /// @param _data The didPayData passed by the terminal.
-    /// @param _minimumSwapAmountOut The minimum amount of project tokens received from the swap.
     /// @param _amountToSwapWith The amount of tokens that are being used with which to make the swap.
     /// @param _terminalToken The token paid in being used to swap.
     /// @param _projectTokenIs0 A flag indicating if the pool will reference the project token as the first in the pair.
     /// @return _amountReceived The amount of tokens received from the swap.
     function _swap(
         JBDidPayData3_1_1 calldata _data,
-        uint256 _minimumSwapAmountOut,
         uint256 _amountToSwapWith,
         address _terminalToken,
         bool _projectTokenIs0
@@ -518,11 +521,6 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         } catch {
             // If the swap failed, return.
             return 0;
-        }
-
-        // Make sure the slippage is tolerable.
-        if (_amountReceived < _minimumSwapAmountOut) {
-            revert JuiceBuyback_MaximumSlippage();
         }
 
         // Burn the whole amount received.
