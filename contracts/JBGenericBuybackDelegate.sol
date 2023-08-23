@@ -303,8 +303,8 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         override
     {
         // Unpack the data passed in through the swap hook.
-        (uint256 _projectId, address _terminalToken, bool _tokenProjectIs0) =
-            abi.decode(_data, (uint256, address, bool));
+        (uint256 _projectId, address _terminalToken) =
+            abi.decode(_data, (uint256, address));
 
         // Get the terminal token, using WETH if the token paid in is ETH.
         address _terminalTokenWithWETH = _terminalToken == JBTokens.ETH ? address(WETH) : _terminalToken;
@@ -312,8 +312,8 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         // Make sure this call is being made from within the swap execution.
         if (msg.sender != address(poolOf[_projectId][_terminalTokenWithWETH])) revert JuiceBuyback_Unauthorized();
 
-        // Keep a reference to the amount of tokens that should be sent to fulfill the swap.
-        uint256 _amountToSendToPool = _tokenProjectIs0 ? uint256(_amount1Delta) : uint256(_amount0Delta);
+        // Keep a reference to the amount of tokens that should be sent to fulfill the swap (the positive delta)
+        uint256 _amountToSendToPool = _amount0Delta < 0 ? uint256(_amount1Delta) : uint256(_amount0Delta);
 
         // Wrap ETH into WETH if relevant.
         if (_terminalToken == JBTokens.ETH) WETH.deposit{value: _amountToSendToPool}();
@@ -511,7 +511,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             zeroForOne: !_projectTokenIs0,
             amountSpecified: int256(_amountToSwapWith),
             sqrtPriceLimitX96: _projectTokenIs0 ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
-            data: abi.encode(_data.projectId, _terminalToken, _projectTokenIs0)
+            data: abi.encode(_data.projectId, _terminalToken)
         }) returns (int256 amount0, int256 amount1) {
             // If the swap succeded, take note of the amount of tokens received. This will return as negative since it is an exact input.
             _amountReceived = uint256(-(_projectTokenIs0 ? amount0 : amount1));
