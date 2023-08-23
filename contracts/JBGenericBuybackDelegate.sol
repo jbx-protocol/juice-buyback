@@ -273,29 +273,19 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         uint256 _exactSwapAmountOut =
             _swap(_data, _data.forwardedAmount.value, _terminalToken, _projectTokenIs0);
 
-        // If no tokens were swapped for, mint instead if the quote was determined from a TWAP. Otherwise revert so that the caller can refine their provided quote.
-        if (_exactSwapAmountOut == 0) {
-            // if a valid quote, suggests TWAP wasn't used.
-            if (_quoteExists) {
-                revert JuiceBuyback_MaximumSlippage();
-            } else {
-                _mint(_data, _data.forwardedAmount.value, _weight);
-            }
-        } else {
-             // Make sure the slippage is tolerable.
-            if (_quoteExists && _exactSwapAmountOut < _minimumSwapAmountOut) {
-                revert JuiceBuyback_MaximumSlippage();
-            }
+         // Make sure the slippage is tolerable.
+        if (_quoteExists && _exactSwapAmountOut < _minimumSwapAmountOut) {
+            revert JuiceBuyback_MaximumSlippage();
+        }
 
-            // If the swap was successfull, get a reference to any amount of tokens paid in remaining in this contract.
-            uint256 _terminalTokenInThisContract = _data.forwardedAmount.token == JBTokens.ETH
-                ? address(this).balance
-                : IERC20(_data.forwardedAmount.token).balanceOf(address(this));
+        // If the swap was successfull, get a reference to any amount of tokens paid in remaining in this contract.
+        uint256 _terminalTokenInThisContract = _data.forwardedAmount.token == JBTokens.ETH
+            ? address(this).balance
+            : IERC20(_data.forwardedAmount.token).balanceOf(address(this));
 
-            // Use any leftover amount of tokens paid in remaining to mint.
-            if (_terminalTokenInThisContract != 0) {
-                _mint(_data, _terminalTokenInThisContract, _weight);
-            }
+        // Use any leftover amount of tokens paid in remaining to mint.
+        if (_terminalTokenInThisContract != 0) {
+            _mint(_data, _terminalTokenInThisContract, _weight);
         }
     }
 
