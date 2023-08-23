@@ -262,7 +262,12 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             assertEq(_allocationsReturned.length, 1);
             assertEq(address(_allocationsReturned[0].delegate), address(delegate));
             assertEq(_allocationsReturned[0].amount, 1 ether);
-            assertEq(_allocationsReturned[0].metadata, abi.encode(_tokenCount, _twapAmountOut, projectToken));
+
+            assertEq(
+                _allocationsReturned[0].metadata, 
+                abi.encode(false, _twapAmountOut, payParams.weight, address(weth), address(projectToken) < address(weth)),
+                "wrong metadata"
+            );
 
             assertEq(_weightReturned, 0);
         }
@@ -495,113 +500,6 @@ contract TestJBGenericBuybackDelegate_Units is Test {
     }
 
     /**
-     * @notice Test didPay when eth leftover from swap
-     */
-    function test_didPay_keepTrackOfETHToSweep() public {
-        uint256 _tokenCount = 10;
-        uint256 _twapQuote = 11;
-
-        // The metadata coming from payParams(..)
-        didPayData.dataSourceMetadata = abi.encode(_tokenCount, _twapQuote, projectToken);
-
-        // Add some leftover
-        vm.deal(address(delegate), 10 ether);
-
-        // Add a previous leftover, to test the incremental accounting (ie 5 out of 10 were there)
-        stdstore.target(address(delegate)).sig("totalSweepBalance(address)").with_key(JBTokens.ETH).checked_write(
-            5 ether
-        );
-
-        // Out of these 5, 1 was for payer
-        stdstore.target(address(delegate)).sig("sweepBalanceOf(address,address)").with_key(didPayData.payer).with_key(
-            JBTokens.ETH
-        ).checked_write(1 ether);
-
-        // mock call to pass the authorization check
-        vm.mockCall(
-            address(directory),
-            abi.encodeCall(directory.isTerminalOf, (didPayData.projectId, IJBPaymentTerminal(address(jbxTerminal)))),
-            abi.encode(true)
-        );
-        vm.expectCall(
-            address(directory),
-            abi.encodeCall(directory.isTerminalOf, (didPayData.projectId, IJBPaymentTerminal(address(jbxTerminal))))
-        );
-
-        // mock the swap call
-        vm.mockCall(
-            address(pool),
-            abi.encodeCall(
-                pool.swap,
-                (
-                    address(delegate),
-                    address(weth) < address(projectToken),
-                    int256(1 ether),
-                    address(projectToken) < address(weth) ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
-                    abi.encode(projectId, _twapQuote, weth, projectToken)
-                )
-            ),
-            abi.encode(-int256(_twapQuote), -int256(_twapQuote))
-        );
-        vm.expectCall(
-            address(pool),
-            abi.encodeCall(
-                pool.swap,
-                (
-                    address(delegate),
-                    address(weth) < address(projectToken),
-                    int256(1 ether),
-                    address(projectToken) < address(weth) ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
-                    abi.encode(projectId, _twapQuote, weth, projectToken)
-                )
-            )
-        );
-
-        // mock the burn call
-        vm.mockCall(
-            address(controller),
-            abi.encodeCall(controller.burnTokensOf, (address(delegate), didPayData.projectId, _twapQuote, "", true)),
-            abi.encode(true)
-        );
-        vm.expectCall(
-            address(controller),
-            abi.encodeCall(controller.burnTokensOf, (address(delegate), didPayData.projectId, _twapQuote, "", true))
-        );
-
-        // mock the minting call
-        vm.mockCall(
-            address(controller),
-            abi.encodeCall(
-                controller.mintTokensOf,
-                (didPayData.projectId, _twapQuote, address(dude), didPayData.memo, didPayData.preferClaimedTokens, true)
-            ),
-            abi.encode(true)
-        );
-        vm.expectCall(
-            address(controller),
-            abi.encodeCall(
-                controller.mintTokensOf,
-                (didPayData.projectId, _twapQuote, address(dude), didPayData.memo, didPayData.preferClaimedTokens, true)
-            )
-        );
-
-        // check: correct event?
-        vm.expectEmit(true, true, true, true);
-        emit BuybackDelegate_PendingSweep(dude, JBTokens.ETH, 5 ether);
-
-        vm.prank(address(jbxTerminal));
-        delegate.didPay(didPayData);
-
-        // Check: correct overall sweep balance?
-        // TODO commented out for compile purposes since totalSweepBalance is no longer used
-        //assertEq(delegate.totalSweepBalance(JBTokens.ETH), 10 ether);
-
-        // Check: correct dude sweep balance (1 previous plus 5 from now)?
-        // TODO commented out for compile purposes since totalSweepBalance is no longer used
-        //assertEq(delegate.sweepBalanceOf(dude, JBTokens.ETH), 6 ether);
-    }
-
-    /**
      * @notice Test didPay with swap reverting, should then mint
      */
 
@@ -823,82 +721,90 @@ contract TestJBGenericBuybackDelegate_Units is Test {
      * @dev    2 branches: project token is 0 or 1 in the pool slot0
      */
     function test_uniswapCallback() public {
-        int256 _delta0 = -1 ether;
+        int256 _delta0 = -2 ether;
         int256 _delta1 = 1 ether;
-        uint256 _minReceived = 25;
+
+        IWETH9 _terminalToken  = weth;
+        IERC20 _projectToken = projectToken;
 
         /**
-         * First branch
+         * First branch: terminal token = ETH, project token = random IERC20
          */
         delegate = new ForTest_JBGenericBuybackDelegate({
-            _weth: weth,
+            _weth: _terminalToken,
             _factory: _uniswapFactory,
             _directory: directory,
             _controller: controller,
             _id: bytes4(hex'69')
         });
 
-        delegate.ForTest_initPool(pool, projectId, secondsAgo, twapDelta, address(projectToken), address(weth));
+        // Init with weth (as weth is stored in the pool of mapping)
+        delegate.ForTest_initPool(pool, projectId, secondsAgo, twapDelta, address(_projectToken), address(_terminalToken));
 
         // If project is token0, then received is delta0 (the negative value)
-        (_delta0, _delta1) = address(projectToken) < address(weth) ? (_delta0, _delta1) : (_delta1, _delta0);
+        (_delta0, _delta1) = address(_projectToken) < address(_terminalToken) ? (_delta0, _delta1) : (_delta1, _delta0);
 
-        // mock and expect weth calls, this should transfer from delegate to pool (positive delta in the callback)
-        vm.mockCall(address(weth), abi.encodeCall(weth.deposit, ()), "");
-        vm.expectCall(address(weth), abi.encodeCall(weth.deposit, ()));
+        // mock and expect _terminalToken calls, this should transfer from delegate to pool (positive delta in the callback)
+        vm.mockCall(address(_terminalToken), abi.encodeCall(_terminalToken.deposit, ()), "");
+        vm.expectCall(address(_terminalToken), abi.encodeCall(_terminalToken.deposit, ()));
 
         vm.mockCall(
-            address(weth),
+            address(_terminalToken),
             abi.encodeCall(
-                weth.transfer, (address(pool), uint256(address(projectToken) < address(weth) ? _delta1 : _delta0))
+                _terminalToken.transfer, (address(pool), uint256(address(_projectToken) < address(_terminalToken) ? _delta1 : _delta0))
             ),
             abi.encode(true)
         );
         vm.expectCall(
-            address(weth),
+            address(_terminalToken),
             abi.encodeCall(
-                weth.transfer, (address(pool), uint256(address(projectToken) < address(weth) ? _delta1 : _delta0))
+                _terminalToken.transfer, (address(pool), uint256(address(_projectToken) < address(_terminalToken) ? _delta1 : _delta0))
             )
         );
 
+        vm.deal(address(delegate), uint256(address(_projectToken) < address(_terminalToken) ? _delta1 : _delta0));
         vm.prank(address(pool));
         delegate.uniswapV3SwapCallback(
-            _delta0, _delta1, abi.encode(projectId, _minReceived, JBTokens.ETH, projectToken)
+            _delta0, _delta1, abi.encode(projectId, JBTokens.ETH, address(_projectToken) < JBTokens.ETH)
         );
 
         /**
-         * Second branch
+         * Second branch: terminal token = random IERC20, project token = weth (as another random ierc20)
          */
 
-        // Invert both contract addresses, to swap token0 and token1 (this will NOT modify the pool address)
-        (projectToken, weth) = (JBToken(address(weth)), IWETH9(address(projectToken)));
+        // Invert both contract addresses, to swap token0 and token1
+        (_projectToken, _terminalToken) = (JBToken(address(_terminalToken)), IWETH9(address(_projectToken)));
+
+        // If project is token0, then received is delta0 (the negative value)
+        (_delta0, _delta1) = address(_projectToken) < address(_terminalToken) ? (_delta0, _delta1) : (_delta1, _delta0);
 
         delegate = new ForTest_JBGenericBuybackDelegate({
-            _weth: weth,
+            _weth: _terminalToken,
             _factory: _uniswapFactory,
             _directory: directory,
             _controller: controller,
             _id: bytes4(hex'69')
         });
 
-        delegate.ForTest_initPool(pool, projectId, secondsAgo, twapDelta, address(projectToken), address(weth));
+        delegate.ForTest_initPool(pool, projectId, secondsAgo, twapDelta, address(_projectToken), address(_terminalToken));
 
         vm.mockCall(
-            address(weth),
+            address(_terminalToken),
             abi.encodeCall(
-                weth.transfer, (address(pool), uint256(address(projectToken) < address(weth) ? _delta1 : _delta0))
+                _terminalToken.transfer, (address(pool), uint256(address(_projectToken) < address(_terminalToken) ? _delta1 : _delta0))
             ),
             abi.encode(true)
         );
         vm.expectCall(
-            address(weth),
+            address(_terminalToken),
             abi.encodeCall(
-                weth.transfer, (address(pool), uint256(address(projectToken) < address(weth) ? _delta1 : _delta0))
+                _terminalToken.transfer, (address(pool), uint256(address(_projectToken) < address(_terminalToken) ? _delta1 : _delta0))
             )
         );
 
+        vm.deal(address(delegate), uint256(address(_projectToken) < address(_terminalToken) ? _delta1 : _delta0));
         vm.prank(address(pool));
-        delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(projectId, _minReceived, weth, projectToken));
+        delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(projectId, address(_terminalToken), address(_projectToken) < address(_terminalToken)));
     }
 
     /**
@@ -907,26 +813,9 @@ contract TestJBGenericBuybackDelegate_Units is Test {
     function test_uniswapCallback_revertIfWrongCaller() public {
         int256 _delta0 = -1 ether;
         int256 _delta1 = 1 ether;
-        uint256 _minReceived = 25;
 
         vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_Unauthorized.selector));
-        delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(projectId, _minReceived, weth, projectToken));
-    }
-
-    /**
-     * @notice Test uniswapCallback revert if max slippage
-     */
-    function test_uniswapCallback_revertIfMaxSlippage() public {
-        int256 _delta0 = -1 ether;
-        int256 _delta1 = 1 ether;
-        uint256 _minReceived = 25 ether;
-
-        // If project is token0, then received is delta0 (the negative value)
-        (_delta0, _delta1) = address(projectToken) < address(weth) ? (_delta0, _delta1) : (_delta1, _delta0);
-
-        vm.prank(address(pool));
-        vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_MaximumSlippage.selector));
-        delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(projectId, _minReceived, weth, projectToken));
+        delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(projectId, weth, address(projectToken) < address(weth)));
     }
 
     function test_setPoolFor(
@@ -1148,107 +1037,6 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         // Test: set the twap
         vm.prank(owner);
         delegate.setTwapDelta(projectId, _newDelta);
-    }
-
-    /**
-     * @notice Test sweep
-     */
-    function test_sweep_erc20(uint256 _delegateLeftover, uint256 _dudeLeftover) public {
-        _dudeLeftover = bound(_dudeLeftover, 0, _delegateLeftover);
-
-        // Store the delegate leftover
-        stdstore.target(address(delegate)).sig("totalSweepBalance(address)").with_key(address(weth)).checked_write(
-            _delegateLeftover
-        );
-
-        // Store the dude leftover
-        stdstore.target(address(delegate)).sig("sweepBalanceOf(address,address)").with_key(dude).with_key(address(weth))
-            .checked_write(_dudeLeftover);
-
-        if (_dudeLeftover > 0) {
-            vm.mockCall(address(weth), abi.encodeCall(weth.transfer, (dude, _dudeLeftover)), abi.encode(true));
-            vm.expectCall(address(weth), abi.encodeCall(weth.transfer, (dude, _dudeLeftover)));
-        }
-
-        // Test: sweep
-        vm.prank(dude);
-        // TODO commented out for compile purposes since totalSweepBalance is no longer used
-        //delegate.sweep(dude, address(weth));
-
-        // Check: correct overall sweep balance?
-        // TODO commented out for compile purposes since totalSweepBalance is no longer used
-        //assertEq(delegate.totalSweepBalance(address(weth)), _delegateLeftover - _dudeLeftover);
-
-        // Check: correct dude sweep balance
-        // TODO commented out for compile purposes since totalSweepBalance is no longer used
-        //assertEq(delegate.sweepBalanceOf(dude, address(weth)), 0);
-    }
-
-    /**
-     * @notice Test sweep
-     */
-    function test_sweep_eth(uint256 _delegateLeftover, uint256 _dudeLeftover) public {
-        _dudeLeftover = bound(_dudeLeftover, 0, _delegateLeftover);
-
-        // Add the ETH
-        vm.deal(address(delegate), _delegateLeftover);
-
-        // Store the delegate leftover
-        stdstore.target(address(delegate)).sig("totalSweepBalance(address)").with_key(JBTokens.ETH).checked_write(
-            _delegateLeftover
-        );
-
-        // Store the dude leftover
-        stdstore.target(address(delegate)).sig("sweepBalanceOf(address,address)").with_key(dude).with_key(JBTokens.ETH)
-            .checked_write(_dudeLeftover);
-
-        uint256 _balanceBeforeSweep = dude.balance;
-
-        // Test: sweep
-        vm.prank(dude);
-        // TODO commented out for compile purposes since totalSweepBalance is no longer used
-        // delegate.sweep(dude, JBTokens.ETH);
-
-        uint256 _balanceAfterSweep = dude.balance;
-        uint256 _sweptAmount = _balanceAfterSweep - _balanceBeforeSweep;
-
-        // Check: correct overall sweep balance?
-        // TODO commented out for compile purposes since totalSweepBalance is no longer used
-        //assertEq(delegate.totalSweepBalance(JBTokens.ETH), _delegateLeftover - _dudeLeftover);
-
-        // Check: correct dude sweep balance
-        // TODO commented out for compile purposes since totalSweepBalance is no longer used
-        //assertEq(delegate.sweepBalanceOf(dude, JBTokens.ETH), 0);
-
-        // Check: correct swept balance
-        // TODO commented out for compile purposes since totalSweepBalance is no longer used
-        //assertEq(_sweptAmount, _dudeLeftover);
-    }
-
-    /**
-     * @notice Test sweep revert if transfer fails
-     */
-    function test_sweep_revertIfTransferFails() public {
-        // Store the delegate total leftover
-        stdstore.target(address(delegate)).sig("totalSweepBalance(address)").with_key(JBTokens.ETH).checked_write(
-            1 ether
-        );
-
-        // Store the dude leftover
-        stdstore.target(address(delegate)).sig("sweepBalanceOf(address,address)").with_key(dude).with_key(JBTokens.ETH)
-            .checked_write(1 ether);
-
-        // Deal enough ETH
-        vm.deal(address(delegate), 1 ether);
-
-        // no fallback -> will revert
-        vm.etch(dude, "6969");
-
-        // Check: revert?
-        vm.prank(dude);
-        // TODO commented out for compile purposes since totalSweepBalance is no longer used
-        // vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_TransferFailed.selector));
-        //delegate.sweep(dude, JBTokens.ETH);
     }
 }
 
