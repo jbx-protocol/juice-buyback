@@ -187,7 +187,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             assertEq(address(_allocationsReturned[0].delegate), address(delegate), "wrong delegate address returned");
             assertEq(_allocationsReturned[0].amount, _amountIn, "worng amount in returned");
             assertEq(
-                _allocationsReturned[0].metadata, 
+                _allocationsReturned[0].metadata,
                 abi.encode(true, _swapOutCount, payParams.weight, address(weth), address(projectToken) < address(weth)),
                 "wrong metadata"
             );
@@ -264,8 +264,10 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             assertEq(_allocationsReturned[0].amount, 1 ether);
 
             assertEq(
-                _allocationsReturned[0].metadata, 
-                abi.encode(false, _twapAmountOut, payParams.weight, address(weth), address(projectToken) < address(weth)),
+                _allocationsReturned[0].metadata,
+                abi.encode(
+                    false, _twapAmountOut, payParams.weight, address(weth), address(projectToken) < address(weth)
+                ),
                 "wrong metadata"
             );
 
@@ -724,7 +726,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         int256 _delta0 = -2 ether;
         int256 _delta1 = 1 ether;
 
-        IWETH9 _terminalToken  = weth;
+        IWETH9 _terminalToken = weth;
         IERC20 _projectToken = projectToken;
 
         /**
@@ -739,7 +741,9 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         });
 
         // Init with weth (as weth is stored in the pool of mapping)
-        delegate.ForTest_initPool(pool, projectId, secondsAgo, twapDelta, address(_projectToken), address(_terminalToken));
+        delegate.ForTest_initPool(
+            pool, projectId, secondsAgo, twapDelta, address(_projectToken), address(_terminalToken)
+        );
 
         // If project is token0, then received is delta0 (the negative value)
         (_delta0, _delta1) = address(_projectToken) < address(_terminalToken) ? (_delta0, _delta1) : (_delta1, _delta0);
@@ -751,14 +755,16 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         vm.mockCall(
             address(_terminalToken),
             abi.encodeCall(
-                _terminalToken.transfer, (address(pool), uint256(address(_projectToken) < address(_terminalToken) ? _delta1 : _delta0))
+                _terminalToken.transfer,
+                (address(pool), uint256(address(_projectToken) < address(_terminalToken) ? _delta1 : _delta0))
             ),
             abi.encode(true)
         );
         vm.expectCall(
             address(_terminalToken),
             abi.encodeCall(
-                _terminalToken.transfer, (address(pool), uint256(address(_projectToken) < address(_terminalToken) ? _delta1 : _delta0))
+                _terminalToken.transfer,
+                (address(pool), uint256(address(_projectToken) < address(_terminalToken) ? _delta1 : _delta0))
             )
         );
 
@@ -786,25 +792,33 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             _id: bytes4(hex'69')
         });
 
-        delegate.ForTest_initPool(pool, projectId, secondsAgo, twapDelta, address(_projectToken), address(_terminalToken));
+        delegate.ForTest_initPool(
+            pool, projectId, secondsAgo, twapDelta, address(_projectToken), address(_terminalToken)
+        );
 
         vm.mockCall(
             address(_terminalToken),
             abi.encodeCall(
-                _terminalToken.transfer, (address(pool), uint256(address(_projectToken) < address(_terminalToken) ? _delta1 : _delta0))
+                _terminalToken.transfer,
+                (address(pool), uint256(address(_projectToken) < address(_terminalToken) ? _delta1 : _delta0))
             ),
             abi.encode(true)
         );
         vm.expectCall(
             address(_terminalToken),
             abi.encodeCall(
-                _terminalToken.transfer, (address(pool), uint256(address(_projectToken) < address(_terminalToken) ? _delta1 : _delta0))
+                _terminalToken.transfer,
+                (address(pool), uint256(address(_projectToken) < address(_terminalToken) ? _delta1 : _delta0))
             )
         );
 
         vm.deal(address(delegate), uint256(address(_projectToken) < address(_terminalToken) ? _delta1 : _delta0));
         vm.prank(address(pool));
-        delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(projectId, address(_terminalToken), address(_projectToken) < address(_terminalToken)));
+        delegate.uniswapV3SwapCallback(
+            _delta0,
+            _delta1,
+            abi.encode(projectId, address(_terminalToken), address(_projectToken) < address(_terminalToken))
+        );
     }
 
     /**
@@ -815,7 +829,9 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         int256 _delta1 = 1 ether;
 
         vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_Unauthorized.selector));
-        delegate.uniswapV3SwapCallback(_delta0, _delta1, abi.encode(projectId, weth, address(projectToken) < address(weth)));
+        delegate.uniswapV3SwapCallback(
+            _delta0, _delta1, abi.encode(projectId, weth, address(projectToken) < address(weth))
+        );
     }
 
     function test_setPoolFor(
@@ -1045,13 +1061,12 @@ contract ForTest_JBGenericBuybackDelegate is JBGenericBuybackDelegate {
         JBGenericBuybackDelegate(_weth, _factory, _directory, _controller, _id)
     {}
 
-    function ForTest_getQuote(
-        uint256 _projectId,
-        address _projectToken,
-        uint256 _amountIn,
-        address _terminalToken
-    ) external view returns (uint256 _amountOut) {
-        return _getQuote(_projectId,_projectToken, _amountIn, _terminalToken);
+    function ForTest_getQuote(uint256 _projectId, address _projectToken, uint256 _amountIn, address _terminalToken)
+        external
+        view
+        returns (uint256 _amountOut)
+    {
+        return _getQuote(_projectId, _projectToken, _amountIn, _terminalToken);
     }
 
     function ForTest_initPool(
