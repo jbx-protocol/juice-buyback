@@ -226,11 +226,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         external
         pure
         override
-        returns (
-            uint256 reclaimAmount,
-            string memory memo,
-            JBRedemptionDelegateAllocation3_1_1[] memory delegateAllocations
-        )
+        returns (uint256, string memory, JBRedemptionDelegateAllocation3_1_1[] memory delegateAllocations)
     {
         return (_data.reclaimAmount.value, _data.memo, delegateAllocations);
     }
