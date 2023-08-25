@@ -101,7 +101,7 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
     uint256 amountOutForOneEth;
 
     function setUp() public {
-        vm.createSelectFork("https://rpc.ankr.com/eth");
+        vm.createSelectFork("https://rpc.ankr.com/eth",17962427);
 
         // Collect the mainnet deployment addresses
         jbDirectory = IJBDirectory(
