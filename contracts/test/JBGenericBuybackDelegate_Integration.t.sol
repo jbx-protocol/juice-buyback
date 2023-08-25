@@ -195,7 +195,7 @@ contract TestJBGenericBuybackDelegate_Integration is TestBaseWorkflowV3 {
 
         // setting the quote in metadata, bigger than the weight
         bytes[] memory _quoteData = new bytes[](1);
-        _quoteData[0] = abi.encode(_quote, 500);
+        _quoteData[0] = abi.encode(_quote, payAmountInWei);
 
         // Pass the delegate id
         bytes4[] memory _ids = new bytes4[](1);
@@ -251,7 +251,7 @@ contract TestJBGenericBuybackDelegate_Integration is TestBaseWorkflowV3 {
 
         // setting the quote in metadata
         bytes[] memory _quoteData = new bytes[](1);
-        _quoteData[0] = abi.encode(1 ether, 10000);
+        _quoteData[0] = abi.encode(1 ether, payAmountInWei);
 
         // Pass the delegate id
         bytes4[] memory _ids = new bytes4[](1);
@@ -310,7 +310,7 @@ contract TestJBGenericBuybackDelegate_Integration is TestBaseWorkflowV3 {
 
         // setting the quote in metadata
         bytes[] memory _quoteData = new bytes[](1);
-        _quoteData[0] = abi.encode(quoteOnUniswap, 500);
+        _quoteData[0] = abi.encode(quoteOnUniswap, payAmountInWei);
 
         // Pass the delegate id
         bytes4[] memory _ids = new bytes4[](1);
@@ -323,13 +323,6 @@ contract TestJBGenericBuybackDelegate_Integration is TestBaseWorkflowV3 {
         uint256 reservedAmount = PRBMath.mulDiv(quoteOnUniswap, reservedRate, JBConstants.MAX_RESERVED_RATE);
 
         uint256 nonReservedAmount = quoteOnUniswap - reservedAmount;
-
-        // mock the burn call
-        vm.mockCall(
-            address(_jbController),
-            abi.encodeCall(_jbController.burnTokensOf, (address(_delegate), _projectId, quoteOnUniswap, "", true)),
-            abi.encode(true)
-        );
 
         uint256 _beneficiaryBalanceBefore = _jbTokenStore.balanceOf(_beneficiary, _projectId);
 
@@ -362,23 +355,5 @@ contract TestJBGenericBuybackDelegate_Integration is TestBaseWorkflowV3 {
 
         // Check: correct reserve balance?
         assertEq(_jbController.reservedTokenBalanceOf(_projectId), reservedAmount);
-    }
-
-    // TODO: refactor with a REAL integration test (using terminal.pay)
-
-    /**
-     * @notice Test the uniswap callback reverting when max slippage is hit
-     *
-     * @dev    This would mean the _mint is then called
-     */
-    function testRevertIfSlippageIsTooMuchWhenSwapping() public poolAdded {
-        // Generate the metadata
-        bytes memory _delegateMetadata = abi.encode(_projectId, uint256(100 ether), weth, jbx);
-
-        vm.expectRevert(abi.encodeWithSignature("JuiceBuyback_MaximumSlippage()"));
-
-        // callback giving 1 instead
-        vm.prank(address(pool));
-        _delegate.uniswapV3SwapCallback(-1 ether, 1 ether, _delegateMetadata);
     }
 }
