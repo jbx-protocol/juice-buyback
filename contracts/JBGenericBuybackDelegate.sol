@@ -169,7 +169,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         // Keep a reference to the project's token.
         address _projectToken = projectTokenOf[_data.projectId];
 
-        // Keep a reference to the token being used by the terminal that is calling this delegate.
+        // Keep a reference to the token being used by the terminal that is calling this delegate. Use weth is ETH.
         address _terminalToken = _data.amount.token == JBTokens.ETH ? address(WETH) : _data.amount.token;
 
         // If a minimum amount of tokens to swap for wasn't specified, resolve a value as good as possible using a TWAP.
@@ -190,7 +190,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             delegateAllocations[0] = JBPayDelegateAllocation3_1_1({
                 delegate: IJBPayDelegate3_1_1(this),
                 amount: _amountToSwapWith,
-                metadata: abi.encode(_quoteExists, _minimumSwapAmountOut, _data.weight, _terminalToken, _projectTokenIs0)
+                metadata: abi.encode(_quoteExists, _minimumSwapAmountOut, _data.weight, _projectTokenIs0)
             });
 
             // Mint the amount not specified for swaping.
@@ -259,12 +259,11 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             bool _quoteExists,
             uint256 _minimumSwapAmountOut,
             uint256 _weight,
-            address _terminalToken,
             bool _projectTokenIs0
-        ) = abi.decode(_data.dataSourceMetadata, (bool, uint256, uint256, address, bool));
+        ) = abi.decode(_data.dataSourceMetadata, (bool, uint256, uint256, bool));
 
         // Get a reference to the amount of tokens that was swapped for.
-        uint256 _exactSwapAmountOut = _swap(_data, _data.forwardedAmount.value, _terminalToken, _projectTokenIs0);
+        uint256 _exactSwapAmountOut = _swap(_data, _projectTokenIs0);
 
         // Make sure the slippage is tolerable if passed in via an explicit quote.
         if (_quoteExists && _exactSwapAmountOut < _minimumSwapAmountOut) revert JuiceBuyback_MaximumSlippage();
@@ -298,7 +297,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         // Keep a reference to the amount of tokens that should be sent to fulfill the swap (the positive delta)
         uint256 _amountToSendToPool = _amount0Delta < 0 ? uint256(_amount1Delta) : uint256(_amount0Delta);
 
-        // Wrap ETH into WETH if relevant.
+        // Wrap ETH into WETH if relevant (do not rely on ETH delegate balance to support pure WETH terminals)
         if (_terminalToken == JBTokens.ETH) WETH.deposit{value: _amountToSendToPool}();
 
         // Transfer the token to the pool.
@@ -463,7 +462,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         _amountOut = OracleLibrary.getQuoteAtTick({
             tick: arithmeticMeanTick,
             baseAmount: uint128(_amountIn),
-            baseToken: _terminalToken == JBTokens.ETH ? address(WETH) : _terminalToken,
+            baseToken: _terminalToken,
             quoteToken: address(_projectToken)
         });
 
@@ -473,18 +472,20 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
 
     /// @notice Swap the terminal token to receive the project token.
     /// @param _data The didPayData passed by the terminal.
-    /// @param _amountToSwapWith The amount of tokens that are being used with which to make the swap.
-    /// @param _terminalToken The token paid in being used to swap.
     /// @param _projectTokenIs0 A flag indicating if the pool will reference the project token as the first in the pair.
     /// @return _amountReceived The amount of tokens received from the swap.
     function _swap(
         JBDidPayData3_1_1 calldata _data,
-        uint256 _amountToSwapWith,
-        address _terminalToken,
         bool _projectTokenIs0
     ) internal returns (uint256 _amountReceived) {
+        // The amount of tokens that are being used with which to make the swap
+        uint256 _amountToSwapWith = _data.forwardedAmount.value;
+
+        // Get the terminal token, using WETH if the token paid in is ETH.
+        address _terminalTokenWithWETH = _data.forwardedAmount.token == JBTokens.ETH ? address(WETH) : _data.forwardedAmount.token;
+
         // Get a reference to the pool that'll be used to make the swap.
-        IUniswapV3Pool _pool = poolOf[_data.projectId][_terminalToken];
+        IUniswapV3Pool _pool = poolOf[_data.projectId][_terminalTokenWithWETH];
 
         // Try swapping.
         try _pool.swap({
@@ -492,7 +493,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             zeroForOne: !_projectTokenIs0,
             amountSpecified: int256(_amountToSwapWith),
             sqrtPriceLimitX96: _projectTokenIs0 ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
-            data: abi.encode(_data.projectId, _terminalToken)
+            data: abi.encode(_data.projectId, _data.forwardedAmount.token)
         }) returns (int256 amount0, int256 amount1) {
             // If the swap succeded, take note of the amount of tokens received. This will return as negative since it is an exact input.
             _amountReceived = uint256(-(_projectTokenIs0 ? amount0 : amount1));

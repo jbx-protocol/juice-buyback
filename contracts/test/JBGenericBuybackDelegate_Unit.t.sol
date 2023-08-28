@@ -190,7 +190,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             assertEq(_allocationsReturned[0].amount, _amountIn, "worng amount in returned");
             assertEq(
                 _allocationsReturned[0].metadata,
-                abi.encode(true, _swapOutCount, payParams.weight, address(weth), address(projectToken) < address(weth)),
+                abi.encode(true, _swapOutCount, payParams.weight, address(projectToken) < address(weth)),
                 "wrong metadata"
             );
 
@@ -268,7 +268,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             assertEq(
                 _allocationsReturned[0].metadata,
                 abi.encode(
-                    false, _twapAmountOut, payParams.weight, address(weth), address(projectToken) < address(weth)
+                    false, _twapAmountOut, payParams.weight, address(projectToken) < address(weth)
                 ),
                 "wrong metadata"
             );
@@ -368,7 +368,6 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             true, // use quote
             _tokenCount,
             _twapQuote,
-            address(weth),
             address(projectToken) < address(weth)
         );
 
@@ -383,7 +382,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
                     address(weth) < address(projectToken),
                     int256(1 ether),
                     address(projectToken) < address(weth) ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
-                    abi.encode(projectId, weth)
+                    abi.encode(projectId, JBTokens.ETH)
                 )
             ),
             abi.encode(-int256(_twapQuote), -int256(_twapQuote))
@@ -397,7 +396,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
                     address(weth) < address(projectToken),
                     int256(1 ether),
                     address(projectToken) < address(weth) ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
-                    abi.encode(projectId, weth)
+                    abi.encode(projectId, JBTokens.ETH)
                 )
             )
         );
@@ -467,7 +466,6 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             true, // use quote
             _tokenCount,
             _twapQuote,
-            address(randomTerminalToken),
             address(projectToken) < address(weth)
         );
 
@@ -568,7 +566,6 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             true, // use quote
             _tokenCount,
             1 ether, // weight - unused
-            address(weth),
             address(projectToken) < address(weth)
         );
 
@@ -632,7 +629,6 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             false, // use quote
             _tokenCount,
             _weight,
-            address(randomTerminalToken),
             address(otherRandomProjectToken) < address(randomTerminalToken)
         );
 
@@ -747,7 +743,6 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             false, // use quote
             _tokenCount,
             _weight,
-            address(weth),
             address(projectToken) < address(weth)
         );
 
@@ -904,7 +899,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         vm.deal(address(delegate), uint256(address(_projectToken) < address(_terminalToken) ? _delta1 : _delta0));
         vm.prank(address(pool));
         delegate.uniswapV3SwapCallback(
-            _delta0, _delta1, abi.encode(projectId, JBTokens.ETH, address(_projectToken) < JBTokens.ETH)
+            _delta0, _delta1, abi.encode(projectId, JBTokens.ETH)
         );
 
         /**
@@ -950,7 +945,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         delegate.uniswapV3SwapCallback(
             _delta0,
             _delta1,
-            abi.encode(projectId, address(_terminalToken), address(_projectToken) < address(_terminalToken))
+            abi.encode(projectId, address(_terminalToken))
         );
     }
 

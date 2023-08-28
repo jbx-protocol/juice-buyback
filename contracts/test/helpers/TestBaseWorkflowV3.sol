@@ -32,6 +32,8 @@ import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPaymentTerminal
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBToken.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBConstants.sol";
 
+import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBSingleTokenPaymentTerminalStore.sol";
+
 import "./AccessJBLib.sol";
 
 import "@paulrberg/contracts/math/PRBMath.sol";
@@ -45,8 +47,8 @@ contract TestBaseWorkflowV3 is Test {
     //*********************************************************************//
 
     // Multisig address used for testing.
-    address internal _multisig = address(123);
-    address internal _beneficiary = address(69420);
+    address internal _multisig = makeAddr('mooltichig');
+    address internal _beneficiary = makeAddr('benefishary');
 
     JBOperatorStore internal _jbOperatorStore;
     JBProjects internal _jbProjects;

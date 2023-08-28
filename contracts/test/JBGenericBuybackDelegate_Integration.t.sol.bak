@@ -330,7 +330,7 @@ contract TestJBGenericBuybackDelegate_Integration is TestBaseWorkflowV3 {
         vm.mockCall(
             address(pool),
             abi.encodeWithSelector(IUniswapV3PoolActions.swap.selector),
-            abi.encode(-int256(quoteOnUniswap), 0)
+            abi.encode(-int256(quoteOnUniswap), payAmountInWei)
         );
 
         // Check: swap triggered?
