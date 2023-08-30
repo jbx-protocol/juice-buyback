@@ -47,6 +47,7 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
     
     uint256 constant amountPaid = 1 ether;
 
+
     // Contracts needed
     IJBFundingCycleStore jbFundingCycleStore;
     IJBDirectory jbDirectory;
@@ -72,6 +73,8 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
     // Target contract
     JBGenericBuybackDelegate delegate;
     
+    address beneficiary = makeAddr('benefichiary');
+
     // sqrtPriceX96 = sqrt(1*10**18 << 192 / 69420*10**18) = 300702666377442711115399168 (?)
     uint160 sqrtPriceX96 = 300702666377442711115399168;
 
@@ -136,9 +139,10 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         pool = IUniswapV3Pool(factory.createPool(address(weth), address(jbx), fee));
         pool.initialize(sqrtPriceX96); // 1 eth <=> 69420 jbx
 
-        vm.startPrank(address(123), address(123));
-        deal(address(weth), address(123), 10000000 ether);
-        deal(address(jbx), address(123), 10000000 ether);
+        address LP = makeAddr('LP');
+        vm.startPrank(LP, LP);
+        deal(address(weth), LP, 10000000 ether);
+        deal(address(jbx), LP, 10000000 ether);
 
         // create a full range position
         address POSITION_MANAGER = 0xC36442b4a4522E871399CD717aBDD847Ab11FE88;
@@ -157,7 +161,7 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
             amount1Desired: 10000000 ether,
             amount0Min: 0,
             amount1Min: 0,
-            recipient: address(123),
+            recipient: LP,
             deadline: block.timestamp
         });
 
@@ -219,7 +223,7 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         // This shouldn't mint via the delegate
         vm.expectEmit(true, true, true, true);
         emit Mint({
-            holder: address(123),
+            holder: beneficiary,
             projectId: 1,
             amount: _weight / 2, // Half is reserved
             tokensWereClaimed: true,
@@ -227,14 +231,14 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
             caller: address(jbController)
         });
 
-        uint256 _balBeforePayment = jbx.balanceOf(address(123));
+        uint256 _balBeforePayment = jbx.balanceOf(beneficiary);
 
         // Pay the project
         jbEthPaymentTerminal.pay{value: amountPaid}(
             1,
             amountPaid,
             address(0),
-            address(123),
+            beneficiary,
             /* _minReturnedTokens */
             0,
             /* _preferClaimedTokens */
@@ -245,7 +249,7 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
             _delegateMetadata
         );
 
-        uint256 _balAfterPayment = jbx.balanceOf(address(123));
+        uint256 _balAfterPayment = jbx.balanceOf(beneficiary);
         uint256 _diff = _balAfterPayment - _balBeforePayment;
 
         // Check: token received by the beneficiary
@@ -278,7 +282,7 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         // Generate the metadata
         bytes memory _delegateMetadata = metadataHelper.createMetadata(_ids, _data);
 
-        uint256 _balBeforePayment = jbx.balanceOf(address(123));
+        uint256 _balBeforePayment = jbx.balanceOf(beneficiary);
 
         vm.expectEmit(true, true, true, true);
         emit BuybackDelegate_Swap(1, amountPaid, amountOutQuoted);
@@ -288,7 +292,7 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
             1,
             amountPaid,
             address(0),
-            address(123),
+            beneficiary,
             /* _minReturnedTokens */
             0,
             /* _preferClaimedTokens */
@@ -300,7 +304,7 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         );
 
         // Check: token received by the beneficiary
-        assertEq(jbx.balanceOf(address(123)) - _balBeforePayment, amountOutQuoted / 2);
+        assertEq(jbx.balanceOf(beneficiary) - _balBeforePayment, amountOutQuoted / 2);
 
         // Check: token added to the reserve - 1 wei sensitivity for rounding errors
         assertApproxEqAbs(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore + amountOutQuoted / 2, 1);
@@ -331,7 +335,7 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
             1,
             amountPaid,
             address(0),
-            address(123),
+            beneficiary,
             /* _minReturnedTokens */
             0,
             /* _preferClaimedTokens */
@@ -342,7 +346,7 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
             _delegateMetadata
         );
 
-        uint256 _balanceBeneficiary = jbx.balanceOf(address(123));
+        uint256 _balanceBeneficiary = jbx.balanceOf(beneficiary);
 
         uint256 _reserveBalance = jbController.reservedTokenBalanceOf(1);
 
@@ -364,7 +368,7 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
             1,
             amountPaid,
             address(0),
-            address(123),
+            beneficiary,
             /* _minReturnedTokens */
             0,
             /* _preferClaimedTokens */
@@ -376,7 +380,7 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         );
 
         // Check: token received by the beneficiary
-        assertEq(jbx.balanceOf(address(123)), _balanceBeneficiary + amountOutQuoted / 2);
+        assertEq(jbx.balanceOf(beneficiary), _balanceBeneficiary + amountOutQuoted / 2);
 
         // Check: token added to the reserve - 1 wei sensitivity for rounding errors
         assertApproxEqAbs(jbController.reservedTokenBalanceOf(1), _reserveBalance + amountOutQuoted / 2, 1);
@@ -411,14 +415,14 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         vm.expectEmit(true, true, true, true);
         emit BuybackDelegate_Swap(1, _amountIn, _quote);
 
-        uint256 _balBeforePayment = jbx.balanceOf(address(123));
+        uint256 _balBeforePayment = jbx.balanceOf(beneficiary);
 
         // Pay the project
         jbEthPaymentTerminal.pay{value: _amountIn}(
             1,
             _amountIn,
             address(0),
-            address(123),
+            beneficiary,
             /* _minReturnedTokens */
             0,
             /* _preferClaimedTokens */
@@ -429,7 +433,7 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
             _delegateMetadata
         );
 
-        uint256 _balAfterPayment = jbx.balanceOf(address(123));
+        uint256 _balAfterPayment = jbx.balanceOf(beneficiary);
         uint256 _diff = _balAfterPayment - _balBeforePayment;
 
         // Check: token received by the beneficiary
@@ -461,7 +465,7 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         uint256 _quote = getAmountOut(pool, _amountIn, address(weth));
 
         // for checking balance difference after payment
-        uint256 _balanceBeforePayment = jbx.balanceOf(address(123));
+        uint256 _balanceBeforePayment = jbx.balanceOf(beneficiary);
 
         // to check if the swap failed and mint happened
         uint256 _terminalBalanceBeforePayment = jbTerminalStore.balanceOf(terminal, 1);
@@ -471,7 +475,7 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
             1,
             _amountIn,
             address(0),
-            address(123),
+            beneficiary,
             /* _minReturnedTokens */
             0,
             /* _preferClaimedTokens */
@@ -482,7 +486,7 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
             new bytes(0)
         );
 
-        uint256 _balanceAfterPayment = jbx.balanceOf(address(123));
+        uint256 _balanceAfterPayment = jbx.balanceOf(beneficiary);
         uint256 _tokenReceived = _balanceAfterPayment - _balanceBeforePayment;
 
         uint256 _tokenCount = mulDiv18(_amountIn, _weight);
@@ -511,14 +515,14 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         // Reconfigure with a weight of amountOutQuoted + 1
         _reconfigure(1, address(delegate), amountOutQuoted + 1, 0);
 
-        uint256 _balBeforePayment = jbx.balanceOf(address(123));
+        uint256 _balBeforePayment = jbx.balanceOf(beneficiary);
 
         // Pay the project
         jbEthPaymentTerminal.pay{value: _amountIn}(
             1,
             _amountIn,
             address(0),
-            address(123),
+            beneficiary,
             /* _minReturnedTokens */
             0,
             /* _preferClaimedTokens */
@@ -531,7 +535,7 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
 
         uint256 expectedTokenCount = PRBMath.mulDiv(_amountIn, amountOutQuoted + 1, 10 ** 18);
 
-        uint256 _balAfterPayment = jbx.balanceOf(address(123));
+        uint256 _balAfterPayment = jbx.balanceOf(beneficiary);
         uint256 _diff = _balAfterPayment - _balBeforePayment;
 
         // Check: token received by the beneficiary
@@ -571,7 +575,7 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
             1,
             1 ether,
             address(0),
-            address(123),
+            beneficiary,
             /* _minReturnedTokens */
             0,
             /* _preferClaimedTokens */
@@ -581,6 +585,58 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
             /* _delegateMetadata */
             _delegateMetadata
         );
+    }
+
+    function test_mintWithExtraFunds(uint256 _amountIn, uint256 _amountInExtra) public {
+        _amountIn = bound(_amountIn, 100, 10 ether);
+        _amountInExtra = bound(_amountInExtra, 100, 10 ether);
+        
+        // Refresh the quote
+        amountOutQuoted = getAmountOut(pool, _amountIn, address(weth));
+
+        // Reconfigure with a weight smaller than the quote
+        uint256 _weight = amountOutQuoted * 10**18 / _amountIn - 1;
+        _reconfigure(1, address(delegate), _weight, 5000);
+
+        uint256 _reservedBalanceBefore = jbController.reservedTokenBalanceOf(1);
+
+        // Build the metadata using the quote at that block
+        bytes[] memory _data = new bytes[](1);
+        _data[0] = abi.encode(amountOutQuoted, _amountIn);
+
+        // Pass the delegate id
+        bytes4[] memory _ids = new bytes4[](1);
+        _ids[0] = bytes4(hex"69");
+
+        // Generate the metadata
+        bytes memory _delegateMetadata = metadataHelper.createMetadata(_ids, _data);
+
+        uint256 _balBeforePayment = jbx.balanceOf(beneficiary);
+
+        vm.expectEmit(true, true, true, true);
+        emit BuybackDelegate_Swap(1, _amountIn, amountOutQuoted);
+
+        // Pay the project
+        jbEthPaymentTerminal.pay{value: _amountIn + _amountInExtra}(
+            1,
+            _amountIn + _amountInExtra,
+            address(0),
+            beneficiary,
+            /* _minReturnedTokens */
+            0,
+            /* _preferClaimedTokens */
+            true,
+            /* _memo */
+            "Take my money!",
+            /* _delegateMetadata */
+            _delegateMetadata
+        );
+
+        // Check: token received by the beneficiary
+        assertApproxEqAbs(jbx.balanceOf(beneficiary) - _balBeforePayment, amountOutQuoted / 2 + mulDiv18(_amountInExtra, _weight) / 2, 10);
+
+        // Check: token added to the reserve - 1 wei sensitivity for rounding errors
+        assertApproxEqAbs(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore + amountOutQuoted / 2 + mulDiv18(_amountInExtra, _weight) / 2, 10);
     }
 
     function _reconfigure(uint256 _projectId, address _delegate, uint256 _weight, uint256 _reservedRate) internal {
