@@ -445,14 +445,19 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
      * @dev    Should swap for both beneficiary and reserve (by burning/minting)
      */
     function test_swapWhenQuoteNotProvidedInMetadata(uint256 _amountIn) public {
-        _amountIn = bound(_amountIn, 100, 100 ether);
+        _amountIn = bound(_amountIn, 100, 10 ether);
 
-        // Reconfigure with a weight of 1
-        _reconfigure(1, address(delegate), 10, 0);
+        uint256 _weight = 10 ether;
+
+        _reconfigure(1, address(delegate), _weight, 0);
 
         uint256 _reservedBalanceBefore = jbController.reservedTokenBalanceOf(1);
 
-        uint256 _quote = _getTwapQuote(_amountIn, cardinality, twapDelta);
+        // The twap which is going to be used
+        uint256 _twap = _getTwapQuote(_amountIn, cardinality, twapDelta);
+
+        // The actual quote, here for test only
+        uint256 _quote = getAmountOut(pool, _amountIn, address(weth));
 
         // for checking balance difference after payment
         uint256 _balanceBeforePayment = jbx.balanceOf(address(123));
@@ -478,22 +483,23 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
 
         uint256 _balanceAfterPayment = jbx.balanceOf(address(123));
 
+        uint256 _tokenReceived = _balanceAfterPayment - _balanceBeforePayment;
+
         // check if there was any increase in the terminal balance
         uint256 _terminalBalanceAfterPayment = jbTerminalStore.balanceOf(terminal, 1);
         uint256 _terminalBalanceDiff = _terminalBalanceAfterPayment - _terminalBalanceBeforePayment;
 
-        // if terminal balance is 0 that means a swap happened else mint happened
-        if (_terminalBalanceDiff == 0) {
-            assertGt(jbx.balanceOf(address(123)), _quote);
+        uint256 _tokenCount = mulDiv18(_amountIn, _weight);
+
+        if (_twap > _tokenCount) {
+            // Path is picked based on twap, but the token received are the one quoted
+            assertEq(_tokenReceived, _quote, "wrong swap");
         } else {
-            // calculating token count
-            uint256 _balanceDifference = _balanceAfterPayment - _balanceBeforePayment;
-            uint256 _tokenCount = mulDiv18(_amountIn, 10);
-            assertEq(_balanceDifference, _tokenCount);
+            assertEq(_tokenReceived, _tokenCount, "Wrong mint");
         }
 
         // Check: reserve unchanged
-        assertEq(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore);
+        assertEq(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore, "Reserve changed");
     }
 
     /**
