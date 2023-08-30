@@ -1356,12 +1356,14 @@ contract TestJBGenericBuybackDelegate_Units is Test {
 
     function test_supportsInterface(bytes4 _random) public {
         vm.assume(_random != type(IJBGenericBuybackDelegate).interfaceId
+            && _random != type(IJBFundingCycleDataSource3_1_1).interfaceId
             && _random != type(IJBPayDelegate3_1_1).interfaceId
             && _random != type(IERC165).interfaceId
         );
 
         assertTrue(ERC165Checker.supportsInterface(address(delegate), type(IJBFundingCycleDataSource3_1_1).interfaceId));
         assertTrue(ERC165Checker.supportsInterface(address(delegate), type(IJBPayDelegate3_1_1).interfaceId));
+        assertTrue(ERC165Checker.supportsInterface(address(delegate), type(IJBGenericBuybackDelegate).interfaceId));
         assertTrue(ERC165Checker.supportsERC165(address(delegate)));
 
         assertFalse(ERC165Checker.supportsInterface(address(delegate), _random));

@@ -237,7 +237,9 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
 
     function supportsInterface(bytes4 _interfaceId) public view override(ERC165, IERC165) returns (bool) {
         return _interfaceId == type(IJBFundingCycleDataSource3_1_1).interfaceId
-            || _interfaceId == type(IJBPayDelegate3_1_1).interfaceId || super.supportsInterface(_interfaceId);
+            || _interfaceId == type(IJBPayDelegate3_1_1).interfaceId
+            || _interfaceId == type(IJBGenericBuybackDelegate).interfaceId
+            || super.supportsInterface(_interfaceId);
     }
 
     //*********************************************************************//
