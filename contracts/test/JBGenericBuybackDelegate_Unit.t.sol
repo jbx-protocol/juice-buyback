@@ -357,11 +357,10 @@ contract TestJBGenericBuybackDelegate_Units is Test {
     /**
      * @notice Test didPay with token received from swapping, within slippage and no leftover in the delegate
      */
-    function test_didPay_swap_ETH(uint256 _tokenCount, uint256 _twapQuote, uint256 _reservedRate) public {
+    function test_didPay_swap_ETH(uint256 _tokenCount, uint256 _twapQuote) public {
         // Bound to avoid overflow and insure swap quote > mint quote
         _tokenCount = bound(_tokenCount, 2, type(uint256).max - 1);
         _twapQuote = bound(_twapQuote, _tokenCount + 1, type(uint256).max);
-        _reservedRate = bound(_reservedRate, 0, 10000);
 
         // The metadata coming from payParams(..)
         didPayData.dataSourceMetadata = abi.encode(
@@ -449,11 +448,10 @@ contract TestJBGenericBuybackDelegate_Units is Test {
     /**
      * @notice Test didPay with token received from swapping
      */
-    function test_didPay_swap_ERC20(uint256 _tokenCount, uint256 _twapQuote, uint256 _reservedRate) public {
+    function test_didPay_swap_ERC20(uint256 _tokenCount, uint256 _twapQuote ) public {
         // Bound to avoid overflow and insure swap quote > mint quote
         _tokenCount = bound(_tokenCount, 2, type(uint256).max - 1);
         _twapQuote = bound(_twapQuote, _tokenCount + 1, type(uint256).max);
-        _reservedRate = bound(_reservedRate, 0, 10000);
 
         didPayData.amount =
             JBTokenAmount({token: address(randomTerminalToken), value: 1 ether, decimals: 18, currency: 1});

@@ -444,12 +444,13 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
      *
      * @dev    Should swap for both beneficiary and reserve (by burning/minting)
      */
-    function test_swapWhenQuoteNotProvidedInMetadata(uint256 _amountIn) public {
-        _amountIn = bound(_amountIn, 100, 10 ether);
+    function test_swapWhenQuoteNotProvidedInMetadata(uint256 _amountIn, uint256 _reservedRate) public {
+        _amountIn = bound(_amountIn, 10, 10 ether);
+        _reservedRate = bound(_reservedRate, 0, 10000);
 
         uint256 _weight = 10 ether;
 
-        _reconfigure(1, address(delegate), _weight, 0);
+        _reconfigure(1, address(delegate), _weight, _reservedRate);
 
         uint256 _reservedBalanceBefore = jbController.reservedTokenBalanceOf(1);
 
@@ -482,24 +483,19 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         );
 
         uint256 _balanceAfterPayment = jbx.balanceOf(address(123));
-
         uint256 _tokenReceived = _balanceAfterPayment - _balanceBeforePayment;
-
-        // check if there was any increase in the terminal balance
-        uint256 _terminalBalanceAfterPayment = jbTerminalStore.balanceOf(terminal, 1);
-        uint256 _terminalBalanceDiff = _terminalBalanceAfterPayment - _terminalBalanceBeforePayment;
 
         uint256 _tokenCount = mulDiv18(_amountIn, _weight);
 
+        // 1 wei sensitivity for rounding errors
         if (_twap > _tokenCount) {
             // Path is picked based on twap, but the token received are the one quoted
-            assertEq(_tokenReceived, _quote, "wrong swap");
+            assertApproxEqAbs(_tokenReceived, _quote - (_quote * _reservedRate) / 10000, 1, "wrong swap");
+            assertApproxEqAbs(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore + (_quote * _reservedRate) / 10000, 1, "Reserve");
         } else {
-            assertEq(_tokenReceived, _tokenCount, "Wrong mint");
+            assertApproxEqAbs(_tokenReceived, _tokenCount - (_tokenCount * _reservedRate) / 10000, 1, "Wrong mint");
+            assertApproxEqAbs(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore + (_tokenCount * _reservedRate) / 10000, 1, "Reserve");
         }
-
-        // Check: reserve unchanged
-        assertEq(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore, "Reserve changed");
     }
 
     /**
