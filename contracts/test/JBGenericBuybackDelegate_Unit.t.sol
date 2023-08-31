@@ -973,14 +973,14 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         vm.assume(_terminalToken != address(0) && _projectToken != address(0) && _fee != 0);
         vm.assume(_terminalToken != _projectToken);
 
-        uint256 _MIN_SECONDS_AGO = delegate.MIN_SECONDS_AGO();
-        uint256 _MAX_SECONDS_AGO = delegate.MAX_SECONDS_AGO();
+        uint256 _MIN_TWAP_WINDOW = delegate.MIN_TWAP_WINDOW();
+        uint256 _MAX_TWAP_WINDOW = delegate.MAX_TWAP_WINDOW();
 
-        uint256 _MIN_TWAP_DELTA = delegate.MIN_TWAP_DELTA();
-        uint256 _MAX_TWAP_DELTA = delegate.MAX_TWAP_DELTA();
+        uint256 _MIN_TWAP_SLIPPAGE_TOLERANCE = delegate.MIN_TWAP_SLIPPAGE_TOLERANCE();
+        uint256 _MAX_TWAP_SLIPPAGE_TOLERANCE = delegate.MAX_TWAP_SLIPPAGE_TOLERANCE();
 
-        _twapDelta = bound(_twapDelta, _MIN_TWAP_DELTA, _MAX_TWAP_DELTA);
-        _secondsAgo = bound(_secondsAgo, _MIN_SECONDS_AGO, _MAX_SECONDS_AGO);
+        _twapDelta = bound(_twapDelta, _MIN_TWAP_SLIPPAGE_TOLERANCE, _MAX_TWAP_SLIPPAGE_TOLERANCE);
+        _secondsAgo = bound(_secondsAgo, _MIN_TWAP_WINDOW, _MAX_TWAP_WINDOW);
 
         address _pool = PoolAddress.computeAddress(
             delegate.UNISWAP_V3_FACTORY(), PoolAddress.getPoolKey(_terminalToken, _projectToken, _fee)
@@ -1003,8 +1003,8 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             address(delegate.setPoolFor(projectId, _fee, uint32(_secondsAgo), _twapDelta, _terminalToken));
 
         // Check: correct params stored?
-        assertEq(delegate.secondsAgoOf(projectId), _secondsAgo);
-        assertEq(delegate.twapDeltaOf(projectId), _twapDelta);
+        assertEq(delegate.twapWindowOf(projectId), _secondsAgo);
+        assertEq(delegate.twapSlippageToleranceOf(projectId), _twapDelta);
         assertEq(address(delegate.poolOf(projectId, _terminalToken == JBTokens.ETH ? address(weth) : _terminalToken)), _pool);
         assertEq(_newPool, _pool);
     }
@@ -1024,14 +1024,14 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         vm.assume(_terminalToken != address(0) && _projectToken != address(0) && _fee != 0);
         vm.assume(_terminalToken != _projectToken);
 
-        uint256 _MIN_SECONDS_AGO = delegate.MIN_SECONDS_AGO();
-        uint256 _MAX_SECONDS_AGO = delegate.MAX_SECONDS_AGO();
+        uint256 _MIN_TWAP_WINDOW = delegate.MIN_TWAP_WINDOW();
+        uint256 _MAX_TWAP_WINDOW = delegate.MAX_TWAP_WINDOW();
 
-        uint256 _MIN_TWAP_DELTA = delegate.MIN_TWAP_DELTA();
-        uint256 _MAX_TWAP_DELTA = delegate.MAX_TWAP_DELTA();
+        uint256 _MIN_TWAP_SLIPPAGE_TOLERANCE = delegate.MIN_TWAP_SLIPPAGE_TOLERANCE();
+        uint256 _MAX_TWAP_SLIPPAGE_TOLERANCE = delegate.MAX_TWAP_SLIPPAGE_TOLERANCE();
 
-        _twapDelta = bound(_twapDelta, _MIN_TWAP_DELTA, _MAX_TWAP_DELTA);
-        _secondsAgo = bound(_secondsAgo, _MIN_SECONDS_AGO, _MAX_SECONDS_AGO);
+        _twapDelta = bound(_twapDelta, _MIN_TWAP_SLIPPAGE_TOLERANCE, _MAX_TWAP_SLIPPAGE_TOLERANCE);
+        _secondsAgo = bound(_secondsAgo, _MIN_TWAP_WINDOW, _MAX_TWAP_WINDOW);
 
         vm.mockCall(address(tokenStore), abi.encodeCall(tokenStore.tokenOf, (projectId)), abi.encode(_projectToken));
 
@@ -1093,33 +1093,33 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         vm.assume(_terminalToken != address(0) && _projectToken != address(0) && _fee != 0);
         vm.assume(_terminalToken != _projectToken);
 
-        uint256 _MIN_SECONDS_AGO = delegate.MIN_SECONDS_AGO();
-        uint256 _MAX_SECONDS_AGO = delegate.MAX_SECONDS_AGO();
+        uint256 _MIN_TWAP_WINDOW = delegate.MIN_TWAP_WINDOW();
+        uint256 _MAX_TWAP_WINDOW = delegate.MAX_TWAP_WINDOW();
 
-        uint256 _MIN_TWAP_DELTA = delegate.MIN_TWAP_DELTA();
-        uint256 _MAX_TWAP_DELTA = delegate.MAX_TWAP_DELTA();
+        uint256 _MIN_TWAP_SLIPPAGE_TOLERANCE = delegate.MIN_TWAP_SLIPPAGE_TOLERANCE();
+        uint256 _MAX_TWAP_SLIPPAGE_TOLERANCE = delegate.MAX_TWAP_SLIPPAGE_TOLERANCE();
 
         vm.mockCall(address(tokenStore), abi.encodeCall(tokenStore.tokenOf, (projectId)), abi.encode(_projectToken));
 
         // Check: seconds ago too low
-        vm.expectRevert(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapPeriod.selector);
+        vm.expectRevert(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapWindow.selector);
         vm.prank(owner);
-        delegate.setPoolFor(projectId, _fee, uint32(_MIN_SECONDS_AGO - 1), _MIN_TWAP_DELTA + 1, _terminalToken);
+        delegate.setPoolFor(projectId, _fee, uint32(_MIN_TWAP_WINDOW - 1), _MIN_TWAP_SLIPPAGE_TOLERANCE + 1, _terminalToken);
 
         // Check: seconds ago too high
-        vm.expectRevert(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapPeriod.selector);
+        vm.expectRevert(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapWindow.selector);
         vm.prank(owner);
-        delegate.setPoolFor(projectId, _fee, uint32(_MAX_SECONDS_AGO + 1), _MIN_TWAP_DELTA + 1, _terminalToken);
+        delegate.setPoolFor(projectId, _fee, uint32(_MAX_TWAP_WINDOW + 1), _MIN_TWAP_SLIPPAGE_TOLERANCE + 1, _terminalToken);
 
         // Check: min twap deviation too low
-        vm.expectRevert(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapDelta.selector);
+        vm.expectRevert(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapSlippageTolerance.selector);
         vm.prank(owner);
-        delegate.setPoolFor(projectId, _fee, uint32(_MIN_SECONDS_AGO + 1), _MIN_TWAP_DELTA - 1, _terminalToken);
+        delegate.setPoolFor(projectId, _fee, uint32(_MIN_TWAP_WINDOW + 1), _MIN_TWAP_SLIPPAGE_TOLERANCE - 1, _terminalToken);
 
         // Check: max twap deviation too high
-        vm.expectRevert(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapDelta.selector);
+        vm.expectRevert(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapSlippageTolerance.selector);
         vm.prank(owner);
-        delegate.setPoolFor(projectId, _fee, uint32(_MIN_SECONDS_AGO + 1), _MAX_TWAP_DELTA + 1, _terminalToken);
+        delegate.setPoolFor(projectId, _fee, uint32(_MIN_TWAP_WINDOW + 1), _MAX_TWAP_SLIPPAGE_TOLERANCE + 1, _terminalToken);
     }
 
     /**
@@ -1135,14 +1135,14 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         vm.assume(_terminalToken != address(0) && _projectToken != address(0) && _fee != 0);
         vm.assume(_terminalToken != _projectToken);
 
-        uint256 _MIN_SECONDS_AGO = delegate.MIN_SECONDS_AGO();
-        uint256 _MAX_SECONDS_AGO = delegate.MAX_SECONDS_AGO();
+        uint256 _MIN_TWAP_WINDOW = delegate.MIN_TWAP_WINDOW();
+        uint256 _MAX_TWAP_WINDOW = delegate.MAX_TWAP_WINDOW();
 
-        uint256 _MIN_TWAP_DELTA = delegate.MIN_TWAP_DELTA();
-        uint256 _MAX_TWAP_DELTA = delegate.MAX_TWAP_DELTA();
+        uint256 _MIN_TWAP_SLIPPAGE_TOLERANCE = delegate.MIN_TWAP_SLIPPAGE_TOLERANCE();
+        uint256 _MAX_TWAP_SLIPPAGE_TOLERANCE = delegate.MAX_TWAP_SLIPPAGE_TOLERANCE();
 
-        _twapDelta = bound(_twapDelta, _MIN_TWAP_DELTA, _MAX_TWAP_DELTA);
-        _secondsAgo = bound(_secondsAgo, _MIN_SECONDS_AGO, _MAX_SECONDS_AGO);
+        _twapDelta = bound(_twapDelta, _MIN_TWAP_SLIPPAGE_TOLERANCE, _MAX_TWAP_SLIPPAGE_TOLERANCE);
+        _secondsAgo = bound(_secondsAgo, _MIN_TWAP_WINDOW, _MAX_TWAP_WINDOW);
 
         vm.mockCall(address(tokenStore), abi.encodeCall(tokenStore.tokenOf, (projectId)), abi.encode(address(0)));
 
@@ -1154,28 +1154,28 @@ contract TestJBGenericBuybackDelegate_Units is Test {
     /**
      * @notice Test increase seconds ago
      */
-    function test_changeSecondsAgo(uint256 _newValue) public {
-        uint256 _MAX_SECONDS_AGO = delegate.MAX_SECONDS_AGO();
-        uint256 _MIN_SECONDS_AGO = delegate.MIN_SECONDS_AGO();
+    function test_setTwapWindowOf(uint256 _newValue) public {
+        uint256 _MAX_TWAP_WINDOW = delegate.MAX_TWAP_WINDOW();
+        uint256 _MIN_TWAP_WINDOW = delegate.MIN_TWAP_WINDOW();
 
-        _newValue = bound(_newValue, _MIN_SECONDS_AGO, _MAX_SECONDS_AGO);
+        _newValue = bound(_newValue, _MIN_TWAP_WINDOW, _MAX_TWAP_WINDOW);
 
         // check: correct event?
         vm.expectEmit(true, true, true, true);
-        emit BuybackDelegate_SecondsAgoChanged(projectId, delegate.secondsAgoOf(projectId), _newValue);
+        emit BuybackDelegate_SecondsAgoChanged(projectId, delegate.twapWindowOf(projectId), _newValue);
 
         // Test: change seconds ago
         vm.prank(owner);
-        delegate.changeSecondsAgo(projectId, uint32(_newValue));
+        delegate.setTwapWindowOf(projectId, uint32(_newValue));
 
         // Check: correct seconds ago?
-        assertEq(delegate.secondsAgoOf(projectId), _newValue);
+        assertEq(delegate.twapWindowOf(projectId), _newValue);
     }
 
     /**
      * @notice Test increase seconds ago revert if wrong caller
      */
-    function test_changeSecondsAgo_revertIfWrongCaller(address _notOwner) public {
+    function test_setTwapWindowOf_revertIfWrongCaller(address _notOwner) public {
         vm.assume(owner != _notOwner);
 
         vm.mockCall(
@@ -1211,59 +1211,59 @@ contract TestJBGenericBuybackDelegate_Units is Test {
 
         // Test: change seconds ago (left uninit/at 0)
         vm.startPrank(_notOwner);
-        delegate.changeSecondsAgo(projectId, 999);
+        delegate.setTwapWindowOf(projectId, 999);
     }
 
     /**
      * @notice Test increase seconds ago reverting on boundary
      */
-    function test_changeSecondsAgo_revertIfNewValueTooBigOrTooLow(uint256 _newValueSeed) public {
-        uint256 _MAX_SECONDS_AGO = delegate.MAX_SECONDS_AGO();
-        uint256 _MIN_SECONDS_AGO = delegate.MIN_SECONDS_AGO();
+    function test_setTwapWindowOf_revertIfNewValueTooBigOrTooLow(uint256 _newValueSeed) public {
+        uint256 _MAX_TWAP_WINDOW = delegate.MAX_TWAP_WINDOW();
+        uint256 _MIN_TWAP_WINDOW = delegate.MIN_TWAP_WINDOW();
 
-        uint256 _newValue = bound(_newValueSeed, _MAX_SECONDS_AGO + 1, type(uint32).max);
+        uint256 _newValue = bound(_newValueSeed, _MAX_TWAP_WINDOW + 1, type(uint32).max);
 
         // Check: revert?
-        vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapPeriod.selector));
+        vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapWindow.selector));
 
         // Test: try to change seconds ago
         vm.prank(owner);
-        delegate.changeSecondsAgo(projectId, uint32(_newValue));
+        delegate.setTwapWindowOf(projectId, uint32(_newValue));
 
-        _newValue = bound(_newValueSeed, 0, _MIN_SECONDS_AGO - 1);
+        _newValue = bound(_newValueSeed, 0, _MIN_TWAP_WINDOW - 1);
 
         // Check: revert?
-        vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapPeriod.selector));
+        vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapWindow.selector));
 
         // Test: try to change seconds ago
         vm.prank(owner);
-        delegate.changeSecondsAgo(projectId, uint32(_newValue));
+        delegate.setTwapWindowOf(projectId, uint32(_newValue));
     }
 
     /**
      * @notice Test set twap delta
      */
-    function test_setTwapDelta(uint256 _newDelta) public {
-        uint256 _MIN_TWAP_DELTA = delegate.MIN_TWAP_DELTA();
-        uint256 _MAX_TWAP_DELTA = delegate.MAX_TWAP_DELTA();
-        _newDelta = bound(_newDelta, _MIN_TWAP_DELTA, _MAX_TWAP_DELTA);
+    function test_setTwapSlippageToleranceOf(uint256 _newDelta) public {
+        uint256 _MIN_TWAP_SLIPPAGE_TOLERANCE = delegate.MIN_TWAP_SLIPPAGE_TOLERANCE();
+        uint256 _MAX_TWAP_SLIPPAGE_TOLERANCE = delegate.MAX_TWAP_SLIPPAGE_TOLERANCE();
+        _newDelta = bound(_newDelta, _MIN_TWAP_SLIPPAGE_TOLERANCE, _MAX_TWAP_SLIPPAGE_TOLERANCE);
 
         // Check: correct event?
         vm.expectEmit(true, true, true, true);
-        emit BuybackDelegate_TwapDeltaChanged(projectId, delegate.twapDeltaOf(projectId), _newDelta);
+        emit BuybackDelegate_TwapDeltaChanged(projectId, delegate.twapSlippageToleranceOf(projectId), _newDelta);
 
         // Test: set the twap
         vm.prank(owner);
-        delegate.setTwapDelta(projectId, _newDelta);
+        delegate.setTwapSlippageToleranceOf(projectId, _newDelta);
 
         // Check: correct twap?
-        assertEq(delegate.twapDeltaOf(projectId), _newDelta);
+        assertEq(delegate.twapSlippageToleranceOf(projectId), _newDelta);
     }
 
     /**
      * @notice Test set twap delta reverts if wrong caller
      */
-    function test_setTwapDelta_revertWrongCaller(address _notOwner) public {
+    function test_setTwapSlippageToleranceOf_revertWrongCaller(address _notOwner) public {
         vm.assume(owner != _notOwner);
 
         vm.mockCall(
@@ -1299,31 +1299,31 @@ contract TestJBGenericBuybackDelegate_Units is Test {
 
         // Test: set the twap
         vm.prank(_notOwner);
-        delegate.setTwapDelta(projectId, 1);
+        delegate.setTwapSlippageToleranceOf(projectId, 1);
     }
 
     /**
      * @notice Test set twap delta
      */
-    function test_setTwapDelta_revertIfInvalidNewValue(uint256 _newDeltaSeed) public {
-        uint256 _MIN_TWAP_DELTA = delegate.MIN_TWAP_DELTA();
-        uint256 _MAX_TWAP_DELTA = delegate.MAX_TWAP_DELTA();
+    function test_setTwapSlippageToleranceOf_revertIfInvalidNewValue(uint256 _newDeltaSeed) public {
+        uint256 _MIN_TWAP_SLIPPAGE_TOLERANCE = delegate.MIN_TWAP_SLIPPAGE_TOLERANCE();
+        uint256 _MAX_TWAP_SLIPPAGE_TOLERANCE = delegate.MAX_TWAP_SLIPPAGE_TOLERANCE();
 
-        uint256 _newDelta = bound(_newDeltaSeed, 0, _MIN_TWAP_DELTA - 1);
+        uint256 _newDelta = bound(_newDeltaSeed, 0, _MIN_TWAP_SLIPPAGE_TOLERANCE - 1);
 
-        vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapDelta.selector));
-
-        // Test: set the twap
-        vm.prank(owner);
-        delegate.setTwapDelta(projectId, _newDelta);
-
-        _newDelta = bound(_newDeltaSeed, _MAX_TWAP_DELTA + 1, type(uint256).max);
-
-        vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapDelta.selector));
+        vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapSlippageTolerance.selector));
 
         // Test: set the twap
         vm.prank(owner);
-        delegate.setTwapDelta(projectId, _newDelta);
+        delegate.setTwapSlippageToleranceOf(projectId, _newDelta);
+
+        _newDelta = bound(_newDeltaSeed, _MAX_TWAP_SLIPPAGE_TOLERANCE + 1, type(uint256).max);
+
+        vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapSlippageTolerance.selector));
+
+        // Test: set the twap
+        vm.prank(owner);
+        delegate.setTwapSlippageToleranceOf(projectId, _newDelta);
     }
 
     /**

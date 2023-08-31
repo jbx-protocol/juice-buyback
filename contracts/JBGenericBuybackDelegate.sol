@@ -54,19 +54,19 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
 
     /// @notice The minimum twap deviation allowed, out of MAX_SLIPPAGE.
     /// @dev This serves to avoid operators settings values that force the bypassing the swap when a quote is not provided in payment metadata.
-    uint256 public constant MIN_TWAP_DELTA = 100;
+    uint256 public constant MIN_TWAP_SLIPPAGE_TOLERANCE = 100;
 
     /// @notice The maximum twap deviation allowed, out of MAX_SLIPPAGE.
     /// @dev This serves to avoid operators settings values that force the bypassing the swap when a quote is not provided in payment metadata.
-    uint256 public constant MAX_TWAP_DELTA = 9000;
+    uint256 public constant MAX_TWAP_SLIPPAGE_TOLERANCE = 9000;
 
     /// @notice The smallest TWAP period allowed, in seconds.
     /// @dev This serves to avoid operators settings values that force the bypassing the swap when a quote is not provided in payment metadata.
-    uint256 public constant MIN_SECONDS_AGO = 2 minutes;
+    uint256 public constant MIN_TWAP_WINDOW = 2 minutes;
 
     /// @notice The largest TWAP period allowed, in seconds.
     /// @dev This serves to avoid operators settings values that force the bypassing the swap when a quote is not provided in payment metadata.
-    uint256 public constant MAX_SECONDS_AGO = 2 days;
+    uint256 public constant MAX_TWAP_WINDOW = 2 days;
 
     //*********************************************************************//
     // -------------------- public immutable properties ------------------ //
@@ -208,14 +208,14 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
     /// @notice The timeframe to use for the pool TWAP.
     /// @param  _projectId The ID of the project for which the value applies.
     /// @return _secondsAgo The period over which the TWAP is computed.
-    function secondsAgoOf(uint256 _projectId) external view returns (uint32) {
+    function twapWindowOf(uint256 _projectId) external view returns (uint32) {
         return uint32(_twapParamsOf[_projectId]);
     }
 
     /// @notice The TWAP max deviation acepted, out of SLIPPAGE_DENOMINATOR.
     /// @param  _projectId The ID of the project for which the value applies.
     /// @return _delta the maximum deviation allowed between the token amount received and the TWAP quote.
-    function twapDeltaOf(uint256 _projectId) external view returns (uint256) {
+    function twapSlippageToleranceOf(uint256 _projectId) external view returns (uint256) {
         return _twapParamsOf[_projectId] >> 128;
     }
 
@@ -311,19 +311,19 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
     /// This can be called by the project owner or an address having the SET_POOL permission in JBOperatorStore
     /// @param _projectId The ID of the project having its pool set.
     /// @param _fee The fee that is used in the pool being set.
-    /// @param _secondsAgo The period over which the TWAP is computed.
-    /// @param _twapDelta The maximum deviation allowed between amount received and TWAP.
+    /// @param _twapWindow The period over which the TWAP is computed.
+    /// @param _twapSlippageTolerance The maximum deviation allowed between amount received and TWAP.
     /// @param _terminalToken The terminal token that payments are made in.
-    function setPoolFor(uint256 _projectId, uint24 _fee, uint32 _secondsAgo, uint256 _twapDelta, address _terminalToken)
+    function setPoolFor(uint256 _projectId, uint24 _fee, uint32 _twapWindow, uint256 _twapSlippageTolerance, address _terminalToken)
         external
         requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.CHANGE_POOL)
         returns (IUniswapV3Pool _newPool)
     {
         // Make sure the provided delta is within sane bounds.
-        if (_twapDelta < MIN_TWAP_DELTA || _twapDelta > MAX_TWAP_DELTA) revert JuiceBuyback_InvalidTwapDelta();
+        if (_twapSlippageTolerance < MIN_TWAP_SLIPPAGE_TOLERANCE || _twapSlippageTolerance > MAX_TWAP_SLIPPAGE_TOLERANCE) revert JuiceBuyback_InvalidTwapSlippageTolerance();
 
         // Make sure the provided period is within sane bounds.
-        if (_secondsAgo < MIN_SECONDS_AGO || _secondsAgo > MAX_SECONDS_AGO) revert JuiceBuyback_InvalidTwapPeriod();
+        if (_twapWindow < MIN_TWAP_WINDOW || _twapWindow > MAX_TWAP_WINDOW) revert JuiceBuyback_InvalidTwapWindow();
 
         // Keep a reference to the project's token.
         address _projectToken = address(CONTROLLER.tokenStore().tokenOf(_projectId));
@@ -369,60 +369,60 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         poolOf[_projectId][_terminalToken] = _newPool;
 
         // Store the twap period and max slipage.
-        _twapParamsOf[_projectId] = _twapDelta << 128 | _secondsAgo;
+        _twapParamsOf[_projectId] = _twapSlippageTolerance << 128 | _twapWindow;
         projectTokenOf[_projectId] = address(_projectToken);
 
-        emit BuybackDelegate_SecondsAgoChanged(_projectId, 0, _secondsAgo);
-        emit BuybackDelegate_TwapDeltaChanged(_projectId, 0, _twapDelta);
-        emit BuybackDelegate_PoolAdded(_projectId, _terminalToken, address(_newPool));
+        emit BuybackDelegate_WindowChanged(_projectId, 0, _twapWindow, msg.sender);
+        emit BuybackDelegate_TwapSlippageToleranceChanged(_projectId, 0, _twapSlippageTolerance, msg.sender);
+        emit BuybackDelegate_PoolAdded(_projectId, _terminalToken, address(_newPool), msg.sender);
     }
 
     /// @notice Increase the period over which the TWAP is computed.
     /// @dev This can be called by the project owner or an address having the SET_TWAP_PERIOD permission in JBOperatorStore.
     /// @param _projectId The ID for which the new value applies.
-    /// @param _newSecondsAgo The new TWAP period.
-    function changeSecondsAgo(uint256 _projectId, uint32 _newSecondsAgo)
+    /// @param _newWindow The new TWAP period.
+    function setTwapWindowOf(uint256 _projectId, uint32 _newWindow)
         external
         requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.SET_POOL_PARAMS)
     {
         // Make sure the provided period is within sane bounds.
-        if (_newSecondsAgo < MIN_SECONDS_AGO || _newSecondsAgo > MAX_SECONDS_AGO) {
-            revert JuiceBuyback_InvalidTwapPeriod();
+        if (_newWindow < MIN_TWAP_WINDOW || _newWindow > MAX_TWAP_WINDOW) {
+            revert JuiceBuyback_InvalidTwapWindow();
         }
 
         // Keep a reference to the currently stored TWAP params.
         uint256 _twapParams = _twapParamsOf[_projectId];
 
-        // Keep a reference to the old period value.
-        uint256 _oldValue = uint128(_twapParams);
+        // Keep a reference to the old window value.
+        uint256 _oldWindow = uint128(_twapParams);
 
         // Store the new packed value of the TWAP params.
-        _twapParamsOf[_projectId] = uint256(_newSecondsAgo) | ((_twapParams >> 128) << 128);
+        _twapParamsOf[_projectId] = uint256(_newWindow) | ((_twapParams >> 128) << 128);
 
-        emit BuybackDelegate_SecondsAgoChanged(_projectId, _oldValue, _newSecondsAgo);
+        emit BuybackDelegate_WindowChanged(_projectId, _oldWindow, _newWindow, msg.sender);
     }
 
     /// @notice Set the maximum deviation allowed between amount received and TWAP.
     /// @dev This can be called by the project owner or an address having the SET_POOL permission in JBOperatorStore.
     /// @param _projectId The ID for which the new value applies.
-    /// @param _newDelta the new delta, out of SLIPPAGE_DENOMINATOR.
-    function setTwapDelta(uint256 _projectId, uint256 _newDelta)
+    /// @param _newSlippageTolerance the new delta, out of SLIPPAGE_DENOMINATOR.
+    function setTwapSlippageToleranceOf(uint256 _projectId, uint256 _newSlippageTolerance)
         external
         requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.SET_POOL_PARAMS)
     {
         // Make sure the provided delta is within sane bounds.
-        if (_newDelta < MIN_TWAP_DELTA || _newDelta > MAX_TWAP_DELTA) revert JuiceBuyback_InvalidTwapDelta();
+        if (_newSlippageTolerance < MIN_TWAP_SLIPPAGE_TOLERANCE || _newSlippageTolerance > MAX_TWAP_SLIPPAGE_TOLERANCE) revert JuiceBuyback_InvalidTwapSlippageTolerance();
 
         // Keep a reference to the currently stored TWAP params.
         uint256 _twapParams = _twapParamsOf[_projectId];
 
         // Keep a reference to the old slippage value.
-        uint256 _oldDelta = _twapParams >> 128;
+        uint256 _oldSlippageTolerance = _twapParams >> 128;
 
         // Store the new packed value of the TWAP params.
-        _twapParamsOf[_projectId] = _newDelta << 128 | ((_twapParams << 128) >> 128);
+        _twapParamsOf[_projectId] = _newSlippageTolerance << 128 | ((_twapParams << 128) >> 128);
 
-        emit BuybackDelegate_TwapDeltaChanged(_projectId, _oldDelta, _newDelta);
+        emit BuybackDelegate_TwapSlippageToleranceChanged(_projectId, _oldSlippageTolerance, _newSlippageTolerance, msg.sender);
     }
 
     //*********************************************************************//
@@ -480,7 +480,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         JBDidPayData3_1_1 calldata _data,
         bool _projectTokenIs0
     ) internal returns (uint256 _amountReceived) {
-        // The amount of tokens that are being used with which to make the swap
+        // The amount of tokens that are being used with which to make the swap.
         uint256 _amountToSwapWith = _data.forwardedAmount.value;
 
         // Get the terminal token, using WETH if the token paid in is ETH.
@@ -523,7 +523,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             useReservedRate: true
         });
 
-        emit BuybackDelegate_Swap(_data.projectId, _data.forwardedAmount.value, _amountReceived);
+        emit BuybackDelegate_Swap(_data.projectId, _amountToSwapWith, _pool, _amountReceived, msg.sender);
     }
 
     /// @notice Add the specified amount of funds back into the project's terminal, and mint the appropriate amount of project tokens.
@@ -531,10 +531,13 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
     /// @param _amount The amount to add back to the project's balance.
     /// @param _weight The relative amount of tokens that should be minted when a project receives funds.
     function _mint(JBDidPayData3_1_1 calldata _data, uint256 _amount, uint256 _weight) internal {
+        // Keep a reference to the number of tokens being minted.
+        uint256 _tokenCount = mulDiv18(_amount, _weight);
+       
         // Mint to the beneficiary, making sure the reserved rate gets taken into account.
         CONTROLLER.mintTokensOf({
             projectId: _data.projectId,
-            tokenCount: mulDiv18(_amount, _weight),
+            tokenCount: _tokenCount,
             beneficiary: _data.beneficiary,
             memo: _data.memo,
             preferClaimedTokens: _data.preferClaimedTokens,
@@ -551,6 +554,6 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             value: _data.forwardedAmount.token == JBTokens.ETH ? _amount : 0
         }(_data.projectId, _amount, _data.forwardedAmount.token, "", "");
 
-        emit BuybackDelegate_Mint(_data.projectId);
+        emit BuybackDelegate_Mint(_data.projectId, _amount, _tokenCount, msg.sender);
     }
 }
