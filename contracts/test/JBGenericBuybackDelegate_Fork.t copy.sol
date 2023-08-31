@@ -202,16 +202,21 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
      *
      * @dev    Should mint for both beneficiary and reserve
      */
-    function test_mintIfWeightGreatherThanPrice(uint256 _weight) public {
-        // Reconfigure with a weight bigger than the quote
-        _weight = bound(_weight, amountOutQuoted + 1, type(uint88).max);
+    function test_mintIfWeightGreatherThanPrice(uint256 _weight, uint256 _amountIn) public {
+        _amountIn = bound(_amountIn, 100, 100 ether);
+
+        uint256 _amountOutQuoted = getAmountOut(pool, _amountIn, address(weth));
+
+        // Reconfigure with a weight bigger than the price implied by the quote
+        _weight = bound(_weight, (_amountOutQuoted * 10**18 / _amountIn) + 1, type(uint88).max);
+
         _reconfigure(1, address(delegate), _weight, 5000);
 
         uint256 _reservedBalanceBefore = jbController.reservedTokenBalanceOf(1);
 
         // Build the metadata using the quote at that block
         bytes[] memory _data = new bytes[](1);
-        _data[0] = abi.encode(amountOutQuoted, amountPaid);
+        _data[0] = abi.encode(_amountOutQuoted, _amountIn);
 
         // Pass the delegate id
         bytes4[] memory _ids = new bytes4[](1);
@@ -225,7 +230,7 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         emit Mint({
             holder: beneficiary,
             projectId: 1,
-            amount: _weight / 2, // Half is reserved
+            amount: mulDiv18(_weight, _amountIn) / 2, // Half is reserved
             tokensWereClaimed: true,
             preferClaimedTokens: true,
             caller: address(jbController)
@@ -234,9 +239,9 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         uint256 _balBeforePayment = jbx.balanceOf(beneficiary);
 
         // Pay the project
-        jbEthPaymentTerminal.pay{value: amountPaid}(
+        jbEthPaymentTerminal.pay{value: _amountIn}(
             1,
-            amountPaid,
+            _amountIn,
             address(0),
             beneficiary,
             /* _minReturnedTokens */
@@ -253,10 +258,10 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         uint256 _diff = _balAfterPayment - _balBeforePayment;
 
         // Check: token received by the beneficiary
-        assertEq(_diff, _weight / 2);
+        assertEq(_diff, mulDiv18(_weight, _amountIn) / 2);
 
         // Check: token added to the reserve - 1 wei sensitivity for rounding errors
-        assertApproxEqAbs(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore + _weight / 2, 1);
+        assertApproxEqAbs(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore + mulDiv18(_weight, _amountIn) / 2, 1);
     }
 
     /**
@@ -264,16 +269,23 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
      *
      * @dev    Should swap for both beneficiary and reserve (by burning/minting)
      */
-    function test_swapIfQuoteBetter(uint256 _weight) public {
-        // Reconfigure with a weight smaller than the quote, slippage included
-        _weight = bound(_weight, 0, amountOutQuoted - ((amountOutQuoted * 500) / 10000) - 1);
-        _reconfigure(1, address(delegate), _weight, 5000);
+    function test_swapIfQuoteBetter(uint256 _weight, uint256 _amountIn, uint256 _reservedRate) public {
+        _amountIn = bound(_amountIn, 100, 100 ether);
+
+        uint256 _amountOutQuoted = getAmountOut(pool, _amountIn, address(weth));
+
+        // Reconfigure with a weight smaller than the price implied by the quote
+        _weight = bound(_weight, 1, (_amountOutQuoted * 10**18 / _amountIn) - 1);
+
+        _reservedRate = bound(_reservedRate, 0, 10000);
+
+        _reconfigure(1, address(delegate), _weight, _reservedRate);
 
         uint256 _reservedBalanceBefore = jbController.reservedTokenBalanceOf(1);
 
         // Build the metadata using the quote at that block
         bytes[] memory _data = new bytes[](1);
-        _data[0] = abi.encode(amountOutQuoted, amountPaid);
+        _data[0] = abi.encode(_amountOutQuoted, _amountIn);
 
         // Pass the delegate id
         bytes4[] memory _ids = new bytes4[](1);
@@ -285,12 +297,12 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         uint256 _balBeforePayment = jbx.balanceOf(beneficiary);
 
         vm.expectEmit(true, true, true, true);
-        emit BuybackDelegate_Swap(1, amountPaid, amountOutQuoted);
+        emit BuybackDelegate_Swap(1, _amountIn, _amountOutQuoted);
 
         // Pay the project
-        jbEthPaymentTerminal.pay{value: amountPaid}(
+        jbEthPaymentTerminal.pay{value: _amountIn}(
             1,
-            amountPaid,
+            _amountIn,
             address(0),
             beneficiary,
             /* _minReturnedTokens */
@@ -304,10 +316,10 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         );
 
         // Check: token received by the beneficiary
-        assertEq(jbx.balanceOf(beneficiary) - _balBeforePayment, amountOutQuoted / 2);
+        assertApproxEqAbs(jbx.balanceOf(beneficiary) - _balBeforePayment, _amountOutQuoted - (_amountOutQuoted * _reservedRate / 10000), 1, "wrong balance");
 
         // Check: token added to the reserve - 1 wei sensitivity for rounding errors
-        assertApproxEqAbs(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore + amountOutQuoted / 2, 1);
+        assertApproxEqAbs(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore + _amountOutQuoted * _reservedRate / 10000, 1, "wrong reserve");
     }
 
     /**
@@ -635,7 +647,7 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         // Check: token received by the beneficiary
         assertApproxEqAbs(jbx.balanceOf(beneficiary) - _balBeforePayment, amountOutQuoted / 2 + mulDiv18(_amountInExtra, _weight) / 2, 10);
 
-        // Check: token added to the reserve - 1 wei sensitivity for rounding errors
+        // Check: token added to the reserve
         assertApproxEqAbs(jbController.reservedTokenBalanceOf(1), _reservedBalanceBefore + amountOutQuoted / 2 + mulDiv18(_amountInExtra, _weight) / 2, 10);
     }
 
