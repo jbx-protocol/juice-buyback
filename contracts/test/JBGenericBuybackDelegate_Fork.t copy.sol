@@ -22,8 +22,8 @@ import "../JBGenericBuybackDelegate.sol";
 contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
     using JBFundingCycleMetadataResolver for JBFundingCycle;
 
-    event BuybackDelegate_Swap(uint256 indexed projectId, uint256 amountEth, uint256 amountOut);
-    event BuybackDelegate_Mint(uint256 indexed projectId);
+    event BuybackDelegate_Swap(uint256 indexed projectId, uint256 amountEth, IUniswapV3Pool pool, uint256 amountOut, address caller);
+    event BuybackDelegate_Mint(uint256 indexed projectId, uint256 amount, uint256 tokenCount, address caller);
     event Mint(
         address indexed holder,
         uint256 indexed projectId,

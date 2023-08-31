@@ -372,7 +372,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         _twapParamsOf[_projectId] = _twapSlippageTolerance << 128 | _twapWindow;
         projectTokenOf[_projectId] = address(_projectToken);
 
-        emit BuybackDelegate_WindowChanged(_projectId, 0, _twapWindow, msg.sender);
+        emit BuybackDelegate_TwapWindowChanged(_projectId, 0, _twapWindow, msg.sender);
         emit BuybackDelegate_TwapSlippageToleranceChanged(_projectId, 0, _twapSlippageTolerance, msg.sender);
         emit BuybackDelegate_PoolAdded(_projectId, _terminalToken, address(_newPool), msg.sender);
     }
@@ -399,7 +399,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
         // Store the new packed value of the TWAP params.
         _twapParamsOf[_projectId] = uint256(_newWindow) | ((_twapParams >> 128) << 128);
 
-        emit BuybackDelegate_WindowChanged(_projectId, _oldWindow, _newWindow, msg.sender);
+        emit BuybackDelegate_TwapWindowChanged(_projectId, _oldWindow, _newWindow, msg.sender);
     }
 
     /// @notice Set the maximum deviation allowed between amount received and TWAP.

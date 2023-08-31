@@ -29,12 +29,12 @@ contract TestJBGenericBuybackDelegate_Units is Test {
 
     ForTest_JBGenericBuybackDelegate delegate;
 
-    event BuybackDelegate_Swap(uint256 indexed projectId, uint256 amountEth, uint256 amountOut);
-    event BuybackDelegate_Mint(uint256 indexed projectId);
-    event BuybackDelegate_SecondsAgoChanged(uint256 indexed projectId, uint256 oldSecondsAgo, uint256 newSecondsAgo);
-    event BuybackDelegate_TwapDeltaChanged(uint256 indexed projectId, uint256 oldTwapDelta, uint256 newTwapDelta);
+    event BuybackDelegate_Swap(uint256 indexed projectId, uint256 amountEth, uint256 amountOut, address caller);
+    event BuybackDelegate_Mint(uint256 indexed projectId, address caller);
+    event BuybackDelegate_TwapWindowChanged(uint256 indexed projectId, uint256 oldTwapWindow, uint256 newTwapWindow, address caller);
+    event BuybackDelegate_TwapSlippageToleranceChanged(uint256 indexed projectId, uint256 oldSlippageTolerance, uint256 newSlippageTolerance, address caller);
     event BuybackDelegate_PendingSweep(address indexed beneficiary, address indexed token, uint256 amount);
-    event BuybackDelegate_PoolAdded(uint256 indexed projectId, address indexed terminalToken, address newPool);
+    event BuybackDelegate_PoolAdded(uint256 indexed projectId, address indexed terminalToken, address newPool, address caller);
 
     // Use the L1 UniswapV3Pool jbx/eth 1% fee for create2 magic
     IUniswapV3Pool pool = IUniswapV3Pool(0x48598Ff1Cee7b4d31f8f9050C2bbAE98e17E6b17);
@@ -990,10 +990,10 @@ contract TestJBGenericBuybackDelegate_Units is Test {
 
         // check: correct events?
         vm.expectEmit(true, true, true, true);
-        emit BuybackDelegate_SecondsAgoChanged(projectId, 0, _secondsAgo);
+        emit BuybackDelegate_TwapWindowChanged(projectId, 0, _secondsAgo);
 
         vm.expectEmit(true, true, true, true);
-        emit BuybackDelegate_TwapDeltaChanged(projectId, 0, _twapDelta);
+        emit BuybackDelegate_TwapSlippageToleranceChanged(projectId, 0, _twapDelta);
 
         vm.expectEmit(true, true, true, true);
         emit BuybackDelegate_PoolAdded(projectId, _terminalToken == JBTokens.ETH ? address(weth) : _terminalToken, address(_pool));
@@ -1162,7 +1162,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
 
         // check: correct event?
         vm.expectEmit(true, true, true, true);
-        emit BuybackDelegate_SecondsAgoChanged(projectId, delegate.twapWindowOf(projectId), _newValue);
+        emit BuybackDelegate_TwapWindowChanged(projectId, delegate.twapWindowOf(projectId), _newValue);
 
         // Test: change seconds ago
         vm.prank(owner);
@@ -1250,7 +1250,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
 
         // Check: correct event?
         vm.expectEmit(true, true, true, true);
-        emit BuybackDelegate_TwapDeltaChanged(projectId, delegate.twapSlippageToleranceOf(projectId), _newDelta);
+        emit BuybackDelegate_TwapSlippageToleranceChanged(projectId, delegate.twapSlippageToleranceOf(projectId), _newDelta);
 
         // Test: set the twap
         vm.prank(owner);
