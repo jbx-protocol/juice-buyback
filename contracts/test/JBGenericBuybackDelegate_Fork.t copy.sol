@@ -22,8 +22,7 @@ import "../JBGenericBuybackDelegate.sol";
 contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
     using JBFundingCycleMetadataResolver for JBFundingCycle;
 
-    event BuybackDelegate_Swap(uint256 indexed projectId, uint256 amountEth, IUniswapV3Pool pool, uint256 amountOut, address caller);
-    event BuybackDelegate_Mint(uint256 indexed projectId, uint256 amount, uint256 tokenCount, address caller);
+    event BuybackDelegate_Swap(uint256 indexed projectId, uint256 amountIn, IUniswapV3Pool pool, uint256 amountOut, address caller);
     event Mint(
         address indexed holder,
         uint256 indexed projectId,
@@ -297,7 +296,7 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         uint256 _balBeforePayment = jbx.balanceOf(beneficiary);
 
         vm.expectEmit(true, true, true, true);
-        emit BuybackDelegate_Swap(1, _amountIn, _amountOutQuoted);
+        emit BuybackDelegate_Swap(1, _amountIn, pool, _amountOutQuoted, address(jbEthPaymentTerminal));
 
         // Pay the project
         jbEthPaymentTerminal.pay{value: _amountIn}(
@@ -425,7 +424,7 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         bytes memory _delegateMetadata = metadataHelper.createMetadata(_ids, _data);
 
         vm.expectEmit(true, true, true, true);
-        emit BuybackDelegate_Swap(1, _amountIn, _quote);
+        emit BuybackDelegate_Swap(1, _amountIn, pool, _quote, address(jbEthPaymentTerminal));
 
         uint256 _balBeforePayment = jbx.balanceOf(beneficiary);
 
@@ -626,7 +625,7 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         uint256 _balBeforePayment = jbx.balanceOf(beneficiary);
 
         vm.expectEmit(true, true, true, true);
-        emit BuybackDelegate_Swap(1, _amountIn, amountOutQuoted);
+        emit BuybackDelegate_Swap(1, _amountIn, pool, amountOutQuoted, address(jbEthPaymentTerminal));
 
         // Pay the project
         jbEthPaymentTerminal.pay{value: _amountIn + _amountInExtra}(
