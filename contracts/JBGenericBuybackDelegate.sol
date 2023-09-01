@@ -88,7 +88,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
     IWETH9 public immutable WETH;
 
     /// @notice The 4bytes ID of this delegate, used for metadata parsing.
-    bytes4 public immutable delegateId;
+    bytes4 public immutable DELEGATE_ID;
 
     //*********************************************************************//
     // --------------------- public stored properties -------------------- //
@@ -111,19 +111,19 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
     /// @param _factory The uniswap v3 factory used to reference pools from.
     /// @param _directory The directory of terminals and controllers.
     /// @param _controller The controller used to mint and burn tokens from.
-    /// @param _delegateId The 4bytes ID of this delegate, used for metadata parsing.
+    /// @param _DELEGATE_ID The 4bytes ID of this delegate, used for metadata parsing.
     constructor(
         IWETH9 _weth,
         address _factory,
         IJBDirectory _directory,
         IJBController3_1 _controller,
-        bytes4 _delegateId
+        bytes4 _DELEGATE_ID
     ) JBOperatable(IJBOperatable(address(_controller)).operatorStore()) {
         WETH = _weth;
         DIRECTORY = _directory;
         CONTROLLER = _controller;
         UNISWAP_V3_FACTORY = _factory;
-        delegateId = _delegateId;
+        DELEGATE_ID = _DELEGATE_ID;
         PROJECTS = _controller.projects();
     }
 
@@ -156,7 +156,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             bytes memory _metadata;
 
             // Unpack the quote from the pool, given by the frontend.
-            (_quoteExists, _metadata) = JBDelegateMetadataLib.getMetadata(delegateId, _data.metadata);
+            (_quoteExists, _metadata) = JBDelegateMetadataLib.getMetadata(DELEGATE_ID, _data.metadata);
             if (_quoteExists) (_minimumSwapAmountOut, _amountToSwapWith) = abi.decode(_metadata, (uint256, uint256));
         }
 

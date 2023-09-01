@@ -52,7 +52,7 @@ interface IJBGenericBuybackDelegate is IJBPayDelegate3_1_1, IJBFundingCycleDataS
     function CONTROLLER() external view returns (IJBController3_1);
     function PROJECTS() external view returns (IJBProjects);
     function WETH() external view returns (IWETH9);
-    function delegateId() external view returns (bytes4);
+    function DELEGATE_ID() external view returns (bytes4);
     function poolOf(uint256 projectId, address terminalToken) external view returns (IUniswapV3Pool pool);
     function twapWindowOf(uint256 projectId) external view returns (uint32 window);
     function twapSlippageToleranceOf(uint256 projectId) external view returns (uint256 slippageTolerance);
