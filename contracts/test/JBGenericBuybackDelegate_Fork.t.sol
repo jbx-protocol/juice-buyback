@@ -131,7 +131,7 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
             _factory: address(factory),
             _directory: IJBDirectory(address(jbDirectory)),
             _controller: jbController,
-            _DELEGATE_ID: bytes4(hex'69')
+            _delegateId: bytes4(hex'69')
         });
 
         // JBX V3 pool wasn't deployed at that block

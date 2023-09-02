@@ -111,19 +111,19 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
     /// @param _factory The uniswap v3 factory used to reference pools from.
     /// @param _directory The directory of terminals and controllers.
     /// @param _controller The controller used to mint and burn tokens from.
-    /// @param _DELEGATE_ID The 4bytes ID of this delegate, used for metadata parsing.
+    /// @param _delegateId The 4bytes ID of this delegate, used for metadata parsing.
     constructor(
         IWETH9 _weth,
         address _factory,
         IJBDirectory _directory,
         IJBController3_1 _controller,
-        bytes4 _DELEGATE_ID
+        bytes4 _delegateId
     ) JBOperatable(IJBOperatable(address(_controller)).operatorStore()) {
         WETH = _weth;
         DIRECTORY = _directory;
         CONTROLLER = _controller;
         UNISWAP_V3_FACTORY = _factory;
-        DELEGATE_ID = _DELEGATE_ID;
+        DELEGATE_ID = _delegateId;
         PROJECTS = _controller.projects();
     }
 
