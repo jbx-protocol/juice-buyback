@@ -478,9 +478,6 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         // for checking balance difference after payment
         uint256 _balanceBeforePayment = jbx.balanceOf(beneficiary);
 
-        // to check if the swap failed and mint happened
-        uint256 _terminalBalanceBeforePayment = jbTerminalStore.balanceOf(terminal, 1);
-
         // Pay the project
         jbEthPaymentTerminal.pay{value: _amountIn}(
             1,
