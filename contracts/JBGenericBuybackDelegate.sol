@@ -195,7 +195,9 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
 
             // Mint the amount not specified for swaping.
             return (
-                mulDiv(_data.amount.value - _amountToSwapWith, _data.weight, _data.amount.value),
+                _data.amount.value != 0
+                    ? mulDiv(_data.amount.value - _amountToSwapWith, _data.weight, _data.amount.value)
+                    : 0,
                 _data.memo,
                 delegateAllocations
             );
