@@ -65,7 +65,6 @@ contract BBDHandler is Test {
     uint256 immutable projectId;
 
     uint256 public ghost_accumulatorAmountIn;
-
     address public _beneficiary;
 
     constructor(JBETHPaymentTerminal3_1_1 _terminal, uint256 _projectId) {
