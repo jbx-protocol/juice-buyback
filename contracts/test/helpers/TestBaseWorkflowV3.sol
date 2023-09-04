@@ -87,11 +87,13 @@ contract TestBaseWorkflowV3 is Test {
     IJBPaymentTerminal[] _terminals; // Default empty
 
     // Use the L1 UniswapV3Pool jbx/eth 1% fee for create2 magic
-    IUniswapV3Pool pool = IUniswapV3Pool(0x48598Ff1Cee7b4d31f8f9050C2bbAE98e17E6b17);
+    // IUniswapV3Pool pool = IUniswapV3Pool(0x48598Ff1Cee7b4d31f8f9050C2bbAE98e17E6b17);
     IJBToken jbx = IJBToken(0x3abF2A4f8452cCC2CF7b4C1e4663147600646f66);
     IWETH9 weth = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
     address _uniswapFactory = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
     uint24 fee = 10000;
+
+    IUniswapV3Pool pool;
 
 
     //*********************************************************************//
@@ -262,18 +264,10 @@ contract TestBaseWorkflowV3 is Test {
             ""
         );
 
-        // "Issue" the token with $JBX address (for create2 trick)
-        stdstore.target(address(_jbTokenStore)).sig(_jbTokenStore.tokenOf.selector).with_key(_projectId).checked_write(
-            address(jbx)
-        );
-
-        JBToken _template = new JBToken("jbx", "jbx", _projectId);
-        vm.etch(address(jbx), address(_template).code);
-
-        // Correct ownership
-        stdstore.target(address(jbx)).sig(Ownable(address(jbx)).owner.selector).checked_write(address(_jbTokenStore));
+        vm.prank(_multisig);
+        _jbTokenStore.issueFor(_projectId, "jbx", "jbx");
 
         vm.prank(_multisig);
-        address(_delegate.setPoolFor(_projectId, fee, uint32(cardinality), twapDelta, address(weth)));
+        pool = _delegate.setPoolFor(_projectId, fee, uint32(cardinality), twapDelta, address(weth));
     }
 }

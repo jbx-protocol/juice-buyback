@@ -45,8 +45,17 @@ contract TestJBGenericBuybackDelegate_Invariant is TestBaseWorkflowV3 {
         // super is the Jbx V3 fixture: deploy full protocol, launch project 1, emit token, deploy delegate, set the pool
         super.setUp();
 
-        handler = new BBDHandler(_jbETHPaymentTerminal, _projectId);
+        handler = new BBDHandler(_jbETHPaymentTerminal, _projectId, pool, _delegate);
+
         targetContract(address(handler));
+
+        // for(uint256 i; i < targetContracts().length; i++)
+        //     console.log(targetContracts()[i]);
+
+        // if(excludeContracts().length == 0) console.log("no exclude");
+
+        // else for(uint256 i; i < excludeContracts().length; i++)
+        //     console.log(excludeContracts()[i]);
     }
 
     function invariant_BBD1() public {
@@ -62,21 +71,50 @@ contract TestJBGenericBuybackDelegate_Invariant is TestBaseWorkflowV3 {
 contract BBDHandler is Test {
     JBDelegateMetadataHelper immutable metadataHelper;
     JBETHPaymentTerminal3_1_1 immutable jbETHPaymentTerminal;
+    IUniswapV3Pool immutable pool;
+    IJBGenericBuybackDelegate immutable delegate;
     uint256 immutable projectId;
 
     uint256 public ghost_accumulatorAmountIn;
     address public _beneficiary;
 
-    constructor(JBETHPaymentTerminal3_1_1 _terminal, uint256 _projectId) {
+    constructor(
+        JBETHPaymentTerminal3_1_1 _terminal, 
+        uint256 _projectId, 
+        IUniswapV3Pool _pool,
+        IJBGenericBuybackDelegate _delegate
+    ) {
         metadataHelper = new JBDelegateMetadataHelper();
 
         jbETHPaymentTerminal = _terminal;
         projectId = _projectId;
+        pool = _pool;
+        delegate = _delegate;
+
         _beneficiary = makeAddr('_beneficiary');
     }
 
     function trigger_pay(uint256 _amountIn) public {
         _amountIn = bound(_amountIn, 0, 10000 ether);
+
+        bool zeroForOne = jbETHPaymentTerminal.token() > address(JBTokens.ETH);
+
+        vm.mockCall(
+            address(pool),
+            abi.encodeCall(
+                IUniswapV3PoolActions.swap,
+                (
+                    address(delegate),
+                    zeroForOne,
+                    int256(_amountIn),
+                    zeroForOne
+                        ? TickMath.MIN_SQRT_RATIO + 1
+                        : TickMath.MAX_SQRT_RATIO - 1,
+                    abi.encode(projectId, JBTokens.ETH)
+                )
+            ),
+            abi.encode(0, 0)
+        );
 
         vm.deal(address(this), _amountIn);
         ghost_accumulatorAmountIn += _amountIn;
