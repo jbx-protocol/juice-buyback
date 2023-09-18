@@ -11,6 +11,7 @@
   "license": "MIT",
   "devDependencies": {
     "@exhausted-pigeon/uniswap-v3-forge-quoter": "^1.0.1",
+    "@exhausted-pigeon/uniswap-v3-foundry-pool": "^1.0.3",
     "prettier": "^2.4.0",
     "prettier-plugin-solidity": "^1.0.0-beta.19",
     "solhint": "^3.3.6",
@@ -23,9 +24,9 @@
   "dependencies": {
     "@jbx-protocol/juice-contracts-v3": "^5.0.0",
     "@jbx-protocol/juice-delegate-metadata-lib": "https://github.com/jbx-protocol/juice-delegate-metadata-lib.git",
-    "@openzeppelin/contracts": "^4.9.2",
+    "@openzeppelin/contracts": "^4.9.3",
     "@prb/math": "^4.0.1",
-    "@uniswap/v3-core": "1.0.2-solc-0.8-simulate",
+    "@uniswap/v3-core": "github:uniswap/v3-core#0.8",
     "@uniswap/v3-periphery": "https://github.com/uniswap/v3-periphery.git#b325bb0905d922ae61fcc7df85ee802e8df5e96c",
     "ds-test": "https://github.com/dapphub/ds-test.git#e282159d5170298eb2455a6c05280ab5a73a4ef0",
     "forge-std": "https://github.com/foundry-rs/forge-std.git#06c5a8f760f7d2392697cb092eda80c864e4fc06"

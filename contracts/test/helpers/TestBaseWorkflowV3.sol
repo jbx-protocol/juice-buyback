@@ -34,7 +34,6 @@ import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBConstants.sol";
 
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBSingleTokenPaymentTerminalStore.sol";
 
-import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import "@paulrberg/contracts/math/PRBMath.sol";
 
 import "./AccessJBLib.sol";
@@ -269,5 +268,6 @@ contract TestBaseWorkflowV3 is Test {
 
         vm.prank(_multisig);
         pool = _delegate.setPoolFor(_projectId, fee, uint32(cardinality), twapDelta, address(weth));
+
     }
 }
