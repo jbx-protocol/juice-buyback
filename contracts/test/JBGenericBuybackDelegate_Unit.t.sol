@@ -189,7 +189,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             assertEq(_allocationsReturned[0].amount, _amountIn, "worng amount in returned");
             assertEq(
                 _allocationsReturned[0].metadata,
-                abi.encode(true, _swapOutCount, payParams.weight, address(projectToken) < address(weth)),
+                abi.encode(true, address(projectToken) < address(weth), _swapOutCount, payParams.weight),
                 "wrong metadata"
             );
 
@@ -267,7 +267,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             assertEq(
                 _allocationsReturned[0].metadata,
                 abi.encode(
-                    false, _twapAmountOut, payParams.weight, address(projectToken) < address(weth)
+                    false, address(projectToken) < address(weth), _twapAmountOut, payParams.weight
                 ),
                 "wrong metadata"
             );
@@ -364,9 +364,9 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         // The metadata coming from payParams(..)
         didPayData.dataSourceMetadata = abi.encode(
             true, // use quote
+            address(projectToken) < address(weth),
             _tokenCount,
-            _twapQuote,
-            address(projectToken) < address(weth)
+            _twapQuote
         );
 
 
@@ -461,9 +461,9 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         // The metadata coming from payParams(..)
         didPayData.dataSourceMetadata = abi.encode(
             true, // use quote
+            address(projectToken) < address(weth),
             _tokenCount,
-            _twapQuote,
-            address(projectToken) < address(weth)
+            _twapQuote
         );
 
         // mock the swap call
@@ -561,9 +561,9 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         // The metadata coming from payParams(..)
         didPayData.dataSourceMetadata = abi.encode(
             true, // use quote
+            address(projectToken) < address(weth),
             _tokenCount,
-            1 ether, // weight - unused
-            address(projectToken) < address(weth)
+            1 ether // weight - unused
         );
 
         // mock the swap call reverting
@@ -624,9 +624,9 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         // The metadata coming from payParams(..)
         didPayData.dataSourceMetadata = abi.encode(
             false, // use quote
+            address(otherRandomProjectToken) < address(randomTerminalToken),
             _tokenCount,
-            _weight,
-            address(otherRandomProjectToken) < address(randomTerminalToken)
+            _weight
         );
 
         // mock the swap call reverting
@@ -738,9 +738,9 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         // The metadata coming from payParams(..)
         didPayData.dataSourceMetadata = abi.encode(
             false, // use quote
+            address(projectToken) < address(weth),
             _tokenCount,
-            _weight,
-            address(projectToken) < address(weth)
+            _weight
         );
 
         // mock the swap call reverting

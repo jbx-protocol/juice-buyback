@@ -454,6 +454,16 @@
   dependencies:
     "@uniswap/v3-core" "^1.0.2-solc-0.8-simulate"
 
+"@exhausted-pigeon/uniswap-v3-foundry-pool@^1.0.3":
+  version "1.0.3"
+  resolved "https://registry.yarnpkg.com/@exhausted-pigeon/uniswap-v3-foundry-pool/-/uniswap-v3-foundry-pool-1.0.3.tgz#7a990f896350cf00fd04820b2b1596655e3743b3"
+  integrity sha512-5X6qTVMhwtVO8ZZsOF9VqM0hJf3eca3qIgyuhIHx7UJ3+AgeuyVwpnkqcmDSKjB0RrVriGFCe4tztDLIyjy0QQ==
+  dependencies:
+    "@openzeppelin/contracts" "^4.9.2"
+    "@prb/math" "^4.0.1"
+    ds-test "https://github.com/dapphub/ds-test.git#e282159d5170298eb2455a6c05280ab5a73a4ef0"
+    forge-std "https://github.com/foundry-rs/forge-std.git#06c5a8f760f7d2392697cb092eda80c864e4fc06"
+
 "@jbx-protocol/juice-contracts-v3@^5.0.0":
   version "5.0.0"
   resolved "https://registry.yarnpkg.com/@jbx-protocol/juice-contracts-v3/-/juice-contracts-v3-5.0.0.tgz#019139c6c6a461e7b7093f58ae1c0ceb10220acd"
@@ -475,10 +485,15 @@
   resolved "https://registry.yarnpkg.com/@openzeppelin/contracts/-/contracts-4.6.0.tgz#c91cf64bc27f573836dba4122758b4743418c1b3"
   integrity sha512-8vi4d50NNya/bQqCmaVzvHNmwHvS0OBKb7HNtuNwEE3scXWrP31fKQoGxNMT+KbzmrNZzatE3QK5p2gFONI/hg==
 
-"@openzeppelin/contracts@^4.5.0-rc.0", "@openzeppelin/contracts@^4.9.2":
+"@openzeppelin/contracts@^4.5.0-rc.0":
   version "4.9.2"
   resolved "https://registry.yarnpkg.com/@openzeppelin/contracts/-/contracts-4.9.2.tgz#1cb2d5e4d3360141a17dbc45094a8cad6aac16c1"
   integrity sha512-mO+y6JaqXjWeMh9glYVzVu8HYPGknAAnWyxTRhGeckOruyXQMNnlcW6w/Dx9ftLeIQk6N+ZJFuVmTwF7lEIFrg==
+
+"@openzeppelin/contracts@^4.9.2", "@openzeppelin/contracts@^4.9.3":
+  version "4.9.3"
+  resolved "https://registry.yarnpkg.com/@openzeppelin/contracts/-/contracts-4.9.3.tgz#00d7a8cf35a475b160b3f0293a6403c511099364"
+  integrity sha512-He3LieZ1pP2TNt5JbkPA4PNT9WC3gOTOlDcFGJW4Le4QKqwmiNJCRt44APfxMxvq7OugU/cqYuPcSBzOw38DAg==
 
 "@paulrberg/contracts@^3.4.0":
   version "3.7.0"
@@ -693,6 +708,10 @@
   version "1.0.2-solc-0.8-simulate"
   resolved "https://registry.yarnpkg.com/@uniswap/v3-core/-/v3-core-1.0.2-solc-0.8-simulate.tgz#77fb42f2b502b4fec81844736d039fc059e8688c"
   integrity sha512-ALAZbsb3wvUrRzeAjrTKjv1fH7UrueJ/+D8uX4yintXHxxzbnnp78Kis2pa4D26cFQ72rwM3DrZpUES9rhsEuQ==
+
+"@uniswap/v3-core@github:uniswap/v3-core#0.8":
+  version "1.0.1-solc-0.8"
+  resolved "https://codeload.github.com/uniswap/v3-core/tar.gz/6562c52e8f75f0c10f9deaf44861847585fc8129"
 
 "@uniswap/v3-periphery@https://github.com/uniswap/v3-periphery.git#b325bb0905d922ae61fcc7df85ee802e8df5e96c":
   version "1.4.2-solc-0.8"
@@ -1564,6 +1583,11 @@ dot-case@^2.1.0:
   dependencies:
     no-case "^2.2.0"
 
+"ds-test@git+https://github.com/dapphub/ds-test.git#e282159d5170298eb2455a6c05280ab5a73a4ef0":
+  version "1.0.0"
+  uid e282159d5170298eb2455a6c05280ab5a73a4ef0
+  resolved "git+https://github.com/dapphub/ds-test.git#e282159d5170298eb2455a6c05280ab5a73a4ef0"
+
 "ds-test@https://github.com/dapphub/ds-test.git#e282159d5170298eb2455a6c05280ab5a73a4ef0":
   version "1.0.0"
   resolved "https://github.com/dapphub/ds-test.git#e282159d5170298eb2455a6c05280ab5a73a4ef0"
@@ -1942,6 +1966,11 @@ forever-agent@~0.6.1:
   version "0.6.1"
   resolved "https://registry.yarnpkg.com/forever-agent/-/forever-agent-0.6.1.tgz#fbc71f0c41adeb37f96c577ad1ed42d8fdacca91"
   integrity sha512-j0KLYPhm6zeac4lz3oJ3o65qvgQCcPubiyotZrXqEaG4hNagNYO8qdlUrX5vwqv9ohqeT/Z3j6+yW067yWWdUw==
+
+"forge-std@git+https://github.com/foundry-rs/forge-std.git#06c5a8f760f7d2392697cb092eda80c864e4fc06":
+  version "1.5.3"
+  uid "06c5a8f760f7d2392697cb092eda80c864e4fc06"
+  resolved "git+https://github.com/foundry-rs/forge-std.git#06c5a8f760f7d2392697cb092eda80c864e4fc06"
 
 "forge-std@https://github.com/foundry-rs/forge-std.git#06c5a8f760f7d2392697cb092eda80c864e4fc06":
   version "1.5.3"
