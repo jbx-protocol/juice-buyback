@@ -12,7 +12,7 @@ import {IUniswapV3SwapCallback} from "@uniswap/v3-core/contracts/interfaces/call
 
 import {IWETH9} from "./external/IWETH9.sol";
 
-interface IJBGenericBuybackDelegate is IJBPayDelegate3_1_1, IJBFundingCycleDataSource3_1_1, IUniswapV3SwapCallback {
+interface IJBBuybackDelegate is IJBPayDelegate3_1_1, IJBFundingCycleDataSource3_1_1, IUniswapV3SwapCallback {
     /////////////////////////////////////////////////////////////////////
     //                             Errors                              //
     /////////////////////////////////////////////////////////////////////

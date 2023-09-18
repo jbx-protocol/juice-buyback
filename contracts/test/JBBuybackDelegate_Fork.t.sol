@@ -14,12 +14,12 @@ import "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 
 import "@exhausted-pigeon/uniswap-v3-forge-quoter/src/UniswapV3ForgeQuoter.sol";
 
-import "../JBGenericBuybackDelegate.sol";
+import "../JBBuybackDelegate.sol";
 
 /**
  * @notice Buyback fork integration tests, using $jbx v3
  */
-contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
+contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
     using JBFundingCycleMetadataResolver for JBFundingCycle;
 
     event BuybackDelegate_Swap(uint256 indexed projectId, uint256 amountIn, IUniswapV3Pool pool, uint256 amountOut, address caller);
@@ -70,7 +70,7 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
     JBGroupedSplits[] groupedSplits;
 
     // Target contract
-    JBGenericBuybackDelegate delegate;
+    JBBuybackDelegate delegate;
     
     address beneficiary = makeAddr('benefichiary');
 
@@ -126,7 +126,7 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         jbOperatorStore = IJBOperatable(address(jbTokenStore)).operatorStore();
         jbSplitsStore = jbController.splitsStore();
 
-        delegate = new JBGenericBuybackDelegate({
+        delegate = new JBBuybackDelegate({
             _weth: weth,
             _factory: address(factory),
             _directory: IJBDirectory(address(jbDirectory)),
@@ -576,7 +576,7 @@ contract TestJBGenericBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         // Generate the metadata
         bytes memory _delegateMetadata = metadataHelper.createMetadata(_ids, _data);
 
-        vm.expectRevert(IJBGenericBuybackDelegate.JuiceBuyback_MaximumSlippage.selector);
+        vm.expectRevert(IJBBuybackDelegate.JuiceBuyback_MaximumSlippage.selector);
 
         // Pay the project
         jbEthPaymentTerminal.pay{value: 1 ether}(

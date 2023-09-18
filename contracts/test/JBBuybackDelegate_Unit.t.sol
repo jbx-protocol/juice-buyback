@@ -17,17 +17,17 @@ import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import "forge-std/Test.sol";
 
 import "./helpers/PoolAddress.sol";
-import "../JBGenericBuybackDelegate.sol";
+import "../JBBuybackDelegate.sol";
 import "../libraries/JBBuybackDelegateOperations.sol";
 
 /**
- * @notice Unit tests for the JBGenericBuybackDelegate contract.
+ * @notice Unit tests for the JBBuybackDelegate contract.
  *
  */
-contract TestJBGenericBuybackDelegate_Units is Test {
+contract TestJBBuybackDelegate_Units is Test {
     using stdStorage for StdStorage;
 
-    ForTest_JBGenericBuybackDelegate delegate;
+    ForTest_JBBuybackDelegate delegate;
 
     event BuybackDelegate_Swap(uint256 indexed projectId, uint256 amountIn, IUniswapV3Pool pool, uint256 amountOut, address caller);
     event BuybackDelegate_Mint(uint256 indexed projectId, uint256 amount, uint256 tokenCount, address caller);
@@ -122,7 +122,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         vm.mockCall(address(controller), abi.encodeCall(controller.tokenStore, ()), abi.encode(tokenStore));
 
         vm.prank(owner);
-        delegate = new ForTest_JBGenericBuybackDelegate({
+        delegate = new ForTest_JBBuybackDelegate({
             _weth: weth,
             _factory: _uniswapFactory,
             _directory: directory,
@@ -346,7 +346,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         string memory _memoReturned;
         uint256 _weightReturned;
 
-        vm.expectRevert(IJBGenericBuybackDelegate.JuiceBuyback_InsufficientPayAmount.selector);
+        vm.expectRevert(IJBBuybackDelegate.JuiceBuyback_InsufficientPayAmount.selector);
 
         // Test: call payParams
         vm.prank(terminalStore);
@@ -593,7 +593,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             abi.encodeCall(directory.isTerminalOf, (didPayData.projectId, IJBPaymentTerminal(address(jbxTerminal))))
         );
 
-        vm.expectRevert(IJBGenericBuybackDelegate.JuiceBuyback_MaximumSlippage.selector);
+        vm.expectRevert(IJBBuybackDelegate.JuiceBuyback_MaximumSlippage.selector);
 
         vm.prank(address(jbxTerminal));
         delegate.didPay(didPayData);
@@ -836,7 +836,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
             abi.encodeCall(directory.isTerminalOf, (didPayData.projectId, IJBPaymentTerminal(address(_notTerminal))))
         );
 
-        vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_Unauthorized.selector));
+        vm.expectRevert(abi.encodeWithSelector(IJBBuybackDelegate.JuiceBuyback_Unauthorized.selector));
 
         vm.prank(_notTerminal);
         delegate.didPay(didPayData);
@@ -857,7 +857,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         /**
          * First branch: terminal token = ETH, project token = random IERC20
          */
-        delegate = new ForTest_JBGenericBuybackDelegate({
+        delegate = new ForTest_JBBuybackDelegate({
             _weth: _terminalToken,
             _factory: _uniswapFactory,
             _directory: directory,
@@ -909,7 +909,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         // If project is token0, then received is delta0 (the negative value)
         (_delta0, _delta1) = address(_projectToken) < address(_terminalToken) ? (_delta0, _delta1) : (_delta1, _delta0);
 
-        delegate = new ForTest_JBGenericBuybackDelegate({
+        delegate = new ForTest_JBBuybackDelegate({
             _weth: _terminalToken,
             _factory: _uniswapFactory,
             _directory: directory,
@@ -953,7 +953,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         int256 _delta0 = -1 ether;
         int256 _delta1 = 1 ether;
 
-        vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_Unauthorized.selector));
+        vm.expectRevert(abi.encodeWithSelector(IJBBuybackDelegate.JuiceBuyback_Unauthorized.selector));
         delegate.uniswapV3SwapCallback(
             _delta0, _delta1, abi.encode(projectId, weth, address(projectToken) < address(weth))
         );
@@ -1037,7 +1037,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         vm.prank(owner);
         delegate.setPoolFor(projectId, _fee, uint32(_secondsAgo), _twapDelta, _terminalToken);
 
-        vm.expectRevert(IJBGenericBuybackDelegate.JuiceBuyback_PoolAlreadySet.selector);
+        vm.expectRevert(IJBBuybackDelegate.JuiceBuyback_PoolAlreadySet.selector);
         vm.prank(owner);
         delegate.setPoolFor(projectId, _fee, uint32(_secondsAgo), _twapDelta, _terminalToken);
     }
@@ -1101,22 +1101,22 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         vm.mockCall(address(tokenStore), abi.encodeCall(tokenStore.tokenOf, (projectId)), abi.encode(_projectToken));
 
         // Check: seconds ago too low
-        vm.expectRevert(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapWindow.selector);
+        vm.expectRevert(IJBBuybackDelegate.JuiceBuyback_InvalidTwapWindow.selector);
         vm.prank(owner);
         delegate.setPoolFor(projectId, _fee, uint32(_MIN_TWAP_WINDOW - 1), _MIN_TWAP_SLIPPAGE_TOLERANCE + 1, _terminalToken);
 
         // Check: seconds ago too high
-        vm.expectRevert(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapWindow.selector);
+        vm.expectRevert(IJBBuybackDelegate.JuiceBuyback_InvalidTwapWindow.selector);
         vm.prank(owner);
         delegate.setPoolFor(projectId, _fee, uint32(_MAX_TWAP_WINDOW + 1), _MIN_TWAP_SLIPPAGE_TOLERANCE + 1, _terminalToken);
 
         // Check: min twap deviation too low
-        vm.expectRevert(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapSlippageTolerance.selector);
+        vm.expectRevert(IJBBuybackDelegate.JuiceBuyback_InvalidTwapSlippageTolerance.selector);
         vm.prank(owner);
         delegate.setPoolFor(projectId, _fee, uint32(_MIN_TWAP_WINDOW + 1), _MIN_TWAP_SLIPPAGE_TOLERANCE - 1, _terminalToken);
 
         // Check: max twap deviation too high
-        vm.expectRevert(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapSlippageTolerance.selector);
+        vm.expectRevert(IJBBuybackDelegate.JuiceBuyback_InvalidTwapSlippageTolerance.selector);
         vm.prank(owner);
         delegate.setPoolFor(projectId, _fee, uint32(_MIN_TWAP_WINDOW + 1), _MAX_TWAP_SLIPPAGE_TOLERANCE + 1, _terminalToken);
     }
@@ -1145,7 +1145,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
 
         vm.mockCall(address(tokenStore), abi.encodeCall(tokenStore.tokenOf, (projectId)), abi.encode(address(0)));
 
-        vm.expectRevert(IJBGenericBuybackDelegate.JuiceBuyback_NoProjectToken.selector);
+        vm.expectRevert(IJBBuybackDelegate.JuiceBuyback_NoProjectToken.selector);
         vm.prank(owner);
         delegate.setPoolFor(projectId, _fee, uint32(_secondsAgo), _twapDelta, _terminalToken);
     }
@@ -1223,7 +1223,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         uint256 _newValue = bound(_newValueSeed, _MAX_TWAP_WINDOW + 1, type(uint32).max);
 
         // Check: revert?
-        vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapWindow.selector));
+        vm.expectRevert(abi.encodeWithSelector(IJBBuybackDelegate.JuiceBuyback_InvalidTwapWindow.selector));
 
         // Test: try to change seconds ago
         vm.prank(owner);
@@ -1232,7 +1232,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
         _newValue = bound(_newValueSeed, 0, _MIN_TWAP_WINDOW - 1);
 
         // Check: revert?
-        vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapWindow.selector));
+        vm.expectRevert(abi.encodeWithSelector(IJBBuybackDelegate.JuiceBuyback_InvalidTwapWindow.selector));
 
         // Test: try to change seconds ago
         vm.prank(owner);
@@ -1310,7 +1310,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
 
         uint256 _newDelta = bound(_newDeltaSeed, 0, _MIN_TWAP_SLIPPAGE_TOLERANCE - 1);
 
-        vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapSlippageTolerance.selector));
+        vm.expectRevert(abi.encodeWithSelector(IJBBuybackDelegate.JuiceBuyback_InvalidTwapSlippageTolerance.selector));
 
         // Test: set the twap
         vm.prank(owner);
@@ -1318,7 +1318,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
 
         _newDelta = bound(_newDeltaSeed, _MAX_TWAP_SLIPPAGE_TOLERANCE + 1, type(uint256).max);
 
-        vm.expectRevert(abi.encodeWithSelector(IJBGenericBuybackDelegate.JuiceBuyback_InvalidTwapSlippageTolerance.selector));
+        vm.expectRevert(abi.encodeWithSelector(IJBBuybackDelegate.JuiceBuyback_InvalidTwapSlippageTolerance.selector));
 
         // Test: set the twap
         vm.prank(owner);
@@ -1352,7 +1352,7 @@ contract TestJBGenericBuybackDelegate_Units is Test {
     }
 
     function test_supportsInterface(bytes4 _random) public {
-        vm.assume(_random != type(IJBGenericBuybackDelegate).interfaceId
+        vm.assume(_random != type(IJBBuybackDelegate).interfaceId
             && _random != type(IJBFundingCycleDataSource3_1_1).interfaceId
             && _random != type(IJBPayDelegate3_1_1).interfaceId
             && _random != type(IERC165).interfaceId
@@ -1360,16 +1360,16 @@ contract TestJBGenericBuybackDelegate_Units is Test {
 
         assertTrue(ERC165Checker.supportsInterface(address(delegate), type(IJBFundingCycleDataSource3_1_1).interfaceId));
         assertTrue(ERC165Checker.supportsInterface(address(delegate), type(IJBPayDelegate3_1_1).interfaceId));
-        assertTrue(ERC165Checker.supportsInterface(address(delegate), type(IJBGenericBuybackDelegate).interfaceId));
+        assertTrue(ERC165Checker.supportsInterface(address(delegate), type(IJBBuybackDelegate).interfaceId));
         assertTrue(ERC165Checker.supportsERC165(address(delegate)));
 
         assertFalse(ERC165Checker.supportsInterface(address(delegate), _random));
     }
 }
 
-contract ForTest_JBGenericBuybackDelegate is JBGenericBuybackDelegate {
+contract ForTest_JBBuybackDelegate is JBBuybackDelegate {
     constructor(IWETH9 _weth, address _factory, IJBDirectory _directory, IJBController3_1 _controller, bytes4 _id)
-        JBGenericBuybackDelegate(_weth, _factory, _directory, _controller, _id)
+        JBBuybackDelegate(_weth, _factory, _directory, _controller, _id)
     {}
 
     function ForTest_getQuote(uint256 _projectId, address _projectToken, uint256 _amountIn, address _terminalToken)

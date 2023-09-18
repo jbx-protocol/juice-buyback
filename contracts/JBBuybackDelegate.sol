@@ -28,15 +28,15 @@ import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import {OracleLibrary} from "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import {JBBuybackDelegateOperations} from "./libraries/JBBuybackDelegateOperations.sol";
-import {IJBGenericBuybackDelegate} from "./interfaces/IJBGenericBuybackDelegate.sol";
+import {IJBBuybackDelegate} from "./interfaces/IJBBuybackDelegate.sol";
 import {IWETH9} from "./interfaces/external/IWETH9.sol";
 
 /// @custom:benediction DEVS BENEDICAT ET PROTEGAT CONTRACTVS MEAM
-/// @title JBGenericBuybackDelegate
+/// @title JBBuybackDelegate
 /// @notice Generic Buyback Delegate compatible with any Juicebox payment terminal and any project token that can be pooled.
 /// @notice Functions as a Data Source and Delegate allowing beneficiaries of payments to get the highest amount
 /// of a project's token between minting using the project weight and swapping in a given Uniswap V3 pool.
-contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDelegate {
+contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
     //*********************************************************************//
     // --------------------- internal stored properties ------------------ //
     //*********************************************************************//
@@ -240,7 +240,7 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
     function supportsInterface(bytes4 _interfaceId) public view override(ERC165, IERC165) returns (bool) {
         return _interfaceId == type(IJBFundingCycleDataSource3_1_1).interfaceId
             || _interfaceId == type(IJBPayDelegate3_1_1).interfaceId
-            || _interfaceId == type(IJBGenericBuybackDelegate).interfaceId
+            || _interfaceId == type(IJBBuybackDelegate).interfaceId
             || super.supportsInterface(_interfaceId);
     }
 

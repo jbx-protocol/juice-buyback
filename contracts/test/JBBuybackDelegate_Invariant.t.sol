@@ -14,7 +14,7 @@ import {PoolTestHelper} from "@exhausted-pigeon/uniswap-v3-foundry-pool/src/Pool
  * @dev    Invariant tested:
  *          - BBD1: totalSupply after pay == total supply before pay + (amountIn * weight / 10^18)
  */
-contract TestJBGenericBuybackDelegate_Invariant is TestBaseWorkflowV3, PoolTestHelper {
+contract TestJBBuybackDelegate_Invariant is TestBaseWorkflowV3, PoolTestHelper {
 
     BBDHandler handler;
     JBDelegateMetadataHelper _metadataHelper = new JBDelegateMetadataHelper();
@@ -52,7 +52,7 @@ contract BBDHandler is Test {
     JBDelegateMetadataHelper immutable metadataHelper;
     JBETHPaymentTerminal3_1_1 immutable jbETHPaymentTerminal;
     IUniswapV3Pool immutable pool;
-    IJBGenericBuybackDelegate immutable delegate;
+    IJBBuybackDelegate immutable delegate;
     uint256 immutable projectId;
 
     address public _beneficiary;
@@ -70,7 +70,7 @@ contract BBDHandler is Test {
         JBETHPaymentTerminal3_1_1 _terminal, 
         uint256 _projectId, 
         IUniswapV3Pool _pool,
-        IJBGenericBuybackDelegate _delegate
+        IJBBuybackDelegate _delegate
     ) {
         metadataHelper = new JBDelegateMetadataHelper();
 

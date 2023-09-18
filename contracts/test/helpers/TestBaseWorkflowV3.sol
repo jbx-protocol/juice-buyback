@@ -38,7 +38,7 @@ import "@paulrberg/contracts/math/PRBMath.sol";
 
 import "./AccessJBLib.sol";
 import "../../interfaces/external/IWETH9.sol";
-import "../../JBGenericBuybackDelegate.sol";
+import "../../JBBuybackDelegate.sol";
 
 
 
@@ -69,7 +69,7 @@ contract TestBaseWorkflowV3 is Test {
     JBETHPaymentTerminal3_1_1 internal _jbETHPaymentTerminal;
     AccessJBLib internal _accessJBLib;
 
-    JBGenericBuybackDelegate _delegate;
+    JBBuybackDelegate _delegate;
 
     uint256 _projectId;
     uint256 reservedRate = 4500;
@@ -194,7 +194,7 @@ contract TestBaseWorkflowV3 is Test {
         vm.label(address(_jbETHPaymentTerminal), "JBETHPaymentTerminal");
 
         // Deploy the delegate
-        _delegate = new JBGenericBuybackDelegate({
+        _delegate = new JBBuybackDelegate({
             _weth: weth,
             _factory: _uniswapFactory,
             _directory: IJBDirectory(address(_jbDirectory)),

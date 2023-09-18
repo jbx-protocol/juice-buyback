@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
 
-import "../JBGenericBuybackDelegate.sol";
+import "../JBBuybackDelegate.sol";
 
 contract DeployGeneric is Script {
     uint256 _chainId = block.chainid;
@@ -76,7 +76,7 @@ contract DeployGeneric is Script {
         console.log(address(_controller));
 
         vm.startBroadcast();
-        JBGenericBuybackDelegate _delegate = new JBGenericBuybackDelegate(
+        JBBuybackDelegate _delegate = new JBBuybackDelegate(
             _weth,
             _factory,
             _directory,
