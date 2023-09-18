@@ -278,7 +278,33 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             : IERC20(_data.forwardedAmount.token).balanceOf(address(this));
 
         // Use any leftover amount of tokens paid in remaining to mint.
-        if (_terminalTokenInThisContract != 0) _mint(_data, _terminalTokenInThisContract, _weight);
+        // Keep a reference to the number of tokens being minted.
+        uint256 _partialMintTokenCount;
+        if (_terminalTokenInThisContract != 0) {
+            _partialMintTokenCount = mulDiv18(_terminalTokenInThisContract, _weight);
+
+            // If the token paid in wasn't ETH, give the terminal permission to pull them back into its balance.
+            if (_data.forwardedAmount.token != JBTokens.ETH) {
+                IERC20(_data.forwardedAmount.token).approve(msg.sender, _terminalTokenInThisContract);
+            }
+
+            // Add the paid amount back to the project's terminal balance.
+            IJBPayoutRedemptionPaymentTerminal3_1_1(msg.sender).addToBalanceOf{
+                value: _data.forwardedAmount.token == JBTokens.ETH ? _terminalTokenInThisContract : 0
+            }(_data.projectId, _terminalTokenInThisContract, _data.forwardedAmount.token, "", "");
+
+            emit BuybackDelegate_Mint(_data.projectId, _terminalTokenInThisContract, _partialMintTokenCount, msg.sender);
+        } 
+
+        // Mint the whole amount of tokens again together with the (optional partial mint), such that the correct portion of reserved tokens get taken into account.
+        CONTROLLER.mintTokensOf({
+            projectId: _data.projectId,
+            tokenCount: _exactSwapAmountOut + _partialMintTokenCount,
+            beneficiary: address(_data.beneficiary),
+            memo: _data.memo,
+            preferClaimedTokens: _data.preferClaimedTokens,
+            useReservedRate: true
+        });
     }
 
     /// @notice The Uniswap V3 pool callback where the token transfer is expected to happen.
@@ -515,47 +541,8 @@ contract JBGenericBuybackDelegate is ERC165, JBOperatable, IJBGenericBuybackDele
             preferClaimedTokens: true
         });
 
-        // Mint the whole amount of tokens again, such that the correct portion of reserved tokens get taken into account.
-        CONTROLLER.mintTokensOf({
-            projectId: _data.projectId,
-            tokenCount: _amountReceived,
-            beneficiary: address(_data.beneficiary),
-            memo: _data.memo,
-            preferClaimedTokens: _data.preferClaimedTokens,
-            useReservedRate: true
-        });
+        // We return the amount we received/burned and we will mint them to the user later
 
         emit BuybackDelegate_Swap(_data.projectId, _amountToSwapWith, _pool, _amountReceived, msg.sender);
-    }
-
-    /// @notice Add the specified amount of funds back into the project's terminal, and mint the appropriate amount of project tokens.
-    /// @param _data The didPayData passed by the terminal.
-    /// @param _amount The amount to add back to the project's balance.
-    /// @param _weight The relative amount of tokens that should be minted when a project receives funds.
-    function _mint(JBDidPayData3_1_1 calldata _data, uint256 _amount, uint256 _weight) internal {
-        // Keep a reference to the number of tokens being minted.
-        uint256 _tokenCount = mulDiv18(_amount, _weight);
-       
-        // Mint to the beneficiary, making sure the reserved rate gets taken into account.
-        CONTROLLER.mintTokensOf({
-            projectId: _data.projectId,
-            tokenCount: _tokenCount,
-            beneficiary: _data.beneficiary,
-            memo: _data.memo,
-            preferClaimedTokens: _data.preferClaimedTokens,
-            useReservedRate: true
-        });
-
-        // If the token paid in wasn't ETH, give the terminal permission to pull them back into its balance.
-        if (_data.forwardedAmount.token != JBTokens.ETH) {
-            IERC20(_data.forwardedAmount.token).approve(msg.sender, _data.forwardedAmount.value);
-        }
-
-        // Add the paid amount back to the project's terminal balance.
-        IJBPayoutRedemptionPaymentTerminal3_1_1(msg.sender).addToBalanceOf{
-            value: _data.forwardedAmount.token == JBTokens.ETH ? _amount : 0
-        }(_data.projectId, _amount, _data.forwardedAmount.token, "", "");
-
-        emit BuybackDelegate_Mint(_data.projectId, _amount, _tokenCount, msg.sender);
     }
 }
