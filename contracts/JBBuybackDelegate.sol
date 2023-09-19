@@ -23,7 +23,7 @@ import {JBTokens} from "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBT
 import {JBDelegateMetadataLib} from "@jbx-protocol/juice-delegate-metadata-lib/src/JBDelegateMetadataLib.sol";
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {ERC165, IERC165} from "@openzeppelin/contracts/utils/introspection/ERC165.sol";
-import {mulDiv18, mulDiv} from "@prb/math/src/Common.sol";
+import {mulDiv} from "@prb/math/src/Common.sol";
 import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import {OracleLibrary} from "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
@@ -164,7 +164,7 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
         if (_amountToSwapWith == 0) _amountToSwapWith = _data.amount.value;
 
         // Find the default total number of tokens to mint as if no Buyback Delegate were installed, as a fixed point number with 18 decimals
-        uint256 _tokenCountWithoutDelegate = mulDiv18(_amountToSwapWith, _data.weight);
+        uint256 _tokenCountWithoutDelegate = mulDiv(_amountToSwapWith, _data.weight, _data.amount.decimals);
 
         // Keep a reference to the project's token.
         address _projectToken = projectTokenOf[_data.projectId];
@@ -190,7 +190,7 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
             delegateAllocations[0] = JBPayDelegateAllocation3_1_1({
                 delegate: IJBPayDelegate3_1_1(this),
                 amount: _amountToSwapWith,
-                metadata: abi.encode(_quoteExists, _projectTokenIs0, _minimumSwapAmountOut, _data.weight)
+                metadata: abi.encode(_quoteExists, _projectTokenIs0, _minimumSwapAmountOut, _data.amount.value - _amountToSwapWith, _data.weight)
             });
 
             // All the mint will be done in didPay, return 0 as weight to avoid minting via the terminal
@@ -261,6 +261,7 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
             bool _quoteExists,
             bool _projectTokenIs0,
             uint256 _minimumSwapAmountOut,
+            uint256 _amountToMintWith,
             uint256 _weight
         ) = abi.decode(_data.dataSourceMetadata, (bool, bool, uint256, uint256));
 
@@ -275,14 +276,11 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
             ? address(this).balance
             : IERC20(_data.forwardedAmount.token).balanceOf(address(this));
 
-        // Get a reference to any amount of token paid which are in the terminal's balance (ie extra-funds used to mint)
-        uint256 _tokenToMintFromTerminal = mulDiv18(_data.amount.value - _data.forwardedAmount.value, _weight);
-
         // Use any leftover amount of tokens paid in remaining to mint.
         // Keep a reference to the number of tokens being minted.
         uint256 _partialMintTokenCount;
         if (_terminalTokenInThisContract != 0) {
-            _partialMintTokenCount = mulDiv18(_terminalTokenInThisContract, _weight);
+            _partialMintTokenCount = mulDiv(_terminalTokenInThisContract, _weight, _data.amount.decimals);
 
             // If the token paid in wasn't ETH, give the terminal permission to pull them back into its balance.
             if (_data.forwardedAmount.token != JBTokens.ETH) {
@@ -297,10 +295,13 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
             emit BuybackDelegate_Mint(_data.projectId, _terminalTokenInThisContract, _partialMintTokenCount, msg.sender);
         } 
 
+        // Get a reference to any amount of token paid which are in the terminal's balance (ie extra-funds used to mint)
+        uint256 _tokensToMintFromTerminal = mulDiv(_amountToMintWith, _weight, _data.amount.decimals);
+
         // Mint the whole amount of tokens again together with the (optional partial mint), such that the correct portion of reserved tokens get taken into account.
         CONTROLLER.mintTokensOf({
             projectId: _data.projectId,
-            tokenCount: _exactSwapAmountOut + _partialMintTokenCount + _tokenToMintFromTerminal,
+            tokenCount: _exactSwapAmountOut + _partialMintTokenCount + _tokensToMintFromTerminal,
             beneficiary: address(_data.beneficiary),
             memo: _data.memo,
             preferClaimedTokens: _data.preferClaimedTokens,
