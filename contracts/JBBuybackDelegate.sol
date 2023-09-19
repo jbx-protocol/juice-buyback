@@ -164,7 +164,7 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
         if (_amountToSwapWith == 0) _amountToSwapWith = _data.amount.value;
 
         // Find the default total number of tokens to mint as if no Buyback Delegate were installed, as a fixed point number with 18 decimals
-        uint256 _tokenCount = mulDiv18(_amountToSwapWith, _data.weight);
+        uint256 _tokenCountWithoutDelegate = mulDiv18(_amountToSwapWith, _data.weight);
 
         // Keep a reference to the project's token.
         address _projectToken = projectTokenOf[_data.projectId];
@@ -178,7 +178,7 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
         }
 
         // If the minimum amount received from swapping is greather than received when minting, use the swap path.
-        if (_tokenCount < _minimumSwapAmountOut) {
+        if (_tokenCountWithoutDelegate < _minimumSwapAmountOut) {
             // Make sure the amount to swap with is at most the full amount being paid.
             if (_amountToSwapWith > _data.amount.value) revert JuiceBuyback_InsufficientPayAmount();
 
@@ -193,17 +193,16 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
                 metadata: abi.encode(_quoteExists, _projectTokenIs0, _minimumSwapAmountOut, _data.weight)
             });
 
-            // Mint the amount not specified for swaping.
+
+            // All the mint will be done in didPay, return 0 as weight to avoid minting via the terminal
             return (
-                _data.amount.value != 0
-                    ? mulDiv(_data.amount.value - _amountToSwapWith, _data.weight, _data.amount.value)
-                    : 0,
+                0,
                 _data.memo,
                 delegateAllocations
             );
         }
 
-        // If minting, delegateAllocations is left uninitialised.
+        // If only minting, delegateAllocations is left uninitialised and the full weight is returned for the terminal to mint.
         return (_data.weight, _data.memo, delegateAllocations);
     }
 
@@ -277,6 +276,9 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
             ? address(this).balance
             : IERC20(_data.forwardedAmount.token).balanceOf(address(this));
 
+        // Get a reference to any amount of token paid which are in the terminal's balance (ie extra-funds to mint)
+        uint256 _tokenToMintFromTerminal = mulDiv(_data.amount.value - _data.forwardedAmount.value, _weight, _data.amount.decimals);
+
         // Use any leftover amount of tokens paid in remaining to mint.
         // Keep a reference to the number of tokens being minted.
         uint256 _partialMintTokenCount;
@@ -299,7 +301,7 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
         // Mint the whole amount of tokens again together with the (optional partial mint), such that the correct portion of reserved tokens get taken into account.
         CONTROLLER.mintTokensOf({
             projectId: _data.projectId,
-            tokenCount: _exactSwapAmountOut + _partialMintTokenCount,
+            tokenCount: _exactSwapAmountOut + _partialMintTokenCount + _tokenToMintFromTerminal,
             beneficiary: address(_data.beneficiary),
             memo: _data.memo,
             preferClaimedTokens: _data.preferClaimedTokens,
