@@ -4,7 +4,7 @@
 
 Provides a datasource and delegate which maximise the project token received by the contributor when they call `pay` on the terminal. In order to do so, the delegate will either mint new tokens ("vanilla" path, bypassing the delegate) or swap existing token in an Uniswap V3 pool ("buyback" path), depending on the best quote available at the time of the call.
 
-This first iteration is only compatible with ETH terminals.
+This first iteration is only compatible with 18-decimals token terminals.
 
 ## Design
 ### Flow
@@ -30,3 +30,8 @@ Maximizing the project token received by the contributor while leveling the fund
  - This delegate is, for now, only compatible with ETH as terminal token.
  - This delegate relies on the liquidity available in an Uniswap V3. If LP migrate to a new pool or another DEX, this delegate would need to be redeployed.
  - A low liquidity might, if the max slippage isn't set properly, lead to an actual amount of token received lower than expected.
+
+## Future work
+- Non-18 decimals token should use a non fixed decimals (ln167, ln199, ln284 - `_data.amount.decimals`) and the tests should then use this same decimals (or the terminal decimal for forked tests, `IJBSingleTokenPaymentTerminal(address(jbEthPaymentTerminal)).decimals()`)
+- Invariant are only partially tested (total supply hold in mint case, pool needfs additional tooling as we rely on hardcoded pool hash for create2)
+- A first version was designed to be used as a BBD for an unique project (project token, pool, etc being immutables), in order to keep the gas cost as low as possible. This might be resumed and further tested if a need arises.
