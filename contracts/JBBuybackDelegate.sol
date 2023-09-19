@@ -193,7 +193,6 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
                 metadata: abi.encode(_quoteExists, _projectTokenIs0, _minimumSwapAmountOut, _data.weight)
             });
 
-
             // All the mint will be done in didPay, return 0 as weight to avoid minting via the terminal
             return (
                 0,
@@ -276,8 +275,8 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
             ? address(this).balance
             : IERC20(_data.forwardedAmount.token).balanceOf(address(this));
 
-        // Get a reference to any amount of token paid which are in the terminal's balance (ie extra-funds to mint)
-        uint256 _tokenToMintFromTerminal = mulDiv(_data.amount.value - _data.forwardedAmount.value, _weight, _data.amount.decimals);
+        // Get a reference to any amount of token paid which are in the terminal's balance (ie extra-funds used to mint)
+        uint256 _tokenToMintFromTerminal = mulDiv18(_data.amount.value - _data.forwardedAmount.value, _weight);
 
         // Use any leftover amount of tokens paid in remaining to mint.
         // Keep a reference to the number of tokens being minted.
