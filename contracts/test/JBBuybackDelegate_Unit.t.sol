@@ -195,8 +195,8 @@ contract TestJBBuybackDelegate_Units is Test {
 
             assertEq(
                 _weightReturned,
-                mulDiv(payParams.amount.value - _amountIn, payParams.weight, payParams.amount.value),
-                "wrong weight returned (for the leftover)"
+                0,
+                "wrong weight returned (if swapping)"
             );
         }
 
