@@ -138,13 +138,6 @@ contract TestJBBuybackDelegate_Units is Test {
         );
     }
 
-    function test_tokenAmounts() public {
-        uint256 _tokenCountWithoutDelegate = mulDiv(1000000, 1 ether, 18);
-        emit log_uint(_tokenCountWithoutDelegate);
-
-        assertEq(_tokenCountWithoutDelegate, 1);
-    }
-
     /**
      * @notice Test payParams when a quote is provided as metadata
      *
@@ -198,7 +191,7 @@ contract TestJBBuybackDelegate_Units is Test {
             assertEq(_allocationsReturned[0].amount, _amountIn, "worng amount in returned");
             assertEq(
                 _allocationsReturned[0].metadata,
-                abi.encode(true, address(projectToken) < address(weth), _swapOutCount, payParams.weight),
+                abi.encode(true, address(projectToken) < address(weth), _swapOutCount, payParams.amount.value - _amountIn, payParams.weight),
                 "wrong metadata"
             );
 
@@ -276,7 +269,7 @@ contract TestJBBuybackDelegate_Units is Test {
             assertEq(
                 _allocationsReturned[0].metadata,
                 abi.encode(
-                    false, address(projectToken) < address(weth), _twapAmountOut, payParams.weight
+                    false, address(projectToken) < address(weth), _twapAmountOut, 0, payParams.weight
                 ),
                 "wrong metadata"
             );
@@ -375,6 +368,7 @@ contract TestJBBuybackDelegate_Units is Test {
             true, // use quote
             address(projectToken) < address(weth),
             _tokenCount,
+            0,
             _twapQuote
         );
 
@@ -472,6 +466,7 @@ contract TestJBBuybackDelegate_Units is Test {
             true, // use quote
             address(projectToken) < address(weth),
             _tokenCount,
+            0,
             _twapQuote
         );
 
@@ -572,6 +567,7 @@ contract TestJBBuybackDelegate_Units is Test {
             true, // use quote
             address(projectToken) < address(weth),
             _tokenCount,
+            0,
             1 ether // weight - unused
         );
 
@@ -635,6 +631,7 @@ contract TestJBBuybackDelegate_Units is Test {
             false, // use quote
             address(otherRandomProjectToken) < address(randomTerminalToken),
             _tokenCount,
+            0,
             _weight
         );
 
@@ -749,6 +746,7 @@ contract TestJBBuybackDelegate_Units is Test {
             false, // use quote
             address(projectToken) < address(weth),
             _tokenCount,
+            0,
             _weight
         );
 
