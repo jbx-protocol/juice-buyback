@@ -16,6 +16,8 @@ import "@exhausted-pigeon/uniswap-v3-forge-quoter/src/UniswapV3ForgeQuoter.sol";
 
 import "../JBBuybackDelegate.sol";
 
+import {mulDiv18} from "@prb/math/src/Common.sol";
+
 /**
  * @notice Buyback fork integration tests, using $jbx v3
  */

@@ -20,6 +20,8 @@ import "./helpers/PoolAddress.sol";
 import "../JBBuybackDelegate.sol";
 import "../libraries/JBBuybackDelegateOperations.sol";
 
+import {mulDiv18} from "@prb/math/src/Common.sol";
+
 /**
  * @notice Unit tests for the JBBuybackDelegate contract.
  *
@@ -134,6 +136,13 @@ contract TestJBBuybackDelegate_Units is Test {
         delegate.ForTest_initPool(
             randomPool, randomId, secondsAgo, twapDelta, address(otherRandomProjectToken), address(randomTerminalToken)
         );
+    }
+
+    function test_tokenAmounts() public {
+        uint256 _tokenCountWithoutDelegate = mulDiv(1000000, 1 ether, 18);
+        emit log_uint(_tokenCountWithoutDelegate);
+
+        assertEq(_tokenCountWithoutDelegate, 1);
     }
 
     /**
