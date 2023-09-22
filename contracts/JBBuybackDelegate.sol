@@ -170,7 +170,8 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
         if (_amountToSwapWith == 0) _amountToSwapWith = _totalPaid;
 
         // Find the default total number of tokens to mint as if no Buyback Delegate were installed, as a fixed point number with 18 decimals
-        uint256 _tokenCountWithoutDelegate = mulDiv(_amountToSwapWith, _weight, _data.amount.decimals);
+        
+        uint256 _tokenCountWithoutDelegate = mulDiv(_amountToSwapWith, _weight, 10 ** _data.amount.decimals);
 
         // Keep a reference to the project's token.
         address _projectToken = projectTokenOf[_data.projectId];
@@ -286,7 +287,7 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
         // Keep a reference to the number of tokens being minted.
         uint256 _partialMintTokenCount;
         if (_terminalTokenInThisContract != 0) {
-            _partialMintTokenCount = mulDiv(_terminalTokenInThisContract, _weight, _data.amount.decimals);
+            _partialMintTokenCount = mulDiv(_terminalTokenInThisContract, _weight, 10 ** _data.amount.decimals);
 
             // If the token paid in wasn't ETH, give the terminal permission to pull them back into its balance.
             if (_data.forwardedAmount.token != JBTokens.ETH) {
@@ -301,8 +302,8 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
             emit BuybackDelegate_Mint(_data.projectId, _terminalTokenInThisContract, _partialMintTokenCount, msg.sender);
         } 
 
-        // Get a reference to any amount of token paid which are in the terminal's balance (ie extra-funds used to mint)
-        _partialMintTokenCount += mulDiv(_amountToMintWith, _weight, _data.amount.decimals);
+        // Add amount to mint to leftover mint amount (avoiding stack too deep here)
+        _partialMintTokenCount += mulDiv(_amountToMintWith, _weight, 10 ** _data.amount.decimals);
 
         // Mint the whole amount of tokens again together with the (optional partial mint), such that the correct portion of reserved tokens get taken into account.
         CONTROLLER.mintTokensOf({
