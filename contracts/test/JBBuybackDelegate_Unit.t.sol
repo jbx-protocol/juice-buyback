@@ -450,15 +450,17 @@ contract TestJBBuybackDelegate_Units is Test {
     /**
      * @notice Test didPay with token received from swapping
      */
-    function test_didPay_swap_ERC20(uint256 _tokenCount, uint256 _twapQuote ) public {
+    function test_didPay_swap_ERC20(uint256 _tokenCount, uint256 _twapQuote, uint256 _decimals ) public {
         // Bound to avoid overflow and insure swap quote > mint quote
         _tokenCount = bound(_tokenCount, 2, type(uint256).max - 1);
         _twapQuote = bound(_twapQuote, _tokenCount + 1, type(uint256).max);
 
+        _decimals = bound(_decimals, 1, 18);
+
         didPayData.amount =
-            JBTokenAmount({token: address(randomTerminalToken), value: 1 ether, decimals: 18, currency: 1});
+            JBTokenAmount({token: address(randomTerminalToken), value: 1 ether, decimals: _decimals, currency: 1});
         didPayData.forwardedAmount =
-            JBTokenAmount({token: address(randomTerminalToken), value: 1 ether, decimals: 18, currency: 1});
+            JBTokenAmount({token: address(randomTerminalToken), value: 1 ether, decimals: _decimals, currency: 1});
         didPayData.projectId = randomId;
 
         // The metadata coming from payParams(..)
@@ -607,17 +609,19 @@ contract TestJBBuybackDelegate_Units is Test {
     /**
      * @notice Test didPay with swap reverting while using the twap, should then mint with the delegate balance, random erc20 is terminal token
      */
-    function test_didPay_swapRevertWithoutQuote_ERC20(uint256 _tokenCount, uint256 _weight) public {
+    function test_didPay_swapRevertWithoutQuote_ERC20(uint256 _tokenCount, uint256 _weight, uint256 _decimals) public {
         // The current weight
         _weight = bound(_weight, 1, 1 ether);
 
         // The amount of termminal token in this delegate (avoid overflowing when mul by weight)
         _tokenCount = bound(_tokenCount, 2, type(uint128).max);
 
+        _decimals = bound(_decimals, 1, 18);
+
         didPayData.amount =
-            JBTokenAmount({token: address(randomTerminalToken), value: _tokenCount, decimals: 18, currency: 1});
+            JBTokenAmount({token: address(randomTerminalToken), value: _tokenCount, decimals: _decimals, currency: 1});
         didPayData.forwardedAmount =
-            JBTokenAmount({token: address(randomTerminalToken), value: _tokenCount, decimals: 18, currency: 1});
+            JBTokenAmount({token: address(randomTerminalToken), value: _tokenCount, decimals: _decimals, currency: 1});
         didPayData.projectId = randomId;
 
         vm.mockCall(
@@ -678,7 +682,7 @@ contract TestJBBuybackDelegate_Units is Test {
             address(controller),
             abi.encodeCall(
                 controller.mintTokensOf,
-                (didPayData.projectId, mulDiv18(_tokenCount, _weight), didPayData.beneficiary, didPayData.memo, didPayData.preferClaimedTokens, true)
+                (didPayData.projectId, mulDiv(_tokenCount, _weight, _decimals), didPayData.beneficiary, didPayData.memo, didPayData.preferClaimedTokens, true)
             ),
             abi.encode(true)
         );
@@ -686,7 +690,7 @@ contract TestJBBuybackDelegate_Units is Test {
             address(controller),
             abi.encodeCall(
                 controller.mintTokensOf,
-                (didPayData.projectId, _tokenCount * _weight / 1e18, didPayData.beneficiary, didPayData.memo, didPayData.preferClaimedTokens, true)
+                (didPayData.projectId, _tokenCount * _weight / _decimals, didPayData.beneficiary, didPayData.memo, didPayData.preferClaimedTokens, true)
             )
         );
 
@@ -728,18 +732,20 @@ contract TestJBBuybackDelegate_Units is Test {
     /**
      * @notice Test didPay with swap reverting while using the twap, should then mint with the delegate balance, random erc20 is terminal token
      */
-    function test_didPay_swapRevertWithoutQuote_ETH(uint256 _tokenCount, uint256 _weight) public {
+    function test_didPay_swapRevertWithoutQuote_ETH(uint256 _tokenCount, uint256 _weight, uint256 _decimals) public {
         // The current weight
         _weight = bound(_weight, 1, 1 ether);
 
         // The amount of termminal token in this delegate (avoid overflowing when mul by weight)
         _tokenCount = bound(_tokenCount, 2, type(uint128).max);
 
+        _decimals = bound(_decimals, 1, 18);
+
         didPayData.amount =
-            JBTokenAmount({token: JBTokens.ETH, value: _tokenCount, decimals: 18, currency: 1});
+            JBTokenAmount({token: JBTokens.ETH, value: _tokenCount, decimals: _decimals, currency: 1});
 
         didPayData.forwardedAmount =
-            JBTokenAmount({token: JBTokens.ETH, value: _tokenCount, decimals: 18, currency: 1});
+            JBTokenAmount({token: JBTokens.ETH, value: _tokenCount, decimals: _decimals, currency: 1});
 
         // The metadata coming from payParams(..)
         didPayData.dataSourceMetadata = abi.encode(
