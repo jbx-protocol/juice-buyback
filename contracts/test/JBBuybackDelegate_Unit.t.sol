@@ -445,6 +445,97 @@ contract TestJBBuybackDelegate_Units is Test {
     }
 
     /**
+     * @notice Test didPay with token received from swapping, within slippage and no leftover in the delegate
+     */
+    function test_didPay_swap_ETH_with_extrafunds(uint256 _tokenCount, uint256 _twapQuote) public {
+        // Bound to avoid overflow and insure swap quote > mint quote
+        _tokenCount = bound(_tokenCount, 2, type(uint256).max - 1);
+        _twapQuote = bound(_twapQuote, _tokenCount + 1, type(uint256).max);
+
+        // The metadata coming from payParams(..)
+        didPayData.dataSourceMetadata = abi.encode(
+            true, // use quote
+            address(projectToken) < address(weth),
+            _tokenCount,
+            _twapQuote
+        );
+
+
+        // mock the swap call
+        vm.mockCall(
+            address(pool),
+            abi.encodeCall(
+                pool.swap,
+                (
+                    address(delegate),
+                    address(weth) < address(projectToken),
+                    int256(1 ether),
+                    address(projectToken) < address(weth) ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
+                    abi.encode(projectId, JBTokens.ETH)
+                )
+            ),
+            abi.encode(-int256(_twapQuote), -int256(_twapQuote))
+        );
+        vm.expectCall(
+            address(pool),
+            abi.encodeCall(
+                pool.swap,
+                (
+                    address(delegate),
+                    address(weth) < address(projectToken),
+                    int256(1 ether),
+                    address(projectToken) < address(weth) ? TickMath.MAX_SQRT_RATIO - 1 : TickMath.MIN_SQRT_RATIO + 1,
+                    abi.encode(projectId, JBTokens.ETH)
+                )
+            )
+        );
+
+        // mock call to pass the authorization check
+        vm.mockCall(
+            address(directory),
+            abi.encodeCall(directory.isTerminalOf, (didPayData.projectId, IJBPaymentTerminal(address(jbxTerminal)))),
+            abi.encode(true)
+        );
+        vm.expectCall(
+            address(directory),
+            abi.encodeCall(directory.isTerminalOf, (didPayData.projectId, IJBPaymentTerminal(address(jbxTerminal))))
+        );
+
+        // mock the burn call
+        vm.mockCall(
+            address(controller),
+            abi.encodeCall(controller.burnTokensOf, (address(delegate), didPayData.projectId, _twapQuote, "", true)),
+            abi.encode(true)
+        );
+        vm.expectCall(
+            address(controller),
+            abi.encodeCall(controller.burnTokensOf, (address(delegate), didPayData.projectId, _twapQuote, "", true))
+        );
+
+        // mock the minting call
+        vm.mockCall(
+            address(controller),
+            abi.encodeCall(
+                controller.mintTokensOf, (didPayData.projectId, _twapQuote, address(dude), didPayData.memo, true, true)
+            ),
+            abi.encode(true)
+        );
+        vm.expectCall(
+            address(controller),
+            abi.encodeCall(
+                controller.mintTokensOf, (didPayData.projectId, _twapQuote, address(dude), didPayData.memo, true, true)
+            )
+        );
+
+        // expect event
+        vm.expectEmit(true, true, true, true);
+        emit BuybackDelegate_Swap(didPayData.projectId, didPayData.amount.value, pool, _twapQuote, address(jbxTerminal));
+
+        vm.prank(address(jbxTerminal));
+        delegate.didPay(didPayData);
+    }
+
+    /**
      * @notice Test didPay with token received from swapping
      */
     function test_didPay_swap_ERC20(uint256 _tokenCount, uint256 _twapQuote ) public {
