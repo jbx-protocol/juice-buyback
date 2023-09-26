@@ -187,7 +187,7 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
         // If the minimum amount received from swapping is greather than received when minting, use the swap path.
         if (_tokenCountWithoutDelegate < _minimumSwapAmountOut) {
             // Make sure the amount to swap with is at most the full amount being paid.
-            if (_amountToSwapWith > _totalPaid || _totalPaid == 0) revert JuiceBuyback_InsufficientPayAmount();
+            if (_amountToSwapWith > _totalPaid) revert JuiceBuyback_InsufficientPayAmount();
 
             // Keep a reference to a flag indicating if the pool will reference the project token as the first in the pair.
             bool _projectTokenIs0 = address(_projectToken) < _terminalToken;
