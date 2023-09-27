@@ -20,8 +20,6 @@ import "./helpers/PoolAddress.sol";
 import "../JBBuybackDelegate.sol";
 import "../libraries/JBBuybackDelegateOperations.sol";
 
-import {mulDiv18} from "@prb/math/src/Common.sol";
-
 /**
  * @notice Unit tests for the JBBuybackDelegate contract.
  *
@@ -330,7 +328,7 @@ contract TestJBBuybackDelegate_Units is Test {
 
         uint256 _weight = 1 ether;
 
-        uint256 _tokenCount = mulDiv18(_amountIn, _weight);
+        uint256 _tokenCount = mulDiv(_amountIn, _weight, 10**18);
 
         // Avoid accidentally using the twap (triggered if out == 0)
         _swapOutCount = bound(_swapOutCount, _tokenCount + 1, type(uint256).max);
