@@ -143,14 +143,20 @@ contract TestJBBuybackDelegate_Units is Test {
      *
      * @dev    _tokenCount == weight, as we use a value of 1.
      */
-    function test_payParams_callWithQuote(uint256 _weight, uint256 _swapOutCount, uint256 _amountIn) public {
-        // Use between 1 wei and the whole amount from pay(..)
-        _amountIn = bound(_amountIn, 1, payParams.amount.value);
-
+    function test_payParams_callWithQuote(uint256 _weight, uint256 _swapOutCount, uint256 _amountIn, uint256 _decimals) public {
         // Avoid accidentally using the twap (triggered if out == 0)
         _swapOutCount = bound(_swapOutCount, 1, type(uint256).max);
 
-        uint256 _tokenCount = mulDiv18(_amountIn, _weight);
+        // Avoid mulDiv overflow
+        _weight = bound(_weight, 1, 1 ether);
+
+        // Use between 1 wei and the whole amount from pay(..)
+        _amountIn = bound(_amountIn, 1, payParams.amount.value);
+
+        // The terminal token decimals
+        _decimals = bound(_decimals, 1, 18);
+
+        uint256 _tokenCount = mulDiv(_amountIn, _weight, 10**_decimals);
 
         // Pass the quote as metadata
         bytes[] memory _data = new bytes[](1);
@@ -166,6 +172,7 @@ contract TestJBBuybackDelegate_Units is Test {
         // Set the relevant payParams data
         payParams.weight = _weight;
         payParams.metadata = _metadata;
+        payParams.amount = JBTokenAmount({token: address(weth), value: 1 ether, decimals: _decimals, currency: 1});
 
         // Returned values to catch:
         JBPayDelegateAllocation3_1_1[] memory _allocationsReturned;
