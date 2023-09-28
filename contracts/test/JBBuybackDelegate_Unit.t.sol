@@ -141,14 +141,20 @@ contract TestJBBuybackDelegate_Units is Test {
      *
      * @dev    _tokenCount == weight, as we use a value of 1.
      */
-    function test_payParams_callWithQuote(uint256 _weight, uint256 _swapOutCount, uint256 _amountIn) public {
-        // Use between 1 wei and the whole amount from pay(..)
-        _amountIn = bound(_amountIn, 1, payParams.amount.value);
-
+    function test_payParams_callWithQuote(uint256 _weight, uint256 _swapOutCount, uint256 _amountIn, uint256 _decimals) public {
         // Avoid accidentally using the twap (triggered if out == 0)
         _swapOutCount = bound(_swapOutCount, 1, type(uint256).max);
 
-        uint256 _tokenCount = mulDiv18(_amountIn, _weight);
+        // Avoid mulDiv overflow
+        _weight = bound(_weight, 1, 1 ether);
+
+        // Use between 1 wei and the whole amount from pay(..)
+        _amountIn = bound(_amountIn, 1, payParams.amount.value);
+
+        // The terminal token decimals
+        _decimals = bound(_decimals, 1, 18);
+
+        uint256 _tokenCount = mulDiv(_amountIn, _weight, 10**_decimals);
 
         // Pass the quote as metadata
         bytes[] memory _data = new bytes[](1);
@@ -164,6 +170,7 @@ contract TestJBBuybackDelegate_Units is Test {
         // Set the relevant payParams data
         payParams.weight = _weight;
         payParams.metadata = _metadata;
+        payParams.amount = JBTokenAmount({token: address(weth), value: 1 ether, decimals: _decimals, currency: 1});
 
         // Returned values to catch:
         JBPayDelegateAllocation3_1_1[] memory _allocationsReturned;
@@ -189,7 +196,7 @@ contract TestJBBuybackDelegate_Units is Test {
             assertEq(_allocationsReturned[0].amount, _amountIn, "worng amount in returned");
             assertEq(
                 _allocationsReturned[0].metadata,
-                abi.encode(true, address(projectToken) < address(weth), _swapOutCount, payParams.weight),
+                abi.encode(true, address(projectToken) < address(weth), _swapOutCount, payParams.amount.value - _amountIn, payParams.weight),
                 "wrong metadata"
             );
 
@@ -267,7 +274,7 @@ contract TestJBBuybackDelegate_Units is Test {
             assertEq(
                 _allocationsReturned[0].metadata,
                 abi.encode(
-                    false, address(projectToken) < address(weth), _twapAmountOut, payParams.weight
+                    false, address(projectToken) < address(weth), _twapAmountOut, 0, payParams.weight
                 ),
                 "wrong metadata"
             );
@@ -321,7 +328,7 @@ contract TestJBBuybackDelegate_Units is Test {
 
         uint256 _weight = 1 ether;
 
-        uint256 _tokenCount = mulDiv18(_amountIn, _weight);
+        uint256 _tokenCount = mulDiv(_amountIn, _weight, 10**18);
 
         // Avoid accidentally using the twap (triggered if out == 0)
         _swapOutCount = bound(_swapOutCount, _tokenCount + 1, type(uint256).max);
@@ -366,6 +373,7 @@ contract TestJBBuybackDelegate_Units is Test {
             true, // use quote
             address(projectToken) < address(weth),
             _tokenCount,
+            0,
             _twapQuote
         );
 
@@ -538,15 +546,17 @@ contract TestJBBuybackDelegate_Units is Test {
     /**
      * @notice Test didPay with token received from swapping
      */
-    function test_didPay_swap_ERC20(uint256 _tokenCount, uint256 _twapQuote ) public {
+    function test_didPay_swap_ERC20(uint256 _tokenCount, uint256 _twapQuote, uint256 _decimals ) public {
         // Bound to avoid overflow and insure swap quote > mint quote
         _tokenCount = bound(_tokenCount, 2, type(uint256).max - 1);
         _twapQuote = bound(_twapQuote, _tokenCount + 1, type(uint256).max);
 
+        _decimals = bound(_decimals, 1, 18);
+
         didPayData.amount =
-            JBTokenAmount({token: address(randomTerminalToken), value: 1 ether, decimals: 18, currency: 1});
+            JBTokenAmount({token: address(randomTerminalToken), value: 1 ether, decimals: _decimals, currency: 1});
         didPayData.forwardedAmount =
-            JBTokenAmount({token: address(randomTerminalToken), value: 1 ether, decimals: 18, currency: 1});
+            JBTokenAmount({token: address(randomTerminalToken), value: 1 ether, decimals: _decimals, currency: 1});
         didPayData.projectId = randomId;
 
         // The metadata coming from payParams(..)
@@ -554,6 +564,7 @@ contract TestJBBuybackDelegate_Units is Test {
             true, // use quote
             address(projectToken) < address(weth),
             _tokenCount,
+            0,
             _twapQuote
         );
 
@@ -654,6 +665,7 @@ contract TestJBBuybackDelegate_Units is Test {
             true, // use quote
             address(projectToken) < address(weth),
             _tokenCount,
+            0,
             1 ether // weight - unused
         );
 
@@ -693,17 +705,23 @@ contract TestJBBuybackDelegate_Units is Test {
     /**
      * @notice Test didPay with swap reverting while using the twap, should then mint with the delegate balance, random erc20 is terminal token
      */
-    function test_didPay_swapRevertWithoutQuote_ERC20(uint256 _tokenCount, uint256 _weight) public {
+    function test_didPay_swapRevertWithoutQuote_ERC20(uint256 _tokenCount, uint256 _weight, uint256 _decimals, uint256 _extraMint) public {
         // The current weight
         _weight = bound(_weight, 1, 1 ether);
 
         // The amount of termminal token in this delegate (avoid overflowing when mul by weight)
         _tokenCount = bound(_tokenCount, 2, type(uint128).max);
 
+        // An extra amount of token to mint, based on fund which stayed in the terminal
+        _extraMint = bound(_extraMint, 2, type(uint128).max);
+
+        // The terminal token decimal
+        _decimals = bound(_decimals, 1, 18);
+
         didPayData.amount =
-            JBTokenAmount({token: address(randomTerminalToken), value: _tokenCount, decimals: 18, currency: 1});
+            JBTokenAmount({token: address(randomTerminalToken), value: _tokenCount, decimals: _decimals, currency: 1});
         didPayData.forwardedAmount =
-            JBTokenAmount({token: address(randomTerminalToken), value: _tokenCount, decimals: 18, currency: 1});
+            JBTokenAmount({token: address(randomTerminalToken), value: _tokenCount, decimals: _decimals, currency: 1});
         didPayData.projectId = randomId;
 
         vm.mockCall(
@@ -717,6 +735,7 @@ contract TestJBBuybackDelegate_Units is Test {
             false, // use quote
             address(otherRandomProjectToken) < address(randomTerminalToken),
             _tokenCount,
+            _extraMint, // extra amount to mint with
             _weight
         );
 
@@ -763,7 +782,7 @@ contract TestJBBuybackDelegate_Units is Test {
             address(controller),
             abi.encodeCall(
                 controller.mintTokensOf,
-                (didPayData.projectId, mulDiv18(_tokenCount, _weight), didPayData.beneficiary, didPayData.memo, didPayData.preferClaimedTokens, true)
+                (didPayData.projectId, mulDiv(_tokenCount, _weight, 10**_decimals) +  mulDiv(_extraMint, _weight, 10**_decimals), didPayData.beneficiary, didPayData.memo, didPayData.preferClaimedTokens, true)
             ),
             abi.encode(true)
         );
@@ -771,7 +790,7 @@ contract TestJBBuybackDelegate_Units is Test {
             address(controller),
             abi.encodeCall(
                 controller.mintTokensOf,
-                (didPayData.projectId, _tokenCount * _weight / 1e18, didPayData.beneficiary, didPayData.memo, didPayData.preferClaimedTokens, true)
+                (didPayData.projectId,  mulDiv(_tokenCount, _weight, 10**_decimals) +  mulDiv(_extraMint, _weight, 10**_decimals), didPayData.beneficiary, didPayData.memo, didPayData.preferClaimedTokens, true)
             )
         );
 
@@ -802,9 +821,9 @@ contract TestJBBuybackDelegate_Units is Test {
             )
         );
 
-        // expect event
+        // expect event - only for the non-extra mint
         vm.expectEmit(true, true, true, true);
-        emit BuybackDelegate_Mint(didPayData.projectId, _tokenCount, _tokenCount * _weight / 10**18, address(jbxTerminal));
+        emit BuybackDelegate_Mint(didPayData.projectId, _tokenCount,  mulDiv(_tokenCount, _weight, 10**_decimals), address(jbxTerminal));
 
         vm.prank(address(jbxTerminal));
         delegate.didPay(didPayData);
@@ -813,24 +832,31 @@ contract TestJBBuybackDelegate_Units is Test {
     /**
      * @notice Test didPay with swap reverting while using the twap, should then mint with the delegate balance, random erc20 is terminal token
      */
-    function test_didPay_swapRevertWithoutQuote_ETH(uint256 _tokenCount, uint256 _weight) public {
+    function test_didPay_swapRevertWithoutQuote_ETH(uint256 _tokenCount, uint256 _weight, uint256 _decimals, uint256 _extraMint) public {
         // The current weight
         _weight = bound(_weight, 1, 1 ether);
 
         // The amount of termminal token in this delegate (avoid overflowing when mul by weight)
         _tokenCount = bound(_tokenCount, 2, type(uint128).max);
 
+        // An extra amount of token to mint, based on fund which stayed in the terminal
+        _extraMint = bound(_extraMint, 2, type(uint128).max);
+
+        // The terminal token decimal
+        _decimals = bound(_decimals, 1, 18);
+
         didPayData.amount =
-            JBTokenAmount({token: JBTokens.ETH, value: _tokenCount, decimals: 18, currency: 1});
+            JBTokenAmount({token: JBTokens.ETH, value: _tokenCount, decimals: _decimals, currency: 1});
 
         didPayData.forwardedAmount =
-            JBTokenAmount({token: JBTokens.ETH, value: _tokenCount, decimals: 18, currency: 1});
+            JBTokenAmount({token: JBTokens.ETH, value: _tokenCount, decimals: _decimals, currency: 1});
 
         // The metadata coming from payParams(..)
         didPayData.dataSourceMetadata = abi.encode(
             false, // use quote
             address(projectToken) < address(weth),
             _tokenCount,
+            _extraMint,
             _weight
         );
 
@@ -871,7 +897,7 @@ contract TestJBBuybackDelegate_Units is Test {
             address(controller),
             abi.encodeCall(
                 controller.mintTokensOf,
-                (didPayData.projectId, mulDiv18(_tokenCount, _weight), didPayData.beneficiary, didPayData.memo, didPayData.preferClaimedTokens, true)
+                (didPayData.projectId, mulDiv(_tokenCount, _weight, 10**_decimals) + mulDiv(_extraMint, _weight, 10**_decimals), didPayData.beneficiary, didPayData.memo, didPayData.preferClaimedTokens, true)
             ),
             abi.encode(true)
         );
@@ -879,7 +905,7 @@ contract TestJBBuybackDelegate_Units is Test {
             address(controller),
             abi.encodeCall(
                 controller.mintTokensOf,
-                (didPayData.projectId, _tokenCount * _weight / 1e18, didPayData.beneficiary, didPayData.memo, didPayData.preferClaimedTokens, true)
+                (didPayData.projectId, mulDiv(_tokenCount, _weight, 10**_decimals) + mulDiv(_extraMint, _weight, 10**_decimals), didPayData.beneficiary, didPayData.memo, didPayData.preferClaimedTokens, true)
             )
         );
 
@@ -904,7 +930,7 @@ contract TestJBBuybackDelegate_Units is Test {
 
         // expect event
         vm.expectEmit(true, true, true, true);
-        emit BuybackDelegate_Mint(didPayData.projectId, _tokenCount, _tokenCount * _weight / 10**18, address(jbxTerminal));
+        emit BuybackDelegate_Mint(didPayData.projectId, _tokenCount, mulDiv(_tokenCount, _weight, 10**_decimals), address(jbxTerminal));
 
         vm.prank(address(jbxTerminal));
         delegate.didPay(didPayData);
