@@ -196,7 +196,7 @@ contract TestJBBuybackDelegate_Units is Test {
             assertEq(_allocationsReturned[0].amount, _amountIn, "worng amount in returned");
             assertEq(
                 _allocationsReturned[0].metadata,
-                abi.encode(true, address(projectToken) < address(weth), _swapOutCount, payParams.amount.value - _amountIn, payParams.weight),
+                abi.encode(true, address(projectToken) < address(weth), payParams.amount.value - _amountIn, _swapOutCount, payParams.weight),
                 "wrong metadata"
             );
 
@@ -274,7 +274,7 @@ contract TestJBBuybackDelegate_Units is Test {
             assertEq(
                 _allocationsReturned[0].metadata,
                 abi.encode(
-                    false, address(projectToken) < address(weth), _twapAmountOut, 0, payParams.weight
+                    false, address(projectToken) < address(weth), 0, _twapAmountOut, payParams.weight
                 ),
                 "wrong metadata"
             );
@@ -372,8 +372,8 @@ contract TestJBBuybackDelegate_Units is Test {
         didPayData.dataSourceMetadata = abi.encode(
             true, // use quote
             address(projectToken) < address(weth),
-            _tokenCount,
             0,
+            _tokenCount,
             _twapQuote
         );
 
@@ -464,8 +464,8 @@ contract TestJBBuybackDelegate_Units is Test {
         didPayData.dataSourceMetadata = abi.encode(
             true, // use quote
             address(projectToken) < address(weth),
-            _twapQuote,
             0,
+            _twapQuote,
             _tokenCount
         );
 
@@ -564,8 +564,8 @@ contract TestJBBuybackDelegate_Units is Test {
         didPayData.dataSourceMetadata = abi.encode(
             true, // use quote
             address(projectToken) < address(weth),
-            _tokenCount,
             0,
+            _tokenCount,
             _twapQuote
         );
 
@@ -665,8 +665,8 @@ contract TestJBBuybackDelegate_Units is Test {
         didPayData.dataSourceMetadata = abi.encode(
             true, // use quote
             address(projectToken) < address(weth),
-            _tokenCount,
             0,
+            _tokenCount,
             1 ether // weight - unused
         );
 
@@ -735,8 +735,8 @@ contract TestJBBuybackDelegate_Units is Test {
         didPayData.dataSourceMetadata = abi.encode(
             false, // use quote
             address(otherRandomProjectToken) < address(randomTerminalToken),
-            _tokenCount,
             _extraMint, // extra amount to mint with
+            _tokenCount,
             _weight
         );
 
@@ -856,8 +856,8 @@ contract TestJBBuybackDelegate_Units is Test {
         didPayData.dataSourceMetadata = abi.encode(
             false, // use quote
             address(projectToken) < address(weth),
-            _tokenCount,
             _extraMint,
+            _tokenCount,
             _weight
         );
 

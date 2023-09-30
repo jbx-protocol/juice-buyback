@@ -197,7 +197,7 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
             delegateAllocations[0] = JBPayDelegateAllocation3_1_1({
                 delegate: IJBPayDelegate3_1_1(this),
                 amount: _amountToSwapWith,
-                metadata: abi.encode(_quoteExists, _projectTokenIs0, _minimumSwapAmountOut, _totalPaid == _amountToSwapWith ? 0 : _totalPaid - _amountToSwapWith, _weight)
+                metadata: abi.encode(_quoteExists, _projectTokenIs0, _totalPaid == _amountToSwapWith ? 0 : _totalPaid - _amountToSwapWith, _minimumSwapAmountOut, _weight)
             });
 
             // All the mint will be done in didPay, return 0 as weight to avoid minting via the terminal
@@ -267,8 +267,8 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
         (
             bool _quoteExists,
             bool _projectTokenIs0,
-            uint256 _minimumSwapAmountOut,
             uint256 _amountToMintWith,
+            uint256 _minimumSwapAmountOut,
             uint256 _weight
         ) = abi.decode(_data.dataSourceMetadata, (bool, bool, uint256, uint256, uint256));
 
