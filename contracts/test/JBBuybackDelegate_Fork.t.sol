@@ -217,7 +217,7 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
 
         // Build the metadata using the quote at that block
         bytes[] memory _data = new bytes[](1);
-        _data[0] = abi.encode(_amountOutQuoted, _amountIn);
+        _data[0] = abi.encode(_amountIn, _amountOutQuoted);
 
         // Pass the delegate id
         bytes4[] memory _ids = new bytes4[](1);
@@ -286,7 +286,7 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
 
         // Build the metadata using the quote at that block
         bytes[] memory _data = new bytes[](1);
-        _data[0] = abi.encode(_amountOutQuoted, _amountIn);
+        _data[0] = abi.encode(_amountIn, _amountOutQuoted);
 
         // Pass the delegate id
         bytes4[] memory _ids = new bytes4[](1);
@@ -334,7 +334,7 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         // Build the metadata using the quote at that block
         // Build the metadata using the quote at that block
         bytes[] memory _data = new bytes[](1);
-        _data[0] = abi.encode(amountOutQuoted, amountPaid);
+        _data[0] = abi.encode(amountPaid, amountOutQuoted);
 
         // Pass the delegate id
         bytes4[] memory _ids = new bytes4[](1);
@@ -371,7 +371,7 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         assert(_previousQuote != amountOutQuoted);
 
         // Update the metadata
-        _data[0] = abi.encode(amountOutQuoted, amountPaid);
+        _data[0] = abi.encode(amountPaid, amountOutQuoted);
 
         // Generate the metadata
         _delegateMetadata = metadataHelper.createMetadata(_ids, _data);
@@ -416,7 +416,7 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
 
         // Build the metadata using the quote
         bytes[] memory _data = new bytes[](1);
-        _data[0] = abi.encode(_quote, _amountIn);
+        _data[0] = abi.encode(_amountIn, _quote);
 
         // Pass the delegate id
         bytes4[] memory _ids = new bytes4[](1);
@@ -567,8 +567,8 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
         // Build the metadata using the quote at that block
         bytes[] memory _data = new bytes[](1);
         _data[0] = abi.encode(
-            69412820131620254304865 + 10, // 10 more than quote at that block
-            0
+            0,
+            69412820131620254304865 + 10 // 10 more than quote at that block
         );
 
         // Pass the delegate id
@@ -612,7 +612,7 @@ contract TestJBBuybackDelegate_Fork is Test, UniswapV3ForgeQuoter {
 
         // Build the metadata using the quote at that block
         bytes[] memory _data = new bytes[](1);
-        _data[0] = abi.encode(amountOutQuoted, _amountIn);
+        _data[0] = abi.encode(_amountIn, amountOutQuoted);
 
         // Pass the delegate id
         bytes4[] memory _ids = new bytes4[](1);

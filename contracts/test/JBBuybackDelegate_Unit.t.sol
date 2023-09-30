@@ -158,7 +158,7 @@ contract TestJBBuybackDelegate_Units is Test {
 
         // Pass the quote as metadata
         bytes[] memory _data = new bytes[](1);
-        _data[0] = abi.encode(_swapOutCount, _amountIn);
+        _data[0] = abi.encode(_amountIn, _swapOutCount);
 
         // Pass the delegate id
         bytes4[] memory _ids = new bytes4[](1);
@@ -335,7 +335,7 @@ contract TestJBBuybackDelegate_Units is Test {
 
         // Pass the quote as metadata
         bytes[] memory _data = new bytes[](1);
-        _data[0] = abi.encode(_swapOutCount, _amountIn);
+        _data[0] = abi.encode(_amountIn, _swapOutCount);
 
         // Pass the delegate id
         bytes4[] memory _ids = new bytes4[](1);

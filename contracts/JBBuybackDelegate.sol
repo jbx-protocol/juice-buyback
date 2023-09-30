@@ -163,7 +163,7 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
 
             // Unpack the quote from the pool, given by the frontend.
             (_quoteExists, _metadata) = JBDelegateMetadataLib.getMetadata(DELEGATE_ID, _data.metadata);
-            if (_quoteExists) (_minimumSwapAmountOut, _amountToSwapWith) = abi.decode(_metadata, (uint256, uint256));
+            if (_quoteExists) (_amountToSwapWith, _minimumSwapAmountOut) = abi.decode(_metadata, (uint256, uint256));
         }
 
         // If no amount was specified to swap with, default to the full amount of the payment.
