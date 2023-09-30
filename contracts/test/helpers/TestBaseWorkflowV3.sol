@@ -32,21 +32,29 @@ import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBPaymentTerminal
 import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBToken.sol";
 import "@jbx-protocol/juice-contracts-v3/contracts/libraries/JBConstants.sol";
 
-import "./AccessJBLib.sol";
+import "@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBSingleTokenPaymentTerminalStore.sol";
 
 import "@paulrberg/contracts/math/PRBMath.sol";
+
+import "./AccessJBLib.sol";
+import "../../interfaces/external/IWETH9.sol";
+import "../../JBBuybackDelegate.sol";
+
+
 
 // Base contract for Juicebox system tests.
 //
 // Provides common functionality, such as deploying contracts on test setup for v3.
 contract TestBaseWorkflowV3 is Test {
+    using stdStorage for StdStorage;
+
     //*********************************************************************//
     // -------------------- internal stored properties ------------------- //
     //*********************************************************************//
 
     // Multisig address used for testing.
-    address internal _multisig = address(123);
-    address internal _beneficiary = address(69420);
+    address internal _multisig = makeAddr('mooltichig');
+    address internal _beneficiary = makeAddr('benefishary');
 
     JBOperatorStore internal _jbOperatorStore;
     JBProjects internal _jbProjects;
@@ -60,6 +68,32 @@ contract TestBaseWorkflowV3 is Test {
     JBSingleTokenPaymentTerminalStore3_1_1 internal _jbPaymentTerminalStore;
     JBETHPaymentTerminal3_1_1 internal _jbETHPaymentTerminal;
     AccessJBLib internal _accessJBLib;
+
+    JBBuybackDelegate _delegate;
+
+    uint256 _projectId;
+    uint256 reservedRate = 4500;
+    uint256 weight = 10 ether ; // Minting 10 token per eth
+    uint32 cardinality = 1000;
+    uint256 twapDelta = 500;
+
+    JBProjectMetadata _projectMetadata;
+    JBFundingCycleData _data;
+    JBFundingCycleData _dataReconfiguration;
+    JBFundingCycleData _dataWithoutBallot;
+    JBFundingCycleMetadata _metadata;
+    JBFundAccessConstraints[] _fundAccessConstraints; // Default empty
+    IJBPaymentTerminal[] _terminals; // Default empty
+
+    // Use the L1 UniswapV3Pool jbx/eth 1% fee for create2 magic
+    // IUniswapV3Pool pool = IUniswapV3Pool(0x48598Ff1Cee7b4d31f8f9050C2bbAE98e17E6b17);
+    IJBToken jbx = IJBToken(0x3abF2A4f8452cCC2CF7b4C1e4663147600646f66);
+    IWETH9 weth = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
+    address _uniswapFactory = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
+    uint24 fee = 10000;
+
+    IUniswapV3Pool pool;
+
 
     //*********************************************************************//
     // ------------------------- internal views -------------------------- //
@@ -78,6 +112,14 @@ contract TestBaseWorkflowV3 is Test {
         // Labels
         vm.label(_multisig, "projectOwner");
         vm.label(_beneficiary, "beneficiary");
+        vm.label(address(pool), "uniswapPool");
+        vm.label(address(_uniswapFactory), "uniswapFactory");
+        vm.label(address(weth), "$WETH");
+        vm.label(address(jbx), "$JBX");
+
+        // mock
+        vm.etch(address(pool), "0x69");
+        vm.etch(address(weth), "0x69");
 
         // JBOperatorStore
         _jbOperatorStore = new JBOperatorStore();
@@ -150,28 +192,82 @@ contract TestBaseWorkflowV3 is Test {
             _multisig
         );
         vm.label(address(_jbETHPaymentTerminal), "JBETHPaymentTerminal");
-    }
 
-    //https://ethereum.stackexchange.com/questions/24248/how-to-calculate-an-ethereum-contracts-address-during-its-creation-using-the-so
-    function addressFrom(address _origin, uint256 _nonce) internal pure returns (address _address) {
-        bytes memory data;
-        if (_nonce == 0x00) {
-            data = abi.encodePacked(bytes1(0xd6), bytes1(0x94), _origin, bytes1(0x80));
-        } else if (_nonce <= 0x7f) {
-            data = abi.encodePacked(bytes1(0xd6), bytes1(0x94), _origin, uint8(_nonce));
-        } else if (_nonce <= 0xff) {
-            data = abi.encodePacked(bytes1(0xd7), bytes1(0x94), _origin, bytes1(0x81), uint8(_nonce));
-        } else if (_nonce <= 0xffff) {
-            data = abi.encodePacked(bytes1(0xd8), bytes1(0x94), _origin, bytes1(0x82), uint16(_nonce));
-        } else if (_nonce <= 0xffffff) {
-            data = abi.encodePacked(bytes1(0xd9), bytes1(0x94), _origin, bytes1(0x83), uint24(_nonce));
-        } else {
-            data = abi.encodePacked(bytes1(0xda), bytes1(0x94), _origin, bytes1(0x84), uint32(_nonce));
-        }
-        bytes32 hash = keccak256(data);
-        assembly {
-            mstore(0, hash)
-            _address := mload(0)
-        }
+        // Deploy the delegate
+        _delegate = new JBBuybackDelegate({
+            _weth: weth,
+            _factory: _uniswapFactory,
+            _directory: IJBDirectory(address(_jbDirectory)),
+            _controller: _jbController,
+            _delegateId: bytes4(hex'69')
+        });
+
+        _projectMetadata = JBProjectMetadata({content: "myIPFSHash", domain: 1});
+
+        _data = JBFundingCycleData({
+            duration: 6 days,
+            weight: weight,
+            discountRate: 0,
+            ballot: IJBFundingCycleBallot(address(0))
+        });
+
+        _metadata = JBFundingCycleMetadata({
+            global: JBGlobalFundingCycleMetadata({
+                allowSetTerminals: false,
+                allowSetController: false,
+                pauseTransfers: false
+            }),
+            reservedRate: reservedRate,
+            redemptionRate: 5000,
+            ballotRedemptionRate: 0,
+            pausePay: false,
+            pauseDistributions: false,
+            pauseRedeem: false,
+            pauseBurn: false,
+            allowMinting: true,
+            preferClaimedTokenOverride: false,
+            allowTerminalMigration: false,
+            allowControllerMigration: false,
+            holdFees: false,
+            useTotalOverflowForRedemptions: false,
+            useDataSourceForPay: true,
+            useDataSourceForRedeem: false,
+            dataSource: address(_delegate),
+            metadata: 0
+        });
+
+        _fundAccessConstraints.push(
+            JBFundAccessConstraints({
+                terminal: _jbETHPaymentTerminal,
+                token: jbLibraries().ETHToken(),
+                distributionLimit: 2 ether,
+                overflowAllowance: type(uint232).max,
+                distributionLimitCurrency: 1, // Currency = ETH
+                overflowAllowanceCurrency: 1
+            })
+        );
+
+        _terminals = [_jbETHPaymentTerminal];
+
+        JBGroupedSplits[] memory _groupedSplits = new JBGroupedSplits[](1); // Default empty
+
+        _projectId = _jbController.launchProjectFor(
+            _multisig,
+            _projectMetadata,
+            _data,
+            _metadata,
+            0, // Start asap
+            _groupedSplits,
+            _fundAccessConstraints,
+            _terminals,
+            ""
+        );
+
+        vm.prank(_multisig);
+        _jbTokenStore.issueFor(_projectId, "jbx", "jbx");
+
+        vm.prank(_multisig);
+        pool = _delegate.setPoolFor(_projectId, fee, uint32(cardinality), twapDelta, address(weth));
+
     }
 }
