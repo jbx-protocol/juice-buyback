@@ -351,10 +351,11 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
     /// @param _twapWindow The period over which the TWAP is computed.
     /// @param _twapSlippageTolerance The maximum deviation allowed between amount received and TWAP.
     /// @param _terminalToken The terminal token that payments are made in.
+    /// @return newPool The pool that was created.
     function setPoolFor(uint256 _projectId, uint24 _fee, uint32 _twapWindow, uint256 _twapSlippageTolerance, address _terminalToken)
         external
         requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.CHANGE_POOL)
-        returns (IUniswapV3Pool _newPool)
+        returns (IUniswapV3Pool newPool)
     {
         // Make sure the provided delta is within sane bounds.
         if (_twapSlippageTolerance < MIN_TWAP_SLIPPAGE_TOLERANCE || _twapSlippageTolerance > MAX_TWAP_SLIPPAGE_TOLERANCE) revert JuiceBuyback_InvalidTwapSlippageTolerance();
@@ -375,7 +376,7 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
         bool _projectTokenIs0 = address(_projectToken) < _terminalToken;
 
         // Compute the corresponding pool's address, which is a function of both tokens and the specified fee.
-        _newPool = IUniswapV3Pool(
+        newPool = IUniswapV3Pool(
             address(
                 uint160(
                     uint256(
@@ -400,10 +401,10 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
         );
 
         // Make sure this pool has yet to be specified in this delegate.
-        if (poolOf[_projectId][_terminalToken] == _newPool) revert JuiceBuyback_PoolAlreadySet();
+        if (poolOf[_projectId][_terminalToken] == newPool) revert JuiceBuyback_PoolAlreadySet();
 
         // Store the pool.
-        poolOf[_projectId][_terminalToken] = _newPool;
+        poolOf[_projectId][_terminalToken] = newPool;
 
         // Store the twap period and max slipage.
         _twapParamsOf[_projectId] = _twapSlippageTolerance << 128 | _twapWindow;
@@ -411,7 +412,7 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
 
         emit BuybackDelegate_TwapWindowChanged(_projectId, 0, _twapWindow, msg.sender);
         emit BuybackDelegate_TwapSlippageToleranceChanged(_projectId, 0, _twapSlippageTolerance, msg.sender);
-        emit BuybackDelegate_PoolAdded(_projectId, _terminalToken, address(_newPool), msg.sender);
+        emit BuybackDelegate_PoolAdded(_projectId, _terminalToken, address(newPool), msg.sender);
     }
 
     /// @notice Increase the period over which the TWAP is computed.
@@ -471,11 +472,11 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
     /// @param _projectToken The project's token being swapped for.
     /// @param _amountIn The amount being used to swap.
     /// @param _terminalToken The token paid in being used to swap.
-    /// @return _amountOut the minimum amount received according to the TWAP.
+    /// @return amountOut the minimum amount received according to the TWAP.
     function _getQuote(uint256 _projectId, address _projectToken, uint256 _amountIn, address _terminalToken)
         internal
         view
-        returns (uint256 _amountOut)
+        returns (uint256 amountOut)
     {
         // Get a reference to the pool that'll be used to make the swap.
         IUniswapV3Pool _pool = poolOf[_projectId][address(_terminalToken)];
@@ -498,7 +499,7 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
         (int24 arithmeticMeanTick,) = OracleLibrary.consult(address(_pool), _quotePeriod);
 
         // Get a quote based on this TWAP tick.
-        _amountOut = OracleLibrary.getQuoteAtTick({
+        amountOut = OracleLibrary.getQuoteAtTick({
             tick: arithmeticMeanTick,
             baseAmount: uint128(_amountIn),
             baseToken: _terminalToken,
@@ -506,17 +507,17 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
         });
 
         // Return the lowest TWAP tolerable.
-        _amountOut -= (_amountOut * _maxDelta) / SLIPPAGE_DENOMINATOR;
+        amountOut -= (amountOut * _maxDelta) / SLIPPAGE_DENOMINATOR;
     }
 
     /// @notice Swap the terminal token to receive the project token.
     /// @param _data The didPayData passed by the terminal.
     /// @param _projectTokenIs0 A flag indicating if the pool will reference the project token as the first in the pair.
-    /// @return _amountReceived The amount of tokens received from the swap.
+    /// @return amountReceived The amount of tokens received from the swap.
     function _swap(
         JBDidPayData3_1_1 calldata _data,
         bool _projectTokenIs0
-    ) internal returns (uint256 _amountReceived) {
+    ) internal returns (uint256 amountReceived) {
         // The amount of tokens that are being used with which to make the swap.
         uint256 _amountToSwapWith = _data.forwardedAmount.value;
 
@@ -535,7 +536,7 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
             data: abi.encode(_data.projectId, _data.forwardedAmount.token)
         }) returns (int256 amount0, int256 amount1) {
             // If the swap succeded, take note of the amount of tokens received. This will return as negative since it is an exact input.
-            _amountReceived = uint256(-(_projectTokenIs0 ? amount0 : amount1));
+            amountReceived = uint256(-(_projectTokenIs0 ? amount0 : amount1));
         } catch {
             // If the swap failed, return.
             return 0;
@@ -545,13 +546,13 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
         CONTROLLER.burnTokensOf({
             holder: address(this),
             projectId: _data.projectId,
-            tokenCount: _amountReceived,
+            tokenCount: amountReceived,
             memo: "",
             preferClaimedTokens: true
         });
 
         // We return the amount we received/burned and we will mint them to the user later
 
-        emit BuybackDelegate_Swap(_data.projectId, _amountToSwapWith, _pool, _amountReceived, msg.sender);
+        emit BuybackDelegate_Swap(_data.projectId, _amountToSwapWith, _pool, amountReceived, msg.sender);
     }
 }
