@@ -464,8 +464,9 @@ contract TestJBBuybackDelegate_Units is Test {
         didPayData.dataSourceMetadata = abi.encode(
             true, // use quote
             address(projectToken) < address(weth),
-            _tokenCount,
-            _twapQuote
+            _twapQuote,
+            0,
+            _tokenCount
         );
 
 
