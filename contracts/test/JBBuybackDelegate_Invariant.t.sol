@@ -111,7 +111,7 @@ contract BBDHandler is Test {
 
         // set only valid metadata
         bytes[] memory _quoteData = new bytes[](1);
-        _quoteData[0] = abi.encode(_quote, _amountIn);
+        _quoteData[0] = abi.encode(_amountIn, _quote);
 
         // Pass the delegate id
         bytes4[] memory _ids = new bytes4[](1);
