@@ -226,24 +226,21 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
     /// @param  _projectId The ID of the project for which the value applies.
     /// @return _secondsAgo The period over which the TWAP is computed.
     function twapWindowOf(uint256 _projectId) external view returns (uint32) {
-        // TODO adjust to account for packed swap percent limit.
-        return uint32(_twapParamsOf[_projectId]);
+         return uint256(uint32(_twapParamsOf[_projectId] << 96 >> 128));
     }
 
     /// @notice The TWAP max deviation acepted, out of SLIPPAGE_DENOMINATOR.
     /// @param  _projectId The ID of the project for which the value applies.
     /// @return _delta the maximum deviation allowed between the token amount received and the TWAP quote.
     function twapSlippageToleranceOf(uint256 _projectId) external view returns (uint256) {
-        // TODO adjust to account for packed swap percent limit.
-        return _twapParamsOf[_projectId] >> 128;
+        return uint256(uint32(_twapParamsOf[_projectId] >> 96));
     }
 
     /// @notice The limit of paid funds that can be allocated towards a swap, as a percent out of SWAP_PERCENT_LIMIT_DENOMINATOR.
     /// @param  _projectId The ID of the project for which the value applies.
     /// @return The limit percentage of payments that can be used for swapping.
     function swapPercentLimit(uint256 _projectId) external view returns (uint256) {
-        // TODO adjust to account for packed swap percent limit.
-        return _twapParamsOf[_projectId] >> 128;
+        return uint256(uint96(_twapParamsOf[_projectId]));
     }
 
     /// @notice Generic redeem params, for interface completion.
@@ -373,7 +370,7 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
     /// @param _swapPercentLimit The limit of paid funds that can be allocated towards a swap.
     /// @param _terminalToken The terminal token that payments are made in.
     /// @return newPool The pool that was created.
-    function setPoolFor(uint256 _projectId, uint24 _fee, uint32 _twapWindow, uint256 _twapSlippageTolerance, uint256 _swapPercentLimit, address _terminalToken)
+    function setPoolFor(uint256 _projectId, uint24 _fee, uint256 _twapWindow, uint256 _twapSlippageTolerance, uint256 _swapPercentLimit, address _terminalToken)
         external
         requirePermission(PROJECTS.ownerOf(_projectId), _projectId, JBBuybackDelegateOperations.CHANGE_POOL)
         returns (IUniswapV3Pool newPool)
@@ -385,7 +382,7 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
         if (_twapWindow < MIN_TWAP_WINDOW || _twapWindow > MAX_TWAP_WINDOW) revert JuiceBuyback_InvalidTwapWindow();
 
         // Make sure the provided delta is within sane bounds.
-        if (_swapPercentLimit < MIN_SWAP_PERCENT_LIMIT) revert JuiceBuyback_InvalidSwapPercentLimit();
+        if (_swapPercentLimit < MIN_SWAP_PERCENT_LIMIT || _swapPercentLimit > SWAP_PERCENT_LIMIT_DENOMINATOR) revert JuiceBuyback_InvalidSwapPercentLimit();
 
         // Keep a reference to the project's token.
         address _projectToken = address(CONTROLLER.tokenStore().tokenOf(_projectId));
@@ -431,8 +428,11 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
         poolOf[_projectId][_terminalToken] = newPool;
 
         // Store the twap period and max slipage.
-        // TODO adjust to account for packed swap percent limit.
-        _twapParamsOf[_projectId] = _twapSlippageTolerance << 128 | _twapWindow << 32;
+        // _twapSlippageTolerance - occupies the topmost bits
+        // _twapWindow - occupies the next 32 bits
+        // _swapPercentLimit - occupies the remaining 32 bits
+        _twapParamsOf[_projectId] = _twapSlippageTolerance << 96 | _twapWindow << 64 | _swapPercentLimit;
+
         projectTokenOf[_projectId] = address(_projectToken);
 
         emit BuybackDelegate_TwapWindowChanged(_projectId, 0, _twapWindow, msg.sender);
@@ -460,8 +460,7 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
         uint256 _oldWindow = uint128(_twapParams);
 
         // Store the new packed value of the TWAP params.
-        // TODO adjust to account for packed swap percent limit.
-        _twapParamsOf[_projectId] = uint256(_newWindow) | ((_twapParams >> 128) << 128);
+       _twapParamsOf[_projectId] = _twapParams >> 96 << 64 | _twapParams << 128 >> 128 | _newWindow << 64;
 
         emit BuybackDelegate_TwapWindowChanged(_projectId, _oldWindow, _newWindow, msg.sender);
     }
@@ -484,8 +483,7 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
         uint256 _oldSlippageTolerance = _twapParams >> 128;
 
         // Store the new packed value of the TWAP params.
-        // TODO adjust to account for packed swap percent limit.
-        _twapParamsOf[_projectId] = _newSlippageTolerance << 128 | ((_twapParams << 128) >> 128);
+        _twapParamsOf[_projectId] = newTwapSlippageTolerance << 96 | _twapParams >> 96 << 96;
 
         emit BuybackDelegate_TwapSlippageToleranceChanged(_projectId, _oldSlippageTolerance, _newSlippageTolerance, msg.sender);
     }
@@ -508,8 +506,7 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
         uint256 _oldSwapPercentLimit = _twapParams >> 128;
 
         // Store the new packed value of the TWAP params.
-        // TODO adjust to account for packed swap percent limit.
-        _twapParamsOf[_projectId] = _newSwapPercentLimit << 128 | ((_twapParams << 128) >> 128);
+       _twapParamsOf[_projectId] = _twapParams << 96 >> 96 | newSwapPercentLimit;
 
         emit BuybackDelegate_TwapPercentLimitChanged(_projectId, _oldSwapPercentLimit, _newSwapPercentLimit, msg.sender);
     }
@@ -542,7 +539,6 @@ contract JBBuybackDelegate is ERC165, JBOperatable, IJBBuybackDelegate {
         }
 
         // Unpack the TWAP params and get a reference to the period and slippage.
-        // TODO adjust to account for packed swap percent limit.
         uint256 _twapParams = _twapParamsOf[_projectId];
         uint32 _quotePeriod = uint32(_twapParams);
         uint256 _maxDelta = _twapParams >> 128;
