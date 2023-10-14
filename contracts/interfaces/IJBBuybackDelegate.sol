@@ -23,7 +23,9 @@ interface IJBBuybackDelegate is IJBPayDelegate3_1_1, IJBFundingCycleDataSource3_
     error JuiceBuyback_NewSecondsAgoTooLow();
     error JuiceBuyback_NoProjectToken();
     error JuiceBuyback_PoolAlreadySet();
+    error JuiceBuyback_SwapAmountOutOfBounds();
     error JuiceBuyback_TransferFailed();
+    error JuiceBuyback_InvalidSwapPercentLimit();
     error JuiceBuyback_InvalidTwapSlippageTolerance();
     error JuiceBuyback_InvalidTwapWindow();
     error JuiceBuyback_Unauthorized();
@@ -36,6 +38,7 @@ interface IJBBuybackDelegate is IJBPayDelegate3_1_1, IJBFundingCycleDataSource3_
     event BuybackDelegate_Mint(uint256 indexed projectId, uint256 amountIn, uint256 tokenCount, address caller);
     event BuybackDelegate_TwapWindowChanged(uint256 indexed projectId, uint256 oldSecondsAgo, uint256 newSecondsAgo, address caller);
     event BuybackDelegate_TwapSlippageToleranceChanged(uint256 indexed projectId, uint256 oldTwapDelta, uint256 newTwapDelta, address caller);
+    event BuybackDelegate_TwapPercentLimitChanged(uint256 indexed projectId, uint256 oldSwapPercentLimit, newSwapPercentLimit, address caller);
     event BuybackDelegate_PoolAdded(uint256 indexed projectId, address indexed terminalToken, address newPool, address caller);
 
     /////////////////////////////////////////////////////////////////////
@@ -69,4 +72,6 @@ interface IJBBuybackDelegate is IJBPayDelegate3_1_1, IJBFundingCycleDataSource3_
     function setTwapWindowOf(uint256 projectId, uint32 newWindow) external;
 
     function setTwapSlippageToleranceOf(uint256 projectId, uint256 newSlippageTolerance) external;
+
+    function setSwapPercentLimitOf(uint256 _projectId, uint256 _newSwapPercentLimit) external;
 }
