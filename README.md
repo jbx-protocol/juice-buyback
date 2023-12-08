@@ -1,35 +1,75 @@
-# Juice Buyback Delegate - Terminal token-Project token
+# Juicebox Buyback Hook
 
-## Summary
+When a Juicebox project that uses the buyback hook is paid, it checks whether buying tokens in a Uniswap pool or paying the project as usual would yield more tokens for the payer. If buying tokens in the pool would yield more tokens, the payment is routed there. Otherwise, the payment is sent to the project as usual. Either way, the project's reserved rate applies.
 
-Provides a datasource and delegate which maximise the project token received by the contributor when they call `pay` on the terminal. In order to do so, the delegate will either mint new tokens ("vanilla" path, bypassing the delegate) and/or swap existing token in an Uniswap V3 pool ("buyback" path), depending on the best quote available at the time of the call as well as the user preferences.
+The buyback hook works with any Juicebox terminal and checks the Uniswap pool specified by the project's owner.
 
-This BBD is used with ETH by JBDAO, this readme hence uses `ETH` as terminal token, but the current implementation allows the use of any ERC20 token as terminal token.
+*If you're having trouble understanding this contract, take a look at the [core Juicebox contracts](https://github.com/bananapus/juice-contracts-v4) and the [documentation](https://docs.juicebox.money/) first. If you have questions, reach out on [Discord](https://discord.com/invite/ErQYmth4dS).*
 
-## Design
-### Flow
-- The frontend passes a quote (as the minimum amount to receive for a given amount send, taking slippage into account) from the correct Uniswap V3, as well as an amount to use for swapping while calling `pay(..)` (this amount might be the less than or equal to the total amount of ETH sent - ie "swap everything or just part of it"). These should be encoded using the [delegate metadata library](https://github.com/jbx-protocol/juice-delegate-metadata-lib). If no quote is provided, a twap is then used.
-- `Pay(..)` will use the buyback delegate as datasource and, based on the minmum amount received, the amount to swap and the funding cycle weight, will mint (using the regular terminal flow) and/or swap.
-- If swap is needed, the terminal will call the delegate's `didPay` method, which will wrap and swap the eth, burn all the token received and mint them again (with extra-token if a portion of ETH was allocated to minting only). This allows to use the correct reserved rate as well as keep the caller's preference for `preferClaimedTokens`.
-- In case of failure of the swap (eg max slippage, low liquidity), the delegate will mint the tokens instead (using the original funding cycle weight and reserved rate, these ETH are then sent back to the project balance using `addToBalanceOf`).
+## Develop
 
-### Contracts/Interfaces
-- BuyBackDelegate: the datasource, pay delegate and uniswap pool callback contract
-- BuyBackDelegate3.1.1: the buyback delegate leveraging the new terminal v3.1.1
+`juice-buyback` uses the [Foundry](https://github.com/foundry-rs/foundry) development toolchain for builds, tests, and deployments. To get set up, install [Foundry](https://github.com/foundry-rs/foundry):
 
-## Usage
-Anyone can deploy this delegate using the provided forge script.
-To run this repo, you'll need [Foundry](https://book.getfoundry.sh/) and [NodeJS](https://nodejs.dev/en/learn/how-to-install-nodejs/) installed.
-Install the dependencies with `npm install && git submodule update --init --force --recursive`, you should then be able to run the tests using `forge test` or deploy a new delegate using `forge script Deploy` (and the correct arguments, based on the chain and key you want to use - see the [Foundry docs](https://book.getfoundry.sh/)).
+```bash
+curl -L https://foundry.paradigm.xyz | sh
+```
 
-## Use-case
-Maximizing the project token received by the contributor while leveling the funding cycle/secondary market price.
+You can download and install dependencies with:
 
-## Risk & trade-offs
- - This delegate is now used with ETH as terminal token, it *should* support any erc20 terminal but hasn't been used in such setup (yet).
- - This delegate relies on the liquidity available in an Uniswap V3. If LP migrate to a new pool or another DEX, this delegate would need to be redeployed.
- - A low liquidity might, if the max slippage isn't set properly, lead to an actual amount of token received lower than expected.
+```bash
+forge install
+```
 
-## Future work
-- Invariant are only partially tested (total supply hold in mint case, pool needfs additional tooling as we rely on hardcoded pool hash for create2)
-- A first version was designed to be used as a BBD for an unique project (project token, pool, etc being immutables), in order to keep the gas cost as low as possible. This might be resumed and further tested if a need arises.
+If you run into trouble with `forge install`, try using `git submodule update --init --recursive` to ensure that nested submodules have been properly initialized.
+
+Some useful commands:
+
+| Command               | Description                                         |
+| --------------------- | --------------------------------------------------- |
+| `forge install`       | Install the dependencies.                           |
+| `forge build`         | Compile the contracts and write artifacts to `out`. |
+| `forge fmt`           | Lint.                                               |
+| `forge test`          | Run the tests.                                      |
+| `forge build --sizes` | Get contract sizes.                                 |
+| `forge coverage`      | Generate a test coverage report.                    |
+| `foundryup`           | Update foundry. Run this periodically.              |
+| `forge clean`         | Remove the build artifacts and cache directories.   |
+
+To learn more, visit the [Foundry Book](https://book.getfoundry.sh/) docs.
+
+We recommend using [Juan Blanco's solidity extension](https://marketplace.visualstudio.com/items?itemName=JuanBlanco.solidity) for VSCode.
+
+## Utilities
+
+For convenience, several utility commands are available in `util.sh`. To see a list, run:
+
+```bash
+`bash util.sh --help`.
+```
+
+Or make the script executable and run:
+
+```bash
+./util.sh --help
+```
+
+## Hooks
+
+This contract is both a *data hook* and a *pay hook*. Data hooks receive information about a payment and put together a payload for the pay hook to execute.
+
+Juicebox projects can specify a data hook in their `JBRulesetMetadata`. When someone attempts to pay or redeem from the project, the project's terminal records the payment in the terminal store, passing information about the payment to the data hook in the process. The data hook responds with a list of payloads – each payload specifies the address of a pay hook, as well as some custom data and an amount of funds to send to that pay hook.
+
+Each pay hook can then execute custom behavior based on the custom data (and funds) they receive.
+
+## Flow
+
+1. The frontend client sends the hook a Uniswap quote, the amount of funds to use for the swap, and the minimum number of project tokens to receive in exchange from the Uniswap pool (accounting for slippage). These should be encoded using the [delegate metadata library](https://github.com/jbx-protocol/juice-delegate-metadata-lib). If no quote is provided, the hook uses a [time-weighted average price](https://blog.uniswap.org/uniswap-v3-oracles#what-is-twap).
+2. The terminal's `pay(...)` function calls this buyback hook (as a data hook) to determine whether the swap should be executed or not. It makes this determination by considering the information that was passed in, information about the pool, and the project's current rules.
+3. The buyback contract sends its determination back to the terminal. If it approved the swap, the terminal then calls the buyback hook's `didPay(...)` method, which will wrap the ETH (to wETH), execute the swap, burns the token it received, and mints them again (it also mints tokens for any funds which weren't used in the swap, if any). This burning/re-minting process allows the buyback hook to apply the reserved rate and respect the caller's `preferClaimedTokens` preference.
+4. If the swap failed (due to exceeding the maximum slippage, low liquidity, or something else) the delegate will mint tokens for the recipient according to the project's rules, and use `addToBalanceOf` to send the funds to the project.
+
+## Risks
+
+- This hook has only been used with terminals that accept ETH so far. It *should* support any ERC-20 terminal, but has not been used for this in production.
+- This hook depends on liquidity in a Uniswap v3 pool. If liquidity providers migrate to a new pool, the project's owner has to call `setPoolFor(...)`. If they migrate to a new exchange, this hook won't work.
+- If there isn't enough liquidity, or if the max slippage isn't set properly, payers may receive fewer tokens than expected.
